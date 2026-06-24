@@ -91,4 +91,30 @@ describe('postCleaning', () => {
     expect(table.getAttribute('style')).toBeNull();
     expect(table.getAttribute('bgcolor')).toBeNull();
   });
+
+  // FIX 3: strip an element with NO child elements and blank LEADING text, matching
+  // go's `len(Children) == 0 && !textCharsTest(etree.Text(child))`.
+  it('strips a whitespace-only <div> (no element children, blank leading text)', () => {
+    const doc = parseDocument('<section><div>   </div><p>keep</p></section>');
+    const root = doc.querySelector('section')!;
+    postCleaning(root);
+    expect(root.querySelector('div')).toBeNull();
+    expect(root.querySelector('p')?.textContent).toBe('keep');
+  });
+
+  it('preserves a <div> with leading text', () => {
+    const doc = parseDocument('<section><div>text</div></section>');
+    const root = doc.querySelector('section')!;
+    postCleaning(root);
+    expect(root.querySelector('div')?.textContent).toBe('text');
+  });
+
+  it('preserves a <div> with a child element even when its leading text is blank', () => {
+    const doc = parseDocument('<section><div>hello<span></span></div></section>');
+    const root = doc.querySelector('section')!;
+    postCleaning(root);
+    // The <div> has a child element (the now-attribute-cleaned <span>), so it is
+    // not "empty" and must survive. The empty <span> itself is stripped (unwrapped).
+    expect(root.querySelector('div')?.textContent).toBe('hello');
+  });
 });

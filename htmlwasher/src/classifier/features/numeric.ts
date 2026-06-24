@@ -136,16 +136,45 @@ const CTA_PHRASES = [
   'schedule',
 ] as const;
 
-/** Python `str.split()` with no args: split on runs of whitespace, drop empties. */
-function splitWhitespace(s: string): string[] {
-  const trimmed = s.trim();
-  if (trimmed === '') return [];
-  return trimmed.split(/\s+/);
+// CPython's whitespace set for `str.split()`/`str.strip()` with no arg. It is NOT
+// the JS `\s` / `String.trim()` set: CPython treats U+001C..U+001F and U+0085 as
+// whitespace (JS does not), and JS treats U+FEFF (the BOM) as whitespace (CPython
+// does NOT). We enumerate the exact codepoints by char code (never a literal exotic
+// glyph) and use this ONE class for split + strip in both numeric.ts and
+// html-signals.ts so tokenization stays byte-for-byte with the Python extractor.
+// Codepoints: tab, newline, U+000B, U+000C, CR, U+001C..U+001F, space, U+0085,
+// U+00A0, U+1680, U+2000..U+200A, U+2028, U+2029, U+202F, U+205F, U+3000.
+const PY_WS_CODEPOINTS = [
+  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001,
+  0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f,
+  0x205f, 0x3000,
+] as const;
+
+/** Shared CPython-whitespace regex character-class body (no surrounding `[]`). */
+export const PY_WS_CLASS = PY_WS_CODEPOINTS.map(
+  (cp) => `\\u${cp.toString(16).padStart(4, '0')}`,
+).join('');
+
+const PY_WS_SPLIT_RE = new RegExp(`[${PY_WS_CLASS}]+`);
+const PY_WS_LEADING_RE = new RegExp(`^[${PY_WS_CLASS}]+`);
+const PY_WS_TRAILING_RE = new RegExp(`[${PY_WS_CLASS}]+$`);
+
+/**
+ * Python `str.split()` with no args: split on runs of CPython whitespace and drop
+ * leading/trailing empty tokens. NOT `String.trim()`/`\s` — see `PY_WS_CODEPOINTS`.
+ */
+export function splitWhitespace(s: string): string[] {
+  const stripped = strip(s);
+  if (stripped === '') return [];
+  return stripped.split(PY_WS_SPLIT_RE);
 }
 
-/** Python `str.strip()`: strip leading/trailing whitespace (ASCII + unicode). */
-function strip(s: string): string {
-  return s.trim();
+/**
+ * Python `str.strip()`: strip a leading/trailing run of CPython whitespace. NOT
+ * `String.trim()` — `.trim()` also strips U+FEFF (the BOM), which Python keeps.
+ */
+export function strip(s: string): string {
+  return s.replace(PY_WS_LEADING_RE, '').replace(PY_WS_TRAILING_RE, '');
 }
 
 /** Lowercased tag name (e.g. `h2`, `div`). Python reads `node.tag`. */
@@ -307,6 +336,10 @@ export function extractNumericFeatures(html: string, url: string): number[] {
     for (const child of children) {
       // Python only counts children whose `class` attribute is PRESENT (not None).
       // linkedom's getAttribute returns '' for a missing class, so gate on hasAttribute.
+      // ACCEPTED PARITY GAP: a valueless boolean `class` attribute (`<div class>`) is
+      // counted here as a `''` class key, whereas selectolax/lexbor skips it
+      // (`get('class') is None`). linkedom cannot distinguish `<div class>` from
+      // `<div class="">`, so this rare edge case is an accepted divergence.
       if (!child.hasAttribute('class')) continue;
       const cls = child.getAttribute('class') ?? '';
       classCounts.set(cls, (classCounts.get(cls) ?? 0) + 1);

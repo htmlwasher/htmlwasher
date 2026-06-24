@@ -50,6 +50,12 @@ function isSafeCssUrl(raw: string): boolean {
   if (value === '') {
     return false;
   }
+  // A CSS backslash escape (e.g. `\6a` → 'j') can smuggle a banned scheme past
+  // the scheme regex below (`\6a avascript:` decodes to `javascript:`). No
+  // legitimate url scheme/host needs one — reject any url() arg containing `\`.
+  if (/\\/.test(value)) {
+    return false;
+  }
   const lower = value.toLowerCase();
 
   // Protocol-relative `//host/...` is treated as https-equivalent → allow.

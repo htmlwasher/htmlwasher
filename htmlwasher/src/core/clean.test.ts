@@ -47,6 +47,41 @@ describe('linkDensityTest', () => {
     const { highDensity } = linkDensityTest(doc.querySelector('p')!, opts);
     expect(highDensity).toBe(false);
   });
+
+  // FIX 2: the higher length limit applies when the element is the LAST ELEMENT
+  // child, even when a whitespace TEXT node follows it (pretty-printed HTML). A
+  // moderately link-dense <p> with textLength in (30, 60) was wrongly judged
+  // low-density under the 30 limit (nextSibling != null) but is high-density
+  // under the correct 60 limit (nextElementSibling === null).
+  it('uses the higher limit (60) for a last <p> followed by a whitespace text node', () => {
+    // Two short links dominate the text; textLength ~ 40 (between 30 and 60).
+    const doc = parseDocument(
+      '<div><p>x <a href="/a">first link here</a> <a href="/b">second link too</a></p>\n  </div>',
+    );
+    const p = doc.querySelector('p')!;
+    // Sanity: a whitespace text node follows the <p>, but it is the last element child.
+    expect(p.nextSibling).not.toBeNull();
+    expect(p.nextElementSibling).toBeNull();
+    const { highDensity } = linkDensityTest(p, opts);
+    expect(highDensity).toBe(true);
+  });
+
+  it('uses the higher limit (300) for a last <div> followed by a whitespace text node', () => {
+    const linkText = 'a fairly long anchor of link text that dominates the block content here';
+    const doc = parseDocument(
+      `<section><div>lead <a href="/a">${linkText}</a> <a href="/b">${linkText}</a></div>\n  </section>`,
+    );
+    const div = doc.querySelector('div')!;
+    expect(div.nextSibling).not.toBeNull();
+    expect(div.nextElementSibling).toBeNull();
+    const total = [...div.textContent.replace(/\s+/g, ' ').trim()].length;
+    // textLength is between the low (100) and high (300) limit, so the verdict
+    // depends entirely on which limit is selected.
+    expect(total).toBeGreaterThan(100);
+    expect(total).toBeLessThan(300);
+    const { highDensity } = linkDensityTest(div, opts);
+    expect(highDensity).toBe(true);
+  });
 });
 
 describe('deleteByLinkDensity', () => {

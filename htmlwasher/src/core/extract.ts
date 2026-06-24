@@ -6,10 +6,10 @@
 // the brief sanctions (§5 Phase 2).
 
 import { cleanDocument } from './clean.js';
-import { type HElement, parseDocument, trim } from './dom.js';
+import { getElementsByTagName, type HElement, parseDocument, trim } from './dom.js';
 import { findContentNode, pruneUnwantedSections } from './main-content.js';
 import { type CoreOptions, resolveCoreOptions } from './options.js';
-import { postCleaning, renderFilteredHTML } from './serialize-filtered.js';
+import { isBoilerplateNamed, postCleaning, renderFilteredHTML } from './serialize-filtered.js';
 
 /** Below this many chars of extracted text we try the whole-body fallback. */
 const MIN_EXTRACTED_TEXT = 200;
@@ -28,12 +28,43 @@ function textLenOf(html: string): number {
   return [...trim(html.replace(/<[^>]+>/g, ' '))].length;
 }
 
-function extractFrom(node: HElement, opts: CoreOptions): { html: string; textLength: number } {
+/**
+ * Remove boilerplate-named DESCENDANTS (by class/id) of the content root. This
+ * must run BEFORE postCleaning, which strips `id`/`class` (ALWAYS_DROP_ATTRS)
+ * and so blinds the serializer's `isBoilerplateNamed` guard. We never remove the
+ * root itself (it was already chosen) — only its descendants. Iterate a snapshot
+ * in reverse document order so removing an already-detached child is a no-op.
+ */
+function removeBoilerplateNamed(root: HElement, opts: CoreOptions): void {
+  const els = getElementsByTagName(root, '*');
+  for (let i = els.length - 1; i >= 0; i--) {
+    const el = els[i];
+    if (el && isBoilerplateNamed(el, opts)) el.remove();
+  }
+}
+
+function renderClone(
+  node: HElement,
+  opts: CoreOptions,
+  dropBoilerplateNamed: boolean,
+): { html: string; textLength: number } {
   const clone = node.cloneNode(true);
   pruneUnwantedSections(clone, opts);
+  if (dropBoilerplateNamed) removeBoilerplateNamed(clone, opts);
   postCleaning(clone);
   const html = renderFilteredHTML(clone, opts);
   return { html, textLength: textLenOf(html) };
+}
+
+function extractFrom(node: HElement, opts: CoreOptions): { html: string; textLength: number } {
+  const filtered = renderClone(node, opts, true);
+  if (filtered.textLength > 0) return filtered;
+  // Name-based boilerplate removal emptied the content — the whole node lives in
+  // boilerplate-named containers (typical of collection/listing pages). Back off
+  // to the unfiltered extraction rather than emit nothing (go-trafilatura's
+  // "do not delete all the content" rule).
+  const unfiltered = renderClone(node, opts, false);
+  return unfiltered.textLength > 0 ? unfiltered : filtered;
 }
 
 /**

@@ -38,6 +38,8 @@ export interface HElement extends HNode {
   readonly children: ArrayLike<HElement> & Iterable<HElement>;
   readonly firstChild: HNode | null;
   readonly firstElementChild: HElement | null;
+  /** The next sibling that is an element (null when this is the last element child). */
+  readonly nextElementSibling: HElement | null;
   /** The nearest ancestor that is an element (null at the document root). */
   readonly parentElement: HElement | null;
   readonly innerHTML: string;

@@ -63,4 +63,52 @@ describe('extractContentHTML — end to end', () => {
     // both should drop the boilerplate-classed related block
     expect(precision.html).not.toContain('href="/a"');
   });
+
+  // FIX 1: name-based boilerplate must fire in the real pipeline. A non-link-dense
+  // prose block whose class matches BOILERPLATE_TOKENS used to survive because
+  // postCleaning stripped class/id BEFORE the serializer's isBoilerplateNamed guard.
+  it('drops a non-link-dense newsletter-classed prose block inside the article', () => {
+    const lead =
+      'This is the genuine article body paragraph carrying the real story a reader came for, long enough to be unambiguous and pass the threshold. ';
+    const html = `<body><main><article class="article-content">
+        <h1>The Headline</h1>
+        <p>${lead.repeat(2)}</p>
+        <div class="newsletter-signup"><p>Sign up for our weekly newsletter to get the latest delivered to your inbox every Monday morning.</p></div>
+        <p>${lead}</p>
+      </article></main></body>`;
+    const { html: out } = extractContentHTML(html, { focus: 'balanced' });
+    expect(out).toContain('genuine article body');
+    expect(out).not.toContain('Sign up for our weekly newsletter');
+  });
+
+  it('keeps a comment-classed prose block when commentsAsContent is true', () => {
+    const lead =
+      'This is the genuine article body paragraph carrying the real story a reader came for, long enough to be unambiguous and pass the threshold. ';
+    const html = `<body><main><article class="article-content">
+        <h1>The Headline</h1>
+        <p>${lead.repeat(2)}</p>
+        <div class="comment"><p>A thoughtful reader comment that adds context and should be preserved when comments are content.</p></div>
+      </article></main></body>`;
+    const { html: out } = extractContentHTML(html, {
+      focus: 'balanced',
+      commentsAsContent: true,
+    });
+    expect(out).toContain('genuine article body');
+    expect(out).toContain('A thoughtful reader comment');
+  });
+
+  // Backoff: when the entire content lives in boilerplate-named containers
+  // (typical of collection/listing pages), name-filtering must NOT empty the
+  // output — it backs off to the unfiltered extraction (go's "don't delete all").
+  it('backs off when name-based boilerplate removal would empty the content', () => {
+    const item =
+      'A listed entry with a meaningful description long enough to count as real body text for this collection page. ';
+    const html = `<body><main><div class="related-widget">
+        <div class="card"><p>${item.repeat(2)}</p></div>
+        <div class="card"><p>${item.repeat(2)}</p></div>
+      </div></main></body>`;
+    const { html: out, textLength } = extractContentHTML(html, { focus: 'balanced' });
+    expect(textLength).toBeGreaterThan(0);
+    expect(out).toContain('A listed entry');
+  });
 });

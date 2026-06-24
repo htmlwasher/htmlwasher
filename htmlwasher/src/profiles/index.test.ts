@@ -29,6 +29,10 @@ describe('extraction profiles', () => {
     expect(getProfile('documentation').contentSelectors).toContain('.markdown-body');
   });
 
+  it("product boilerplate restores the rs-trafilatura [class*='recommend'] selector", () => {
+    expect(getProfile('product').boilerplateSelectors).toContain("[class*='recommend']");
+  });
+
   it('article and collection use no special content selectors', () => {
     expect(getProfile('article').contentSelectors).toHaveLength(0);
     expect(getProfile('collection').contentSelectors).toHaveLength(0);

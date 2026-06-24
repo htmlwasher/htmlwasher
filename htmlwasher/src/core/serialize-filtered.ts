@@ -17,6 +17,7 @@ import {
 import {
   childNodesOf,
   classId,
+  ELEMENT_NODE,
   getElementsByTagName,
   type HElement,
   type HNode,
@@ -147,17 +148,33 @@ export function isBoilerplateNamed(el: HElement, opts: CoreOptions): boolean {
 }
 
 /**
+ * Concatenated text of the TEXT-node children that appear BEFORE the first child
+ * element (go-trafilatura's `etree.Text(child)` — leading text only, never deep
+ * descendant text). Stops at the first element node.
+ */
+function leadingText(el: HElement): string {
+  let out = '';
+  for (const node of childNodesOf(el)) {
+    if (node.nodeType === ELEMENT_NODE) break;
+    if (isText(node)) out += node.textContent;
+  }
+  return out;
+}
+
+/**
  * postCleaning — remove empty non-void elements and strip useless/unsafe
- * attributes in place (go-trafilatura postCleaning).
+ * attributes in place (go-trafilatura postCleaning). An element is "empty" when
+ * it has NO child elements and its LEADING text is blank — matching go's
+ * `len(Children(child)) == 0 && !textCharsTest(etree.Text(child))`.
  */
 export function postCleaning(root: HElement): void {
   const all = getElementsByTagName(root, '*');
   for (let i = all.length - 1; i >= 0; i--) {
     const el = all[i];
     if (el === undefined) continue;
-    const isEmpty = trim(el.firstChild?.textContent ?? el.textContent) === '';
+    const isEmpty = trim(leadingText(el)) === '';
     const isVoid = VOID_TAGS.has(tagOf(el));
-    if (el.childNodes.length === 0 && isEmpty && !isVoid) {
+    if (el.children.length === 0 && isEmpty && !isVoid) {
       el.replaceWith(...childNodesOf(el));
     }
   }

@@ -9,6 +9,7 @@
 import { type HDocument, parseDocumentSpec } from '../core/dom.js';
 import type { PageType } from '../types.js';
 import { selectLen } from './features/dom-query.js';
+import { splitWhitespace } from './features/numeric.js';
 import { ogType } from './features/text.js';
 
 const MIN_PRODUCT_ELEMENTS_FOR_CATEGORY = 5;
@@ -135,7 +136,8 @@ export function extractHtmlSignals(doc: HDocument): HtmlSignals {
   const linkCount = selectLen(doc, 'a');
   let pText = '';
   for (const p of doc.querySelectorAll('p')) pText += p.textContent ?? '';
-  const paragraphWordCount = pText.trim() === '' ? 0 : pText.trim().split(/\s+/).length;
+  // CPython `str.split()` whitespace semantics (NOT JS `\s`) — see numeric.ts.
+  const paragraphWordCount = splitWhitespace(pText).length;
   let linkRatio: number;
   if (paragraphWordCount > 0) linkRatio = linkCount / paragraphWordCount;
   else if (linkCount > 0) linkRatio = linkCount;

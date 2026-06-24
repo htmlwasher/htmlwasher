@@ -220,7 +220,7 @@ export function buildProgram(): Command {
     .option('-o, --output <file>', 'write the result to a file instead of stdout')
     .option('--json', 'emit the full result as pretty JSON (html, metadata, pageType, …)', false)
     .option('-q, --quiet', 'suppress the diagnostics + page-type line on stderr', false)
-    .action(async (input: string | undefined, opts: CommanderOptions, command: Command) => {
+    .action(async (input: string | undefined, opts: CommanderOptions) => {
       const resolved: ResolvedCliOptions = {
         input,
         boilerplate: opts.boilerplate,
@@ -240,7 +240,6 @@ export function buildProgram(): Command {
         // Set the exit code without exiting mid-pipe so stdout flushes; runCli /
         // commander returns and the process exits with this code naturally.
         process.exitCode = code;
-        command.error('', { exitCode: code });
       }
     });
 

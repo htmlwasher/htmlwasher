@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { wash } from './pipeline.js';
 
@@ -81,5 +81,29 @@ describe('wash() orchestration', () => {
     const { pageType, confidence } = await wash(PAGE, { boilerplate: 'none' });
     expect(pageType).toBeUndefined();
     expect(confidence).toBeUndefined();
+  });
+});
+
+describe('wash() warning builders narrow non-Error throws', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('a non-Error thrown from metadata extraction is stringified, not "undefined"', async () => {
+    // A throw that is NOT an Error instance: `(error as Error).message` would be
+    // `undefined`; the narrowed `String(error)` yields the literal text instead.
+    // resetModules first so the freshly-imported pipeline graph wires the mock.
+    vi.resetModules();
+    vi.doMock('./metadata/index.js', () => ({
+      extractMetadata: () => {
+        throw 'boom-not-an-error';
+      },
+    }));
+    const { wash: washMocked } = await import('./pipeline.js');
+    const { messages } = await washMocked(PAGE, { boilerplate: 'none' });
+    const warning = messages.find((m) => m.text.startsWith('metadata extraction failed'));
+    expect(warning?.text).toContain('boom-not-an-error');
+    expect(warning?.text).not.toContain('undefined');
   });
 });

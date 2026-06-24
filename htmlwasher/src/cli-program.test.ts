@@ -2,7 +2,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { buildProgram, type CliIo, type ResolvedCliOptions, runWash } from './cli-program.js';
 import { DEFAULT_BOILERPLATE_MODE, DEFAULT_WASHING_LEVEL } from './types.js';
@@ -200,5 +200,32 @@ describe('option validation (parser layer)', () => {
     expect(exitCode).not.toBe(0);
     expect(message).toMatch(/level/i);
     expect(message).toMatch(/xyz/);
+  });
+});
+
+describe('commander action handled-error exit path', () => {
+  it('a failing input sets exit code 1 with no stray trailing blank line on stderr', async () => {
+    // The action runs runWash against the real process streams, then sets
+    // process.exitCode. With the old `command.error('', …)` call gone, no empty
+    // message is routed through writeErr, so stderr must not gain a lone extra \n.
+    const savedExitCode = process.exitCode;
+    let captured = '';
+    const stderrSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk: string | Uint8Array) => {
+        captured += chunk.toString();
+        return true;
+      });
+    try {
+      const program = buildProgram().exitOverride();
+      await program.parseAsync(['node', 'htmlwasher', '/no/such/file/at/all.html']);
+      expect(process.exitCode).toBe(1);
+      // The only stderr is runWash's single-line read error — no double newline.
+      expect(captured).toMatch(/cannot read input file/i);
+      expect(captured.endsWith('\n\n')).toBe(false);
+    } finally {
+      stderrSpy.mockRestore();
+      process.exitCode = savedExitCode;
+    }
   });
 });

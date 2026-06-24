@@ -6,14 +6,7 @@
 
 import { deleteByLinkDensity, linkDensityTest } from './clean.js';
 import { CONTENT_RULES, type ContentRule } from './constants.js';
-import {
-  childElements,
-  getElementsByTagName,
-  type HElement,
-  tagOf,
-  textLength,
-  trim,
-} from './dom.js';
+import { getElementsByTagName, type HElement, tagOf, textLength } from './dom.js';
 import type { CoreOptions } from './options.js';
 
 /** Minimum text length (chars) for a selector match to win outright (rs guard). */
@@ -160,9 +153,4 @@ export function findContentNode(body: HElement, opts: CoreOptions): HElement {
 
   // Last resort: the longest selector match, else the body itself.
   return bySelector ?? body;
-}
-
-/** Whether a content node has a plausible amount of extractable text. */
-export function hasSufficientText(el: HElement): boolean {
-  return [...trim(el.textContent)].length > 0 && childElements(el).length >= 0;
 }

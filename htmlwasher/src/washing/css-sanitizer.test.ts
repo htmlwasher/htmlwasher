@@ -43,6 +43,14 @@ describe('sanitizeCss', () => {
     expect(out).not.toMatch(/javascript:/i);
   });
 
+  it('defeats CSS backslash-escape evasion of a banned scheme', () => {
+    // On the wire the CSS is `url(\6a avascript:alert(1))`; `\6a` is the CSS
+    // escape for 'j', so a browser decodes it back to `javascript:`. Any url()
+    // arg containing a backslash escape is rejected.
+    const out = sanitizeCss('background:url(\\6a avascript:alert(1))');
+    expect(out).toContain("url('')");
+  });
+
   it('preserves safe http/https url()', () => {
     const out = sanitizeCss('background:url(https://ok.com/a.png)');
     expect(out).toBe('background:url(https://ok.com/a.png)');
@@ -51,6 +59,10 @@ describe('sanitizeCss', () => {
   it('preserves protocol-relative and relative url()', () => {
     expect(sanitizeCss('background:url("//cdn/a.png")')).toContain('//cdn/a.png');
     expect(sanitizeCss("background:url('../img/a.png')")).toContain('../img/a.png');
+  });
+
+  it('preserves fragment url() (same-doc reference)', () => {
+    expect(sanitizeCss('clip-path:url(#mask)')).toContain('url(#mask)');
   });
 
   it('returns empty input unchanged', () => {
@@ -74,5 +86,11 @@ describe('sanitizeStyledHtml', () => {
   it('leaves a safe inline style untouched (modulo re-encoding)', () => {
     const out = sanitizeStyledHtml('<div style="color:red">x</div>');
     expect(out).toContain('color:red');
+  });
+
+  it('neutralizes a backslash-escaped scheme in an inline style attribute', () => {
+    const out = sanitizeStyledHtml('<div style="background:url(\\6a avascript:alert(1))">x</div>');
+    expect(out).toContain("url('')");
+    expect(out).not.toMatch(/javascript:/i);
   });
 });

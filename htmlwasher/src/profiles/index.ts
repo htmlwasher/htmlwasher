@@ -133,6 +133,7 @@ const PRODUCT_BOILERPLATE_SELECTORS = [
   "[class*='email-signup']",
   "[class*='signup']",
   "[class*='recently-viewed']",
+  "[class*='recommend']",
   "[class*='related-']",
   "[class*='sponsored']",
   "[class*='a-carousel']",

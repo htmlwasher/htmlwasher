@@ -194,7 +194,7 @@ consumed (matching rs-trafilatura).
   `html-minifier-terser` (minify), `chardet` + `iconv-lite` (decode non-UTF-8
   buffers). _added in Phase 6._
 - ONNX inference: `onnxruntime-node` (default) + `onnxruntime-web` (WASM,
-  optional) behind one interface; pinned ≥ 1.23.0.
+  optional) behind one interface; pinned to exactly 1.27.0.
 
 The classifier model is trained offline in the separate `@/training/` Python
 project (see [`@/training/SPEC.md`](../training/SPEC.md)) and exported as

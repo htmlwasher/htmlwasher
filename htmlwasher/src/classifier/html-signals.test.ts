@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
-import { refineWithHtmlSignals } from './html-signals.js';
+import { parseDocumentSpec } from '../core/dom.js';
+import { extractHtmlSignals, refineWithHtmlSignals } from './html-signals.js';
 
 describe('refineWithHtmlSignals — Stage-2 (only overrides article)', () => {
   it('leaves a non-article type unchanged', () => {
@@ -33,5 +34,21 @@ describe('refineWithHtmlSignals — Stage-2 (only overrides article)', () => {
   it('plain article stays article', () => {
     const html = '<html><body><article><p>words here</p></article></body></html>';
     expect(refineWithHtmlSignals('article', html)).toBe('article');
+  });
+});
+
+describe('extractHtmlSignals — paragraphWordCount uses CPython whitespace (FIX H)', () => {
+  const NEL = String.fromCodePoint(0x85); // CPython whitespace, JS \s ✗
+  const FS = String.fromCodePoint(0x1c); // CPython whitespace, JS \s ✗
+  const BOM = String.fromCodePoint(0xfeff); // CPython keeps it, JS .trim() strips it
+
+  it('counts words split on U+0085 / U+001C (CPython, not JS \\s)', () => {
+    const doc = parseDocumentSpec(`<html><body><p>one${NEL}two${FS}three</p></body></html>`);
+    expect(extractHtmlSignals(doc).paragraphWordCount).toBe(3);
+  });
+
+  it('does NOT split on U+FEFF (BOM stays attached, one word)', () => {
+    const doc = parseDocumentSpec(`<html><body><p>alpha${BOM}beta</p></body></html>`);
+    expect(extractHtmlSignals(doc).paragraphWordCount).toBe(1);
   });
 });

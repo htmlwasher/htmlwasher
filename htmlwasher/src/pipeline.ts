@@ -72,7 +72,7 @@ async function runBoilerplate(
   } catch (error) {
     messages.push({
       type: 'warning',
-      text: `page-type classification unavailable; using the default profile: ${(error as Error).message}`,
+      text: `page-type classification unavailable; using the default profile: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
 
@@ -113,7 +113,7 @@ export async function wash(html: string, options: WashOptions = {}): Promise<Was
   } catch (error) {
     messages.push({
       type: 'warning',
-      text: `metadata extraction failed: ${(error as Error).message}`,
+      text: `metadata extraction failed: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
 

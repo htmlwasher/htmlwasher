@@ -31,10 +31,12 @@ and `~/r/contextractor`.
   pending the trained model (part 2).
 - Phase 7 (validation vs adbar corpus) — done. `test/validation/` scores the full
   `wash()` pipeline over the 100 adbar eval pages present locally (skips in CI).
-  **Result: precision ≈ 0.75, recall ≈ 0.84, F1 ≈ 0.79** (balanced + minimal) —
-  in the same ballpark as upstream Trafilatura on this set. Expectations fixture
-  (`fixtures/validation/eval-expectations.json`) derived from adbar's
-  `tests/evaldata.py` (Apache-2.0; attribution in NOTICE).
+  **Result: precision ≈ 0.79, recall ≈ 0.81, F1 ≈ 0.80** (balanced + minimal) —
+  in the same ballpark as upstream Trafilatura on this set. (Pre code-review the
+  name-based boilerplate filter was dead, scoring P 0.75 / R 0.84 / F1 0.79;
+  activating it lifted precision — see "Post-implementation code review".)
+  Expectations fixture (`fixtures/validation/eval-expectations.json`) derived from
+  adbar's `tests/evaldata.py` (Apache-2.0; attribution in NOTICE).
 - Phase 4 (classifier) — done. Real model trained on full WCXB (test acc 0.777,
   macro-F1 0.663; ONNX↔native argmax 100%). TS runtime at 100% feature parity
   (numeric 1246/1246, tfidf 1400/1400, argmax 14/14). Cross-DOM fixes: selectolax
@@ -63,17 +65,43 @@ and `~/r/contextractor`.
   and the stub never actually fetches. The two are complementary: offline fixtures
   here vs a future live-fetch harness there.
 
-### Phase 7 gaps (systematic)
+### Post-implementation code review
 
-- Precision (~0.75) is the weaker dimension: some `without` boilerplate strings
-  survive (footers/teasers/related blocks not caught by the class-token list or
-  the link-density pass). This is expected given the simplified per-element
-  handling — the filter-serialize path is coarser than go-trafilatura's per-handler
-  rebuild. Tightening the boilerplate token list + a precision-mode teaser/discard
-  pass (rs `prune_unwanted_sections`) would lift it.
-- `precision` and `balanced` modes scored identically on this set; `recall` kept
-  marginally more (`+2` true positives). The focus thresholds have only a small
-  effect on these coarse substring checks.
+A whole-repo multi-agent review (7 subsystem reviewers → adversarial verify)
+surfaced 25 findings; 16 were confirmed real and fixed, 9 rejected as style nits.
+Highlights:
+
+- **(critical) The name-based boilerplate filter was dead in the real pipeline.**
+  `postCleaning` strips `class`/`id` (ALWAYS_DROP_ATTRS) BEFORE the whitelist
+  serializer's `isBoilerplateNamed` guard reads them, so `BOILERPLATE_TOKENS`/
+  `COMMENT_TOKENS` never dropped anything during extraction. Fix: a name-based
+  boilerplate pass over the content-node DESCENDANTS in `extractFrom()` BEFORE
+  `postCleaning` (honoring `commentsAsContent`), with a **backoff**: if removing
+  boilerplate-named nodes empties the content (collection/listing pages whose
+  whole body is in boilerplate-named containers), keep the unfiltered extraction
+  (go-trafilatura's "do not delete all the content" rule). This lifted precision
+  0.75 → 0.79 and F1 0.79 → 0.80 on the adbar eval.
+- (warning) `linkDensityTest` used `nextSibling` (node) where go-trafilatura uses
+  `NextElementSibling` — on pretty-printed HTML a whitespace text node made every
+  last block use the lower limit. Fixed via `HElement.nextElementSibling`.
+- (warning) `postCleaning` empty-strip used `childNodes.length` instead of
+  element-children + leading-text (go's `etree.Text`); now strips whitespace-only
+  `<div>   </div>`.
+- (warning) `PRODUCT_BOILERPLATE_SELECTORS` was missing `[class*='recommend']` vs
+  rs-trafilatura — restored.
+- (info) classifier feature whitespace (`splitWhitespace`/`strip`/`paragraphWordCount`)
+  now uses the exact CPython `str.split`/`str.strip` codepoint class (was JS `\s`/
+  `.trim()`), tightening the byte-for-byte parity contract (parity stayed 100%).
+- ONNX runtimes pinned to exactly 1.27.0 (both backends in lockstep); vocab artifact
+  validated at load; `css-sanitizer` rejects backslash-escaped `url()` schemes;
+  pipeline catch blocks narrow `unknown`; CLI error path no longer double-newlines;
+  unused `washing/index.ts` barrel removed; stale "181-feature" comment → 189;
+  `training/uv.lock` gitignored.
+
+The earlier "precision is the weak dimension" gap is the same root cause (the dead
+filter) and is now addressed. Remaining: `precision`/`balanced` modes still score
+near-identically on this coarse substring eval; the focus thresholds have only a
+small effect there.
 
 ### Phase 2 notes
 

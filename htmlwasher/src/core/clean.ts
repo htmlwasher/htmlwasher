@@ -161,9 +161,9 @@ export function linkDensityTest(
 
   let limit: number;
   if (tagOf(element) === 'p') {
-    limit = element.nextSibling === null ? 60 : 30;
+    limit = element.nextElementSibling === null ? 60 : 30;
   } else {
-    limit = element.nextSibling === null ? 300 : 100;
+    limit = element.nextElementSibling === null ? 300 : 100;
   }
 
   if (textLength < limit) {

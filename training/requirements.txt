@@ -32,7 +32,7 @@ pandas>=2.2,<3
 datasets>=3.0,<4
 huggingface_hub>=0.25,<1
 
-# HTML parsing for the 181-feature extractor (Python side, parity with the TS extractor)
+# HTML parsing for the 189-feature extractor (89 numeric + 100 TF-IDF; Python side, parity with the TS extractor)
 selectolax>=0.3.21,<0.4
 
 # Tooling
