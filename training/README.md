@@ -1,13 +1,13 @@
-# trafilatura-alpha — model training (offline)
+# htmlwasher — model training (offline)
 
 > Status: NOT YET IMPLEMENTED — skeleton only.
 > This directory will hold the offline pipeline that trains the page-type
 > classifier described in `@/prompts/2026-6-24-init/prompt.md` (Phase 4). No
 > training, feature-extraction, or export logic exists yet.
 
-This is the **offline** training project for trafilatura-alpha's page-type
+This is the **offline** training project for htmlwasher's page-type
 classifier. It trains a standard XGBoost model from the public WCXB dataset and
-exports two artifacts into `@/trafilatura-alpha/src/classifier/model/`:
+exports two artifacts into `@/htmlwasher/src/classifier/model/`:
 
 - `model.onnx` — the trained classifier, run in Node via onnxruntime (no Python
   at runtime).
@@ -34,10 +34,10 @@ These are described here for context only — do not expect them to exist yet:
   (DOI `10.5281/zenodo.19316874`). Downloaded data is `.gitignore`d.
 - `extract_features.py` — compute the **189 features** (89 numeric DOM/URL
   signals + 100 TF-IDF) with byte-for-byte **parity** to the TypeScript
-  extractor in `@/trafilatura-alpha/src/classifier/features/`.
+  extractor in `@/htmlwasher/src/classifier/features/`.
 - `train.py` — train an `XGBClassifier`, export `model.onnx`, emit
   `tfidf-vocab.json`, and copy both into
-  `@/trafilatura-alpha/src/classifier/model/`.
+  `@/htmlwasher/src/classifier/model/`.
 
 ## Dataset and attribution (required)
 
@@ -51,11 +51,11 @@ The **WCXB** (Web Content Extraction Benchmark) dataset is licensed
 
 When this pipeline is implemented, reproduce the full attribution/NOTICE block
 required by the upstream and reference licenses (see the repository root
-`NOTICE` and `@/trafilatura-alpha/README.md`).
+`NOTICE` and `@/htmlwasher/README.md`).
 
 ## What is committed vs. not
 
 - **Committed:** the trained artifacts `model.onnx` and `tfidf-vocab.json` (they
-  live in `@/trafilatura-alpha/src/classifier/model/`), plus this skeleton.
+  live in `@/htmlwasher/src/classifier/model/`), plus this skeleton.
 - **Never committed:** the WCXB dataset, downloaded data, the `.venv`, and any
   intermediate `*.parquet` / `*.csv` (see `.gitignore`).

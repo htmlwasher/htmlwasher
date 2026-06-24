@@ -39,8 +39,8 @@ api_surface_changed=false
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
-    */trafilatura-alpha/src/*)
-      required_specs+=$'\n'"trafilatura-alpha/SPEC.md"
+    */htmlwasher/src/*)
+      required_specs+=$'\n'"htmlwasher/SPEC.md"
       [[ "$f" == */index.ts ]] && api_surface_changed=true ;;
     */tools/live-crawl-tester/src/*)
       required_specs+=$'\n'"tools/live-crawl-tester/SPEC.md" ;;

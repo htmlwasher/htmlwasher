@@ -1,11 +1,11 @@
-# htmlwasher — trafilatura-alpha
+# htmlwasher — htmlwasher
 
-htmlwasher hosts **`trafilatura-alpha`**, a faithful **TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura)** with page-type-aware extraction and an ONNX page-type classifier. It extracts a page's main content — clean text plus structured metadata (title, author, date, sitename, tags) — and classifies the page into one of 7 page types (article, forum, product, collection, listing, documentation, service) to route extraction through a type-specific profile. Alongside the library, this repo holds an offline Python `training/` pipeline (XGBoost → ONNX) and a `tools/live-crawl-tester/` end-to-end fetcher. It is a **content-extraction library for Node.js — not a scraper, not a browser-automation crawler, not an Apify Actor.**
+htmlwasher hosts **`htmlwasher`**, a faithful **TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura)** with page-type-aware extraction and an ONNX page-type classifier. It extracts a page's main content — clean text plus structured metadata (title, author, date, sitename, tags) — and classifies the page into one of 7 page types (article, forum, product, collection, listing, documentation, service) to route extraction through a type-specific profile. Alongside the library, this repo holds an offline Python `training/` pipeline (XGBoost → ONNX) and a `tools/live-crawl-tester/` end-to-end fetcher. It is a **content-extraction library for Node.js — not a scraper, not a browser-automation crawler, not an Apify Actor.**
 
 ## Project Structure
 
 ```
-trafilatura-alpha/         # the TypeScript library (npm package `trafilatura-alpha`, alpha)
+htmlwasher/         # the TypeScript library (npm package `htmlwasher`, alpha)
                            #   src/{core,metadata,classifier/{features,model},profiles}, test/, fixtures/
 training/                  # OFFLINE Python project (3.12+, uv-managed): trains XGBoost from the
                            #   WCXB dataset, exports model.onnx + tfidf-vocab.json. Not a pnpm
@@ -89,7 +89,7 @@ Rules under `.claude/rules/` auto-load by reference; the SessionStart snapshot p
 
 Spec maintenance routes changes to the nearest SPEC.md:
 
-- `trafilatura-alpha/src/**` → `trafilatura-alpha/SPEC.md`
+- `htmlwasher/src/**` → `htmlwasher/SPEC.md`
 - `tools/live-crawl-tester/src/**` → `tools/live-crawl-tester/SPEC.md`
 - `training/**.py` → `training/SPEC.md`
 - architecture / data-flow changes → root `SPEC.md`

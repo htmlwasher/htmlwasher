@@ -2,7 +2,7 @@
 
 A TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura) with
 page-type-aware extraction and an ONNX page-type classifier. The published
-library is `trafilatura-alpha` (alpha — see Status below).
+library is `htmlwasher` (alpha — see Status below).
 
 htmlwasher extracts the main content of a web page — clean text plus structured
 metadata (title, author, date, sitename, tags) — and classifies the page type
@@ -21,8 +21,8 @@ this scaffold. Treat everything here as a work in progress.
 
 This is a pnpm + turbo monorepo.
 
-- `@/trafilatura-alpha/` — the TypeScript library (the npm package
-  `trafilatura-alpha`). Strict TypeScript, Node 22+. Holds the core extraction
+- `@/htmlwasher/` — the TypeScript library (the npm package
+  `htmlwasher`). Strict TypeScript, Node 22+. Holds the core extraction
   algorithm, metadata extraction, the page-type classifier (181-feature
   extractor plus ONNX backends), and per-page-type profiles.
 - `@/training/` — an offline Python project (Python 3.12+, uv-managed) that

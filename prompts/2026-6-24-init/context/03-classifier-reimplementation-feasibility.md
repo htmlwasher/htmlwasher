@@ -1,6 +1,6 @@
 # Reimplementing the rs-trafilatura XGBoost Page-Type Classifier in TypeScript and Python — Feasibility
 
-> Research context document for the trafilatura-alpha TypeScript port.
+> Research context document for the htmlwasher TypeScript port.
 > Saved 2026-06-24. Source: deep technical research session.
 
 ## TL;DR

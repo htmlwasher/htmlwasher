@@ -86,7 +86,7 @@ Analyze the prompt's scope to determine which skills and agents are relevant.
 **Discovery**: Scan `@/.claude/skills/` and `@/.claude/agents/` directories. Read the frontmatter (`description` field) of each skill and agent to understand what it does and when it activates. Match against the prompt's technologies, file paths, and verification needs.
 
 **Selection criteria**:
-- Which directories does the prompt touch? (`trafilatura-alpha/`, `tools/`, `training/`, etc.)
+- Which directories does the prompt touch? (`htmlwasher/`, `tools/`, `training/`, etc.)
 - Which technologies are involved? (TypeScript, Python, ONNX, etc.)
 - What verification is needed? (type safety, unit tests, smoke tests, etc.)
 - Are there implementation agents that match the work? (TypeScript, Python, etc.)

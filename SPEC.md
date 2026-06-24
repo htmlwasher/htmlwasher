@@ -5,7 +5,7 @@
 This SPEC describes the **intended architecture** of a scaffolded repository. The
 implementation is **pending** and is being built in phases (Phase 0 through Phase 7) per the build brief at `@/prompts/2026-6-24-init/prompt.md`. At the time of
 writing, the root workspace configuration exists but the component directories
-(`@/trafilatura-alpha/`, `@/tools/live-crawl-tester/`, `@/training/`) and their
+(`@/htmlwasher/`, `@/tools/live-crawl-tester/`, `@/training/`) and their
 source skeletons are not yet created.
 
 Treat every API, module, and artifact named below as a **design target**, not an
@@ -16,7 +16,7 @@ per-component SPEC files are updated to reflect what actually exists (see
 
 ## Overview
 
-htmlwasher is the product repository for **trafilatura-alpha**: a faithful
+htmlwasher is the product repository for **htmlwasher**: a faithful
 **TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura)** with
 **page-type-aware extraction** and an **ONNX page-type classifier**.
 
@@ -32,7 +32,7 @@ The seven page types are: `article`, `forum`, `product`, `collection`,
 This is a **port with a divergent classifier**, not a from-scratch design. It
 leans on the upstream and reference implementations cloned into `~/r/htmlwasher-sources/`
 (see the Source authority hierarchy below). The published library is named
-`trafilatura-alpha` and is **alpha** — early-stage and not yet production-ready.
+`htmlwasher` and is **alpha** — early-stage and not yet production-ready.
 
 ## Architecture
 
@@ -53,13 +53,13 @@ The main-content detection, the readability/dom-distiller-style fallback
 cascade, comment extraction, table handling, and the precision/recall toggles
 are ported from **go-trafilatura** (the cleanest readable reference),
 disambiguated against **adbar/trafilatura** semantics. Lives under
-`@/trafilatura-alpha/src/core/`.
+`@/htmlwasher/src/core/`.
 
 ### Metadata
 
 Title, author, date, URL, sitename, description, and tags — including JSON-LD,
 OpenGraph, and meta-tag handling — ported from adbar/go-trafilatura. Lives under
-`@/trafilatura-alpha/src/metadata/`.
+`@/htmlwasher/src/metadata/`.
 
 ### Page-type classifier (the crux)
 
@@ -77,9 +77,9 @@ A 3-stage cascade equivalent to web-page-classifier's, returning
 Inference runs behind a single `PageTypeClassifier` interface with swappable
 backends: **`onnxruntime-node`** (default) and **`onnxruntime-web`** (WASM, for
 zero-native-binary / serverless deployment). The onnxruntime version is pinned to
-a known-good release. Lives under `@/trafilatura-alpha/src/classifier/`, with the
-feature extractor in `@/trafilatura-alpha/src/classifier/features/` and the
-shipped model artifacts in `@/trafilatura-alpha/src/classifier/model/`.
+a known-good release. Lives under `@/htmlwasher/src/classifier/`, with the
+feature extractor in `@/htmlwasher/src/classifier/features/` and the
+shipped model artifacts in `@/htmlwasher/src/classifier/model/`.
 
 Feature parity is the hard constraint: the TypeScript feature extractor MUST
 produce the same feature vectors as the Python training pipeline, or predictions
@@ -95,15 +95,15 @@ runtimes can flip borderline probability values.
 
 Once classified, extraction is routed through a type-specific extraction profile
 with type-specific tuning, and a confidence score is produced — ported from
-**rs-trafilatura**. Lives under `@/trafilatura-alpha/src/profiles/`.
+**rs-trafilatura**. Lives under `@/htmlwasher/src/profiles/`.
 
 ## Monorepo layout
 
 This is a **pnpm + turbo** monorepo. Workspace members are defined in
-`@/pnpm-workspace.yaml` (`trafilatura-alpha`, `tools/*`).
+`@/pnpm-workspace.yaml` (`htmlwasher`, `tools/*`).
 
 ```
-trafilatura-alpha/          The TypeScript library (the npm package, alpha)
+htmlwasher/          The TypeScript library (the npm package, alpha)
   src/core/                 Core extraction algorithm
   src/metadata/             Metadata extraction
   src/classifier/           Page-type classifier (interface + ONNX backends)
@@ -120,14 +120,14 @@ prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 # (the six read-only reference repos live OUTSIDE this repo at ~/r/htmlwasher-sources/)
 ```
 
-### Component — trafilatura-alpha (the library)
+### Component — htmlwasher (the library)
 
-The published npm package `trafilatura-alpha`. Strict TypeScript (Node 22+,
+The published npm package `htmlwasher`. Strict TypeScript (Node 22+,
 NodeNext modules). Holds the core extraction algorithm, metadata extraction, the
 page-type classifier (189-feature extractor + ONNX backends), and the
 per-page-type profiles. The model artifacts (`model.onnx`, `tfidf-vocab.json`)
 are committed shipped artifacts — they are deliberately **not** gitignored.
-See `@/trafilatura-alpha/SPEC.md` for the public API and module-level behavior.
+See `@/htmlwasher/SPEC.md` for the public API and module-level behavior.
 
 ### Component — training (offline Python pipeline)
 
@@ -144,7 +144,7 @@ library ships:
 - `train.py` — trains an `XGBClassifier` (multi-class softprob over 7 classes),
   exports `model.onnx` via skl2onnx / onnxmltools, and emits `tfidf-vocab.json`
   (vocabulary + IDF weights). Both artifacts are copied into
-  `@/trafilatura-alpha/src/classifier/model/`.
+  `@/htmlwasher/src/classifier/model/`.
 
 Training runs on CPU (no GPU required) at this scale. See
 `@/training/SPEC.md` for the pipeline detail.
@@ -152,7 +152,7 @@ Training runs on CPU (no GPU required) at this scale. See
 ### Component — tools/live-crawl-tester (E2E harness)
 
 A **separate** TypeScript workspace package that proves the library works on the
-real web. It depends on the local `trafilatura-alpha` package, reads a
+real web. It depends on the local `htmlwasher` package, reads a
 configurable URL list (at least 3 real URLs per page type across all 7 types,
 including multilingual / EU sources), fetches each page, runs extraction +
 classification, and reports per-URL PASS/FAIL against simple assertions.
@@ -229,7 +229,7 @@ purely as read-only reference — it is **never built** in this repo.
 
 ## Licensing and attribution
 
-trafilatura-alpha is licensed under the **Apache License, Version 2.0**
+htmlwasher is licensed under the **Apache License, Version 2.0**
 (`@/LICENSE`). It is a port of Trafilatura and references several upstream
 projects; full attribution is in `@/NOTICE`, including the required credit for
 Adrien Barbaresi (Trafilatura), markusmobius (go-trafilatura), Murrough Foley
@@ -241,7 +241,7 @@ The shipped `model.onnx` is trained fresh from the public WCXB dataset — it is
 
 ## Per-component SPEC files
 
-- `@/trafilatura-alpha/SPEC.md` — the library's public API and module behavior.
+- `@/htmlwasher/SPEC.md` — the library's public API and module behavior.
 - `@/tools/live-crawl-tester/SPEC.md` — the live-crawl E2E harness.
 - `@/training/SPEC.md` — the offline Python training pipeline.
 
@@ -252,7 +252,7 @@ phase, tracked in `@/prompts/2026-6-24-init/prompt.md`:
 
 - **Phase 0 — Orientation:** read the research context docs; map the source repos
   to the planned `src/` layout; record findings in `PORTING-NOTES.md`.
-- **Phase 1 — Scaffold:** initialize the `trafilatura-alpha` package (strict
+- **Phase 1 — Scaffold:** initialize the `htmlwasher` package (strict
   tsconfig, vitest, lint); gate is a passing `pnpm test` and clean type-check.
 - **Phase 2 — Core extraction:** port the core algorithm from go-trafilatura.
 - **Phase 3 — Metadata:** port metadata extraction.

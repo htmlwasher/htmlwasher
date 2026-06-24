@@ -1,6 +1,6 @@
 # htmlwasher: HTML-Output Boilerplate Removal + Cleanup Pipeline, Library Choices & Security (June 2026)
 
-> Research context document for **htmlwasher** (the renamed `trafilatura-alpha`) — the HTML-in / HTML-out cleanup library. This doc covers the concerns the pivot introduced that docs 01–07 do not: how to emit the extracted main content **as HTML**, how the two pillars (boilerplate removal + HTML washing) compose, the exact washing-level presets, the 2026 library choices (sanitizer/normalizer/formatter/DOM/ONNX), and the untrusted-HTML security model. It is grounded in deep reads of the cloned references under `~/r/htmlwasher-sources/`, the htmlwasher cleanup engine at `~/r/tools/packages/htmlprocessing-server`, and `~/r/contextractor`, plus mid-2026 web research. Adversarially verified where load-bearing.
+> Research context document for **htmlwasher** (the renamed `htmlwasher`) — the HTML-in / HTML-out cleanup library. This doc covers the concerns the pivot introduced that docs 01–07 do not: how to emit the extracted main content **as HTML**, how the two pillars (boilerplate removal + HTML washing) compose, the exact washing-level presets, the 2026 library choices (sanitizer/normalizer/formatter/DOM/ONNX), and the untrusted-HTML security model. It is grounded in deep reads of the cloned references under `~/r/htmlwasher-sources/`, the htmlwasher cleanup engine at `~/r/tools/packages/htmlprocessing-server`, and `~/r/contextractor`, plus mid-2026 web research. Adversarially verified where load-bearing.
 
 ---
 

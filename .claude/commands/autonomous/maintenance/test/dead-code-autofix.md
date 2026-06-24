@@ -42,7 +42,7 @@ Fix issues that can be resolved autonomously:
 - Remove unused exports where the function is also unused internally
 
 Do NOT remove:
-- Public API exports (types, classes, functions exported from `trafilatura-alpha/src/index.ts`)
+- Public API exports (types, classes, functions exported from `htmlwasher/src/index.ts`)
 - Dependencies that are used at runtime but may not be detected by knip (e.g., peer deps, the ONNX runtimes loaded behind one interface)
 - Exports with `// @public` or similar annotations
 

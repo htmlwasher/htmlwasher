@@ -1,14 +1,14 @@
-# trafilatura-alpha — Specification
+# htmlwasher — Specification
 
 Status: pending — not implemented. This document describes the intended public
-API surface and module layout of the `trafilatura-alpha` library. None of it is
+API surface and module layout of the `htmlwasher` library. None of it is
 built yet; the package is a scaffold. The implementation lands in phases per the
 build brief at [`@/prompts/2026-6-24-init/prompt.md`](../prompts/2026-6-24-init/prompt.md).
 Keep this spec in sync with the source as the port is implemented.
 
 ## Purpose
 
-`trafilatura-alpha` is a TypeScript port of Trafilatura. Given the HTML of a web
+`htmlwasher` is a TypeScript port of Trafilatura. Given the HTML of a web
 page, it extracts the main content (clean text plus structured metadata) and
 classifies the page type so extraction can be routed through a profile tuned for
 that type. It is a Node.js library — not a scraper or a browser automation

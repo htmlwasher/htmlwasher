@@ -1,6 +1,6 @@
 # Porting the rs-trafilatura Page-Type Classifier: Bilingual Feasibility Deep-Dive
 
-> Research context document for the trafilatura-alpha TypeScript port.
+> Research context document for the htmlwasher TypeScript port.
 > Saved 2026-06-24. Source: deep technical research session.
 >
 > **What's in this doc:** The deeper bilingual (TS + Python) port evaluation, with concrete library options, performance estimates, dependency footprints, and a staged plan. **This is the companion to `03-classifier-reimplementation-feasibility.md`** — that one is the synthesized, primary brief; this one expands on inference-library choices (ONNX vs native bindings vs m2cgen vs Treelite), training cost (no GPU needed), model-sharing format (ONNX), feature-extraction libraries (selectolax for Python, htmlparser2/cheerio for TS), and a reuse-vs-rebuild verdict (**rebuild fresh**, because the rs-trafilatura model is a custom binary with unpublished feature extraction). Read this alongside doc 03 for full coverage of the classifier port.

@@ -21,7 +21,7 @@ Both enumerations are **plain string-union / `as const`-array types, NOT TypeScr
 
 Also build: **comprehensive unit tests** for every module, **golden parity tests** against the reference implementations, and a separate **offline** end-to-end "wash corpus" tester in `tools/` (saved HTML fixtures in → cleaned HTML out; **no network**).
 
-This is a *rename + recombination*, not a from-scratch design: it keeps the full existing trafilatura-alpha functionality (now renamed **htmlwasher**) — including the page-type classifier you train yourself and export to ONNX — and **adds** the htmlwasher HTML-cleanup levels, while constraining all output to HTML and dropping every conversion and all scraping. Lean heavily on the existing implementations listed below.
+This is a *rename + recombination*, not a from-scratch design: it keeps the full existing htmlwasher functionality (now renamed **htmlwasher**) — including the page-type classifier you train yourself and export to ONNX — and **adds** the htmlwasher HTML-cleanup levels, while constraining all output to HTML and dropping every conversion and all scraping. Lean heavily on the existing implementations listed below.
 
 ---
 

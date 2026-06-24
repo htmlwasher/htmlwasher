@@ -11,7 +11,7 @@ Update all dependencies to their latest compatible versions.
 pnpm update --latest --recursive
 ```
 
-This covers the TypeScript workspace members (`trafilatura-alpha`, `tools/live-crawl-tester`).
+This covers the TypeScript workspace members (`htmlwasher`, `tools/live-crawl-tester`).
 
 ## Step PYTHON: Bump training deps within ranges
 

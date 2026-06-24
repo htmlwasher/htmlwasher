@@ -1,6 +1,6 @@
 # @htmlwasher/live-crawl-tester
 
-A polite, live-site end-to-end tester for [`trafilatura-alpha`](../../trafilatura-alpha). It fetches real URLs across all 7 page types, runs extraction plus page-type classification over the fetched HTML, and reports PASS/FAIL per URL.
+A polite, live-site end-to-end tester for [`htmlwasher`](../../htmlwasher). It fetches real URLs across all 7 page types, runs extraction plus page-type classification over the fetched HTML, and reports PASS/FAIL per URL.
 
 This is a separate workspace package. It is **not** part of the offline `pnpm test` suite because it hits the network.
 
@@ -11,7 +11,7 @@ Scaffolded, not implemented. `src/index.ts` is a placeholder that logs a notice 
 ## What it does
 
 - Fetches real URLs across all 7 page types (article, forum, product, collection, listing, documentation, service).
-- Runs `trafilatura-alpha` extraction plus the page-type classifier over each fetched page.
+- Runs `htmlwasher` extraction plus the page-type classifier over each fetched page.
 - Reports PASS/FAIL per URL and a summary across page types.
 
 ## Not Crawlee / not Playwright

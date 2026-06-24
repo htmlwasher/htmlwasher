@@ -1,4 +1,4 @@
-# trafilatura-alpha
+# htmlwasher
 
 A TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura) with
 page-type-aware extraction and an ONNX page-type classifier. It extracts the
@@ -18,7 +18,7 @@ package yet.
 
 ## Attribution
 
-trafilatura-alpha is a TypeScript port of Trafilatura and references several
+htmlwasher is a TypeScript port of Trafilatura and references several
 upstream projects. The full attribution lives in the root
 [`@/NOTICE`](../NOTICE) file, including the required credit for:
 

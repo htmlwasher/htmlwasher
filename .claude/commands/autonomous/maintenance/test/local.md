@@ -27,7 +27,7 @@ Automatically fix any formatting issues before running tests. `training/` is an 
 pnpm build
 ```
 
-This builds the TypeScript workspace members (`trafilatura-alpha`, `tools/live-crawl-tester`). If the build fails, read the error output, identify the root cause, fix the code, and retry.
+This builds the TypeScript workspace members (`htmlwasher`, `tools/live-crawl-tester`). If the build fails, read the error output, identify the root cause, fix the code, and retry.
 
 ## Step TEST_TS: Run TypeScript Tests
 
@@ -35,7 +35,7 @@ This builds the TypeScript workspace members (`trafilatura-alpha`, `tools/live-c
 pnpm test
 ```
 
-This runs vitest in `trafilatura-alpha` and `tools/live-crawl-tester` (and any package whose `test` script is wired up). Packages without tests use `vitest run --passWithNoTests`.
+This runs vitest in `htmlwasher` and `tools/live-crawl-tester` (and any package whose `test` script is wired up). Packages without tests use `vitest run --passWithNoTests`.
 
 If tests fail:
 - Read the error output for each failing test

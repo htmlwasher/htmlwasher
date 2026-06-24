@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polite live-site E2E tester for trafilatura-alpha across the 7 page types.",
+  "description": "Polite live-site E2E tester for htmlwasher across the 7 page types.",
   "scripts": {
     "test:live": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "trafilatura-alpha": "workspace:*",
+    "htmlwasher": "workspace:*",
     "undici": "^7.0.0",
     "robots-parser": "^3.0.1"
   },

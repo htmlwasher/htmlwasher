@@ -3,7 +3,7 @@
 # clone-other-repos.sh
 # =============================================================================
 # Clones the SOURCE repositories used as references for building a TypeScript
-# fork/port of rs-trafilatura ("trafilatura-alpha").
+# fork/port of rs-trafilatura ("htmlwasher").
 #
 # WHY THIS SCRIPT EXISTS
 # -----------------------------------------------------------------------------
@@ -23,7 +23,7 @@
 #     Murrough-Foley/rs-trafilatura  (DIVERGENT Rust fork: + ML page-typing)
 #            |  '-- Murrough-Foley/web-page-classifier (the XGBoost classifier)
 #            v
-#     trafilatura-alpha   (OUR TypeScript fork, built under r/htmlwasher/)
+#     htmlwasher   (OUR TypeScript fork, built under r/htmlwasher/)
 #
 # AUTHORITY HIERARCHY when sources disagree:
 #   1. rs-trafilatura + web-page-classifier define *WHAT* to build

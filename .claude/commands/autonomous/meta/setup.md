@@ -19,7 +19,7 @@ Also read: `CLAUDE.md`, `.claude/settings.json`, `.mcp.json`, `.claude/rules/*.m
 
 ## Step SCAN: Codebase Scan
 
-Read the root `package.json` / `pnpm-workspace.yaml`, the TypeScript sources (`trafilatura-alpha/src`, `tools/live-crawl-tester/src`), and `training/pyproject.toml` to build a technology domain map. Identify frameworks, tools, and key domains actually in use. The `training/` project is an offline uv-managed Python project — not a pnpm workspace member, so it never surfaces through `package.json`; treat it as a first-class surface alongside the TS workspace packages. The reference repos live OUTSIDE this repo at `~/r/htmlwasher-sources/` (rs-trafilatura, web-page-classifier, go-trafilatura, trafilatura, trafilatura-rs, readability) — never treat them as in-repo source.
+Read the root `package.json` / `pnpm-workspace.yaml`, the TypeScript sources (`htmlwasher/src`, `tools/live-crawl-tester/src`), and `training/pyproject.toml` to build a technology domain map. Identify frameworks, tools, and key domains actually in use. The `training/` project is an offline uv-managed Python project — not a pnpm workspace member, so it never surfaces through `package.json`; treat it as a first-class surface alongside the TS workspace packages. The reference repos live OUTSIDE this repo at `~/r/htmlwasher-sources/` (rs-trafilatura, web-page-classifier, go-trafilatura, trafilatura, trafilatura-rs, readability) — never treat them as in-repo source.
 
 ## Step ANALYZE: Gap Analysis
 

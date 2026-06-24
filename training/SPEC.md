@@ -6,13 +6,13 @@
 
 ## Purpose
 
-Train trafilatura-alpha's page-type classifier offline and export the two
+Train htmlwasher's page-type classifier offline and export the two
 runtime artifacts consumed by the TypeScript library:
 
 - `model.onnx` — XGBoost classifier exported to ONNX.
 - `tfidf-vocab.json` — locked TF-IDF vocabulary + IDF weights.
 
-Both are written to `@/trafilatura-alpha/src/classifier/model/` and are the
+Both are written to `@/htmlwasher/src/classifier/model/` and are the
 only outputs committed to the repository. This project is offline-only, not a
 pnpm workspace member, and not shipped at runtime.
 
@@ -35,7 +35,7 @@ yet):
   total; its README body still says 81/181 — the code is authoritative.)
 - HTML parsing via `selectolax` (Python side).
 - **Parity requirement:** these features MUST match the TypeScript extractor in
-  `@/trafilatura-alpha/src/classifier/features/` exactly (feature list,
+  `@/htmlwasher/src/classifier/features/` exactly (feature list,
   ordering, normalization, missing-value handling). Parity is validated by the
   TS↔Python feature-parity tests (target ≥99% exact match).
 - **TF-IDF detail:** replicate scikit-learn's nonstandard idf exactly — its
@@ -55,7 +55,7 @@ yet):
 
 - Export the trained model to `model.onnx` via `skl2onnx` / `onnxmltools`.
 - Emit `tfidf-vocab.json` (vocabulary + IDF weights).
-- Copy both artifacts into `@/trafilatura-alpha/src/classifier/model/`.
+- Copy both artifacts into `@/htmlwasher/src/classifier/model/`.
 - Pin a known-good `onnxruntime` for verification (avoid the 1.21.x–1.22.x
   category-only-trees bug noted in the research).
 

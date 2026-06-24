@@ -1,4 +1,4 @@
-// trafilatura-alpha — TypeScript port of Trafilatura with page-type-aware
+// htmlwasher — TypeScript port of Trafilatura with page-type-aware
 // extraction and an ONNX page-type classifier.
 //
 // SCAFFOLD ONLY — no extraction, classifier, or training logic lives here yet.

@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews TypeScript and Python code in this Trafilatura-port repo for correctness, hygiene, security (untrusted HTML), ONNX/feature parity, and training reproducibility. Use proactively after code changes. <example>Context: User just changed the classifier feature extractor. user: 'Review my changes to trafilatura-alpha/src/classifier/features/' assistant: 'I'll use the code-reviewer agent to review the TypeScript changes and check feature parity with training/extract_features.py' <commentary>Feature-extractor changes need the parity checklist — the TS and Python extractors must agree.</commentary></example> <example>Context: User reworked the training pipeline. user: 'I changed training/train.py — can you check it?' assistant: 'I'll use the code-reviewer agent to review the Python changes for correctness, reproducibility, and ONNX-export integrity' <commentary>Training-pipeline changes should be reviewed proactively with the Python + ML checklist.</commentary></example>
+description: Reviews TypeScript and Python code in this Trafilatura-port repo for correctness, hygiene, security (untrusted HTML), ONNX/feature parity, and training reproducibility. Use proactively after code changes. <example>Context: User just changed the classifier feature extractor. user: 'Review my changes to htmlwasher/src/classifier/features/' assistant: 'I'll use the code-reviewer agent to review the TypeScript changes and check feature parity with training/extract_features.py' <commentary>Feature-extractor changes need the parity checklist — the TS and Python extractors must agree.</commentary></example> <example>Context: User reworked the training pipeline. user: 'I changed training/train.py — can you check it?' assistant: 'I'll use the code-reviewer agent to review the Python changes for correctness, reproducibility, and ONNX-export integrity' <commentary>Training-pipeline changes should be reviewed proactively with the Python + ML checklist.</commentary></example>
 tools: Read, Glob, Grep, Bash
 ---
 
@@ -54,7 +54,7 @@ uv run pytest training
 
 ## ONNX and Feature Parity
 
-- [ ] The TS feature extractor (`trafilatura-alpha/src/classifier/features/`) and the Python one (`training/extract_features.py`) compute the same 181 features (81 numeric + 100 TF-IDF) in the same order with the same missing-value handling
+- [ ] The TS feature extractor (`htmlwasher/src/classifier/features/`) and the Python one (`training/extract_features.py`) compute the same 181 features (81 numeric + 100 TF-IDF) in the same order with the same missing-value handling
 - [ ] TF-IDF replicates scikit-learn's `idf = ln(n/df) + 1` with L2 normalization on both sides; `tfidf-vocab.json` is the single source of vocabulary + IDF weights
 - [ ] Cross-language parity tests compare the **argmax class**, not exact probabilities
 - [ ] `model.onnx` is loaded behind the single `PageTypeClassifier` interface; both `onnxruntime-node` and `onnxruntime-web` backends honor it, pinned to a known-good runtime version

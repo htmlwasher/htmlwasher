@@ -41,5 +41,5 @@ training/datasets/
 training/**/*.parquet
 training/**/*.csv
 
-# NOTE: trafilatura-alpha/src/classifier/model/*.onnx and tfidf-vocab.json
+# NOTE: htmlwasher/src/classifier/model/*.onnx and tfidf-vocab.json
 # ARE committed (shipped artifacts) — do not ignore them.

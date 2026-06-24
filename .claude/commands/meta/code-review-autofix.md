@@ -61,19 +61,19 @@ Determine domain per file:
 
 | Path pattern | Domain |
 |---|---|
-| `trafilatura-alpha/src/core/**/*.ts` | TypeScript (extraction core) |
-| `trafilatura-alpha/src/metadata/**/*.ts` | TypeScript (metadata) |
-| `trafilatura-alpha/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
-| `trafilatura-alpha/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
-| `trafilatura-alpha/src/**/*.ts` | TypeScript (library) |
+| `htmlwasher/src/core/**/*.ts` | TypeScript (extraction core) |
+| `htmlwasher/src/metadata/**/*.ts` | TypeScript (metadata) |
+| `htmlwasher/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
+| `htmlwasher/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
+| `htmlwasher/src/**/*.ts` | TypeScript (library) |
 | `tools/live-crawl-tester/src/**/*.ts` | TypeScript (live-crawl tester) |
 | `training/**/*.py` | Python (offline training) |
 
 ## Step RESEARCH
 
 For each non-trivial pattern or API usage in the change set:
-- **Repo grep**: search `trafilatura-alpha/`, `tools/`, and `training/` for existing usage — establishes convention vs. new introduction
-- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`trafilatura-alpha/SPEC.md`, `tools/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
+- **Repo grep**: search `htmlwasher/`, `tools/`, and `training/` for existing usage — establishes convention vs. new introduction
+- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`htmlwasher/SPEC.md`, `tools/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
 - **Web fetch**: for unfamiliar library APIs (linkedom, parse5, htmlparser2, onnxruntime), fetch their official docs
 - **Security**: WebSearch for CVEs or OWASP issues on security-adjacent patterns (untrusted HTML parsing, input handling)
 
@@ -173,7 +173,7 @@ Use Edit tool directly on the prompt files.
 - List prompts: `find prompts/ -name "*.md" -maxdepth 3 2>/dev/null | head -10`
 - Match: compare branch name keywords and recent commit messages against prompt directory names; pick the best match
 - If matched: read the prompt, then update it to mark completed steps as `[DONE]`, update the "Current State" section if one exists, and add any new patterns or constraints discovered during this review
-- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`trafilatura-alpha/SPEC.md`, `tools/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
+- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`htmlwasher/SPEC.md`, `tools/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
 
 **Tertiary — fix this command.** Extract repo-specific patterns (not generic best-practices) and integrate into `## Project-Specific Checks` below. Only edit if a genuinely new project-specific pattern emerged.
 

@@ -4,7 +4,7 @@ Status: pending / not implemented. This document describes the intended behavior
 
 ## Purpose
 
-End-to-end validation of [`trafilatura-alpha`](../../trafilatura-alpha) against real websites. The tester fetches live URLs across all 7 page types, runs extraction plus the page-type classifier over the fetched HTML, and reports PASS/FAIL per URL with a per-page-type summary.
+End-to-end validation of [`htmlwasher`](../../htmlwasher) against real websites. The tester fetches live URLs across all 7 page types, runs extraction plus the page-type classifier over the fetched HTML, and reports PASS/FAIL per URL with a per-page-type summary.
 
 It is a separate workspace package and is **not** run by the offline `pnpm test` suite, because it performs network requests.
 

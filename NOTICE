@@ -1,4 +1,4 @@
-htmlwasher / trafilatura-alpha
+htmlwasher / htmlwasher
 Copyright 2026 the htmlwasher authors
 
 This product is licensed under the Apache License, Version 2.0 (see the
@@ -8,7 +8,7 @@ LICENSE file in the root of this repository).
 Attribution for upstream and reference projects
 ================================================================================
 
-trafilatura-alpha is a TypeScript port of Trafilatura. It is derived from,
+htmlwasher is a TypeScript port of Trafilatura. It is derived from,
 informed by, and references the projects listed below. Their authors are
 credited here as required by their respective licenses. The text of the
 Apache License, Version 2.0 referenced below is reproduced in this repository's
@@ -21,7 +21,7 @@ Author:  Adrien Barbaresi
 Source:  https://github.com/adbar/trafilatura
 Docs:    https://trafilatura.readthedocs.io/
 
-The canonical original. trafilatura-alpha follows its extraction semantics,
+The canonical original. htmlwasher follows its extraction semantics,
 metadata rules, option behavior, and test corpus as the ground-truth reference.
 
 Citation:
