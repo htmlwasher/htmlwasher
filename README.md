@@ -31,7 +31,8 @@ This is a pnpm + turbo monorepo.
   `htmlwasher`). Strict TypeScript, Node 22+. Holds the core extraction
   algorithm, metadata extraction, the page-type classifier (189-feature
   extractor plus ONNX backends), per-page-type profiles, and the HTML-washing
-  levels, all behind the `wash()` API.
+  levels, exposed both as the `wash()` library API and as an offline `htmlwasher`
+  CLI (reads a file or stdin, writes cleaned HTML to stdout; never fetches).
 - `@/training/` — an offline Python project (Python 3.12+, uv-managed) that
   trains the page-type classifier from the public WCXB dataset and exports
   `model.onnx` + `tfidf-vocab.json`. It is run offline, is not a pnpm workspace
@@ -52,9 +53,6 @@ This is a pnpm + turbo monorepo.
 
 ## Quick start
 
-These are placeholders for the scaffold; full functionality lands as the phases
-complete.
-
 ```bash
 # Fetch the six read-only reference repositories into ~/r/htmlwasher-sources/ (outside this repo)
 bash clone-other-repos.sh
@@ -62,13 +60,35 @@ bash clone-other-repos.sh
 # Install workspace dependencies
 pnpm install
 
-# Run the offline unit test suite
+# Build, then run the offline unit test suite (turbo)
+pnpm build
 pnpm test
 ```
 
+Use it as a **library**:
+
+```ts
+import { wash } from 'htmlwasher';
+const { html, metadata, pageType } = await wash(pageHtml, {
+  boilerplate: 'balanced', // precision | balanced | recall | none
+  level: 'standard', //      minimal | standard | permissive | styled | correct
+  minify: false, //          set true to minify instead of pretty-print
+});
+```
+
+…or as a **CLI** (offline — reads a file or stdin, writes cleaned HTML to stdout):
+
+```bash
+htmlwasher article.html -b balanced -l standard      # file in → stdout
+cat page.html | htmlwasher --minify                  # stdin → minified stdout
+htmlwasher page.html --json > out.json               # full result (html + metadata + pageType)
+```
+
 The classifier is trained offline in `@/training/` (Python, uv-managed) and is
-not part of the Node.js install. The live-crawl tester hits the network and is
-not part of the offline `pnpm test`.
+**not** part of the Node.js install — the npm package ships only the exported
+`model.onnx` + `tfidf-vocab.json` and runs them via `onnxruntime`. The
+`wash-corpus-tester` runs entirely offline; the `live-crawl-tester` is an
+unimplemented stub (htmlwasher itself never fetches).
 
 ## Inference backends
 
