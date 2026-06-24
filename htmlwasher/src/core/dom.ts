@@ -36,12 +36,17 @@ export interface HElement extends HNode {
   className: string;
   readonly children: ArrayLike<HElement> & Iterable<HElement>;
   readonly firstChild: HNode | null;
+  readonly firstElementChild: HElement | null;
+  /** The nearest ancestor that is an element (null at the document root). */
+  readonly parentElement: HElement | null;
   readonly innerHTML: string;
   readonly attributes: ArrayLike<HAttr> & Iterable<HAttr>;
   getAttribute(name: string): string | null;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
   hasAttribute(name: string): boolean;
+  /** Nearest self-or-ancestor element matching the selector (standard DOM `closest`). */
+  closest(selectors: string): HElement | null;
   querySelector(selectors: string): HElement | null;
   querySelectorAll(selectors: string): ArrayLike<HElement> & Iterable<HElement>;
   append(...nodes: (HNode | string)[]): void;

@@ -84,7 +84,11 @@ extraction pass selected by the classifier output.
   (docCleaning + link-density), `main-content` (selector/semantic/scoring
   cascade), `serialize-filtered` (postCleaning + whitelist re-serializer),
   `extract` (orchestration). _implemented (Phase 2)_
-- `src/metadata/` — optional metadata sidecar (OG → JSON-LD → meta → DOM). _pending (Phase 3)_
+- `src/metadata/` — optional metadata sidecar. Entry:
+  `extractMetadata(html, url?)` / `extractMetadataFromDocument(doc, url?)` →
+  `Metadata`. Field precedence OG → JSON-LD (override) → meta → DOM, ported from
+  adbar `metadata.py`/`json_metadata.py`/`xpaths.py`. `date.ts` is a reduced
+  htmldate equivalent. _implemented (Phase 3)_
 - `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
   TF-IDF), htmlparser2 hot-path; parity with `training/extract_features.py`. _pending (Phase 4)_
 - `src/classifier/model/` — `model.onnx` + `tfidf-vocab.json` + the

@@ -14,7 +14,11 @@ and `~/r/contextractor`.
 - Phase 1 (scaffold) — done. Type surface in `src/types.ts`; baseline gate green.
 - Phase 2 (boilerplate core) — done. `src/core/` extracts main-content HTML; 45
   unit tests + 4 real adbar pages pass. See "Phase 2 notes" below.
-- Phases 3–8 — pending.
+- Phase 3 (metadata) — done. `src/metadata/` ports adbar's OG→JSON-LD→meta→DOM
+  precedence; 60 unit tests pass; correct title/author/date/sitename on real adbar
+  pages. `date.ts` is a reduced htmldate equivalent; DOM XPaths translated to CSS
+  (regex-anchored class/id predicates loosened to substring — documented per module).
+- Phases 4–8 — pending.
 
 ### Phase 2 notes
 
