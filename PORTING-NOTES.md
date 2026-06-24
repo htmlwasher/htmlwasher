@@ -26,7 +26,28 @@ and `~/r/contextractor`.
 - Orchestration — done. `src/pipeline.ts` exposes the public async `wash()`
   composing metadata + boilerplate(mode) + wash(level); 6 integration tests pass.
   Classifier-based profile routing plugs into the boilerplate stage in Phase 5.
-- Phases 4, 5, 7, 8 — pending (Phase 4 training runs in the background).
+- Phase 5 (part 1) — done. The 7 profiles + core profile wiring
+  (`contentSelectors`/`preserveTags`/`boilerplateSelectors`). Classifier routing
+  pending the trained model (part 2).
+- Phase 7 (validation vs adbar corpus) — done. `test/validation/` scores the full
+  `wash()` pipeline over the 100 adbar eval pages present locally (skips in CI).
+  **Result: precision ≈ 0.75, recall ≈ 0.84, F1 ≈ 0.79** (balanced + minimal) —
+  in the same ballpark as upstream Trafilatura on this set. Expectations fixture
+  (`fixtures/validation/eval-expectations.json`) derived from adbar's
+  `tests/evaldata.py` (Apache-2.0; attribution in NOTICE).
+- Phases 4, 5 (part 2), 8 — pending (Phase 4 training runs in the background).
+
+### Phase 7 gaps (systematic)
+
+- Precision (~0.75) is the weaker dimension: some `without` boilerplate strings
+  survive (footers/teasers/related blocks not caught by the class-token list or
+  the link-density pass). This is expected given the simplified per-element
+  handling — the filter-serialize path is coarser than go-trafilatura's per-handler
+  rebuild. Tightening the boilerplate token list + a precision-mode teaser/discard
+  pass (rs `prune_unwanted_sections`) would lift it.
+- `precision` and `balanced` modes scored identically on this set; `recall` kept
+  marginally more (`+2` true positives). The focus thresholds have only a small
+  effect on these coarse substring checks.
 
 ### Phase 2 notes
 
