@@ -149,8 +149,9 @@ The TypeScript library is the **htmlwasher** package (npm name `htmlwasher`). Pl
       washing/                       # HTML washing: sanitize-html presets + normalize/format
         presets/                     # minimal, standard, permissive, styled (SanitizeConfig)
         wash.ts                      # level union + sanitize/normalize/format pipeline
-      pipeline.ts                    # orchestrates decode -> normalize -> boilerplate(mode) -> wash(level) -> format
+      pipeline.ts                    # orchestrates decode -> classify -> profile -> boilerplate(mode) -> wash(level) -> format
       index.ts                       # public wash() API
+      cli.ts                         # offline CLI entry (bin: htmlwasher) + cli-program.ts — file/stdin -> stdout, NEVER fetches
     test/                            # unit tests (mirrors src/)
     fixtures/                        # saved HTML + expected cleaned-HTML output (golden tests)
     package.json
@@ -166,17 +167,36 @@ The TypeScript library is the **htmlwasher** package (npm name `htmlwasher`). Pl
     wash-corpus-tester/              # OFFLINE E2E over saved HTML fixtures (Section 7) — no network
 ```
 
-The public API is roughly:
+The public API is roughly (note: `wash()` is **async** — the washing formatter
+and the ONNX classifier load lazily):
 
 ```ts
 wash(html: string, options?: {
   boilerplate?: 'precision' | 'balanced' | 'recall' | 'none'  // default 'balanced'
   level?: 'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'  // default 'standard'
   minify?: boolean                                            // default false (prettier-format)
-}): { html: string; messages: Message[]; metadata?: Metadata }
+  url?: string                                                // context only — NEVER fetched
+}): Promise<{
+  html: string; messages: Message[]; metadata?: Metadata;
+  pageType?: PageType; confidence?: number                    // set when extraction runs (omitted for boilerplate:'none')
+}>
 ```
 
 The two knobs are orthogonal: any boilerplate mode combines with any washing level (e.g. `boilerplate: 'balanced'` + `level: 'standard'`). These two (plus `minify`) are the **entire** user-facing surface — there are deliberately **no `includeComments` / `includeTables` / `includeImages` / `includeLinks` options**. The washing `level` is the single tag-inclusion knob (it subsumes images/tables/links), and comments are decided by the classified page type.
+
+**CLI (offline) — same surface, both bin and lib.** Ship a `htmlwasher` CLI
+(`bin: htmlwasher` → `dist/cli.js`, plus an `./cli` export) built on `commander`,
+modeled on contextractor's `packages/standalone` (`cli.ts` + `cli-program.ts`,
+`#!/usr/bin/env node` + an `isMainEntry` guard wrapping a testable `runWash(opts, io)`
+core) — but **offline only**: it NEVER fetches a URL. It reads an HTML **file
+argument** or **stdin** (`-`/omitted) and writes cleaned HTML to **stdout** (or
+`-o <file>`); diagnostics + the `[pageType confidence]` line go to **stderr**. The
+Unix-pipe convention (file arg for the common case, stdin for piping, stdout for
+composition) is deliberate. Options map 1:1 to `wash()`: `-b/--boilerplate`,
+`-l/--level`, `-m/--minify` (surfaces the same minify switch), `-u/--url` (context
+only), plus `--json` (emit the full result object), `-o/--output`, `-q/--quiet`.
+Set `process.exitCode` rather than calling `process.exit()` mid-pipe so stdout
+flushes.
 
 ---
 
@@ -275,6 +295,7 @@ Requirements:
 ## 9. Deliverables checklist
 
 - [ ] `htmlwasher/` TS library: boilerplate removal (HTML subtree) + classifier + per-type profiles + confidence + the `Precision/Balanced/Recall/None` mode, AND the HTML washing levels `Minimal/Standard/Permissive/Styled/Correct`, exposed via a single `wash(html, options)` API that returns cleaned **HTML** (+ optional metadata sidecar). No conversion, no scraping.
+- [ ] An **offline `htmlwasher` CLI** (`bin`) wrapping the same `wash()`: file-arg/stdin → stdout (or `-o`), `-b/-l/-m/-u/--json/-q` options, never fetches.
 - [ ] `model.onnx` + `tfidf-vocab.json` trained from WCXB, loaded via onnxruntime-node (and a WASM backend behind the same interface).
 - [ ] Full **unit test** suite (vitest): per-module tests, washing-level + security tests, golden fixtures, and TS<->Python **feature-parity tests**, all green via `pnpm test`.
 - [ ] Validation harness vs adbar's test corpus (cleaned-HTML scoring) with a short results writeup in `PORTING-NOTES.md`.
@@ -283,3 +304,48 @@ Requirements:
 - [ ] READMEs with usage + full license attribution.
 
 Work incrementally, commit per phase, keep `PORTING-NOTES.md` current, and ask if the source-repo location or the host-repo structure is not what this brief assumes.
+
+---
+
+## 10. Implementation outcomes & learnings (post-build)
+
+Phases 0–8 + the CLI are **implemented and green**: 307 library unit tests + the
+offline corpus tester + 14 training pytests pass; classifier held-out test accuracy
+≈ 0.78 (macro-F1 0.66); TS↔Python feature parity **100%** on the fixtures; adbar
+eval **F1 ≈ 0.80** (P 0.79 / R 0.81). The repo is **TypeScript + Python by design**
+(do NOT collapse to pure TS): training is Python (XGBoost / scikit-learn / ONNX
+export — no JS equivalent of that maturity), the runtime is TS (onnxruntime), and
+the two are joined ONLY by the exported `model.onnx`/`tfidf-vocab.json` and the
+byte-for-byte feature-parity contract (`training/FEATURES.md`). Feature extraction
+is therefore implemented twice (`training/extract_features.py` + TS
+`src/classifier/features/`) and MUST be kept in parity — a dedicated parity test
+enforces it.
+
+Hard-won gotchas (a re-run should bake these in from the start):
+
+- **Run the name-based boilerplate filter BEFORE `postCleaning`, with a backoff.**
+  `postCleaning` strips `class`/`id`, which blinds any serializer-stage name guard,
+  so the `BOILERPLATE_TOKENS`/`COMMENT_TOKENS` filter silently does nothing if it
+  runs at serialize time. Run it over the content node's DESCENDANTS before
+  `postCleaning` (honoring `commentsAsContent`), and back off to the unfiltered
+  extraction if filtering would empty the content (collection/listing pages live in
+  boilerplate-named containers — go-trafilatura's "do not delete all the content").
+- **Classifier DOM parity needs lexbor-equivalent parsing.** linkedom's parser
+  diverges from selectolax/lexbor on nested `<body>` and trailing whitespace text
+  nodes; parse via parse5-normalize → linkedom (`parseDocumentSpec`) to get
+  byte-exact body text. selectolax comma-union selectors do **not** deduplicate
+  (match each sub-selector separately). Use **UTF-8 byte lengths** everywhere (not
+  JS UTF-16 `.length`) and an explicit **CPython `str.split`/`str.strip` whitespace
+  codepoint class** (JS `\s`/`.trim()` differ on U+001C–U+001F / U+0085 / U+FEFF).
+- **linkedom does not wrap loose fragments** in `<html><body>` — normalize in the
+  parse step. Use `nextElementSibling` (not `nextSibling`) for last-element checks,
+  since pretty-printed HTML interleaves whitespace text nodes.
+- **The offline corpus tester imports `htmlwasher` from `dist/`** — rebuild before a
+  direct `pnpm test:corpus`; the turbo `pnpm test` rebuilds first.
+- **Pin onnxruntime exactly** (both `-node` and `-web` in lockstep) and validate the
+  shipped vocab artifact at load. Metadata XPaths translate to CSS (regex-anchored
+  class/id predicates loosen to substring — document per module).
+- **A post-implementation multi-agent code review pays off:** it caught the dead
+  boilerplate filter (unit tests passed because they exercised the serializer in
+  isolation, bypassing `postCleaning`). End-to-end validation, not just unit tests,
+  is what surfaces this class of bug.
