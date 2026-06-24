@@ -18,7 +18,7 @@ and `~/r/contextractor`.
 
 - `rs-trafilatura` + `web-page-classifier` define **WHAT** (page-type-aware
   architecture, the 7 types, per-type profiles, confidence, the 89+100 feature
-  classifier). Treat its extraction internals as *intent*.
+  classifier). Treat its extraction internals as _intent_.
 - `go-trafilatura` + `adbar/trafilatura` define **HOW** extraction behaves. Defer to
   these for the core algorithm, thresholds, and metadata semantics.
 - `trafilatura-rs` (nchapman) is the cross-check / tiebreaker.
@@ -34,7 +34,7 @@ and `~/r/contextractor`.
 The brief §3.8 is correct and is confirmed by source: `web-page-classifier/src/lib.rs:35`
 declares `N_NUMERIC_FEATURES = 89`, and `rs-trafilatura/src/page_type/ml.rs`
 `extract_ml_features` fills `f[0..89]`. Context docs 03 and 07 say 81/181 — that traces
-to the stale README *body* and the `ml.rs` doc comment (which says 81 while the array is
+to the stale README _body_ and the `ml.rs` doc comment (which says 81 while the array is
 89). **Trust the code: 89 numeric, 189 total.** Numeric feature groups:
 
 - `f[0..14]` — URL flags
@@ -84,13 +84,13 @@ re-serialize**.
   `is_always_excluded_name` (class/id substring list), and `is_boilerplate` nodes; escape
   all text/attr values. Never `outerHTML` the kept node verbatim.
 - **Block+inline tag whitelist** (generous, per brief §5 Phase 2): `p, div, section,
-  article, main, h1-h6, blockquote, pre, code, strong, em, b, i, a, ul, ol, li, dl, dt, dd,
-  table, thead, tbody, tfoot, tr, td, th, caption, colgroup, col, br`, plus images. The
+article, main, h1-h6, blockquote, pre, code, strong, em, b, i, a, ul, ol, li, dl, dt, dd,
+table, thead, tbody, tfoot, tr, td, th, caption, colgroup, col, br`, plus images. The
   washing **level** does the final tag narrowing — do NOT re-expose
   `include_tables/links/images`.
 - **Attribute allow-list** — go `settings.go:79-116`: always drop
   `id, class, align, background, bgcolor, border, cellpadding, cellspacing, frame, hspace,
-  rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre`. Minimal
+rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre`. Minimal
   conditional keep set from rs: `href` on `<a>`, `class` on `<code>`, `colspan/rowspan` on
   `td/th`.
 - **Boilerplate predicates** — `is_always_excluded_name` + `is_boilerplate`
@@ -148,16 +148,16 @@ Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field preceden
 `lenient_boilerplate`, `min_paragraph_density` — do not invent behavior; omit or wire
 deliberately. Copy the 7 profile selector/tag arrays verbatim. Confidence:
 `classification_confidence` (agreement) + `extraction_quality` heuristic (`extract.rs:880-985`;
-the 27-feature ML quality model `predict_quality` is a *second* model — out of scope unless
+the 27-feature ML quality model `predict_quality` is a _second_ model — out of scope unless
 confirmed).
 
 ### HTML washing → `@/htmlwasher/src/washing/`
 
 Faithful port of `htmlprocessing-server/src/process-html.ts`. Pipeline order:
-**decode (chardet + iconv-lite, buffers only) → normalize (parse5) → sanitize (sanitize-html
-+ level preset; skipped for `correct`) → re-normalize (only if `transformTags`) → DOCTYPE
-prepend (full documents) → format (prettier default; html-minifier-terser when `minify`)**.
-Returns `{ html, messages }`.
+decode (chardet, iconv-lite; buffers only), then normalize (parse5), then sanitize
+(sanitize-html with the level preset; skipped for `correct`), then re-normalize (only if
+`transformTags`), then DOCTYPE prepend (full documents), then format (prettier by default;
+html-minifier-terser when `minify`). Returns `{ html, messages }`.
 
 - `washing/modes.ts` — washing-level union as `as const` (NEVER a TS enum), mirroring
   `PROCESSING_MODES`. **htmlwasher uses exactly 5 levels** —
@@ -169,9 +169,9 @@ Returns `{ html, messages }`.
   copied from `htmlprocessing-server/src/presets/`. `standard` is the default.
 - `washing/sanitize.ts` — wraps sanitize-html; runs `filterEventHandlers` (strip every `on*`
   attr) on `allowedAttributes` first. `correct` skips this stage entirely (normalize + DOCTYPE
-  + format only) but is still a security boundary.
+  - format only) but is still a security boundary.
 - Security at EVERY level: rely on sanitize-html defaults (`allowedSchemes
-  [http,https,ftp,mailto,tel]` on `href/src/cite`) to strip `javascript:`/`data:`, plus
+[http,https,ftp,mailto,tel]` on `href/src/cite`) to strip `javascript:`/`data:`, plus
   `filterEventHandlers`. The **`styled` level must add an explicit CSS-URL allow-list** —
   sanitize-html does NOT scheme-filter `url()` inside `style` attrs or `<style>` blocks, so
   `url(javascript:|data:)`, `expression()`, `@import`, `-moz-binding` survive by default.

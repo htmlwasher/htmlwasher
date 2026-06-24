@@ -1,79 +1,104 @@
 # htmlwasher — Specification
 
-Status: pending — not implemented. This document describes the intended public
-API surface and module layout of the `htmlwasher` library. None of it is
-built yet; the package is a scaffold. The implementation lands in phases per the
-build brief at [`@/prompts/2026-6-24-init/prompt.md`](../prompts/2026-6-24-init/prompt.md).
-Keep this spec in sync with the source as the port is implemented.
+Status: in progress. This document tracks the public API surface and module
+layout of the `htmlwasher` library as the phased port lands (build brief:
+[`@/prompts/2026-6-24-init/prompt.md`](../prompts/2026-6-24-init/prompt.md);
+port map: [`@/PORTING-NOTES.md`](../PORTING-NOTES.md)). Sections marked _pending_
+are not implemented yet. Keep this spec in sync with the source.
 
 ## Purpose
 
-`htmlwasher` is a TypeScript port of Trafilatura. Given the HTML of a web
-page, it extracts the main content (clean text plus structured metadata) and
-classifies the page type so extraction can be routed through a profile tuned for
-that type. It is a Node.js library — not a scraper or a browser automation
-framework.
+`htmlwasher` is a TypeScript HTML-cleanup library: **HTML in → cleaned HTML out**.
+It never converts to Markdown, XML, XML/TEI, or plain text, and never fetches the
+network. It has two orthogonal, composable pillars:
 
-## Intended public API surface
+- **Boilerplate removal** — a Trafilatura-derived, page-type-aware main-content
+  extractor (article/main detection, fallback cascade, comment + table handling)
+  that keeps the result as an HTML subtree, re-serialized through a tag/attribute
+  whitelist. An ONNX page-type classifier (7 types) routes extraction through a
+  per-type profile. Gated by a boilerplate-removal mode.
+- **HTML washing** — a sanitize-html-based sanitize + normalize + format stage,
+  exposed as five washing levels.
 
-The shapes below are a sketch of intent, not a committed contract. Names,
-fields, and signatures will be finalized as the phases land.
+## Public API surface
 
-### extract()
+### wash() — _pending (orchestration step)_
 
-The primary entry point. Accepts page HTML (and optional context such as the
-source URL and extraction options) and returns the extracted content together
-with metadata, the detected page type, and a confidence score.
+The single entry point. Combines both pillars:
 
-- Input: HTML string, optional source URL, optional extraction options
-  (output format, metadata toggles, fallback behavior).
-- Output: extracted main text, structured metadata (title, author, date,
-  sitename, tags), the detected page type, and a confidence value.
+```ts
+wash(html: string, options?: WashOptions): WashResult
+```
 
-### PageTypeClassifier (interface)
+The two knobs are orthogonal — any boilerplate mode combines with any washing
+level. These options (plus the optional `url` context) are the entire user-facing
+surface; there are deliberately no `includeComments`/`includeTables`/
+`includeImages`/`includeLinks` toggles.
 
-The page-type classifier interface. Implementations consume page features and
-return a page-type label with a confidence score. ONNX inference runs behind
-this interface, with `onnxruntime-node` as the default backend and
-`onnxruntime-web` (WASM) as an alternative — both satisfy one interface.
+### Types — _implemented in `src/types.ts`_
 
-- Page types under consideration: article, forum, product, collection, listing,
-  documentation, service.
+- `BOILERPLATE_MODES` (`as const`) + `BoilerplateMode` =
+  `'precision' | 'balanced' | 'recall' | 'none'`. Default `'balanced'`. Maps to
+  Trafilatura's `favor_precision`/`favor_recall`; `none` skips boilerplate removal
+  entirely (washes the whole document — htmlwasher's addition).
+- `WASHING_LEVELS` (`as const`) + `WashingLevel` =
+  `'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'`. Default
+  `'standard'`. The single tag-inclusion control. No `*-reader` variants.
+- `PAGE_TYPES` (`as const`) + `PageType` = the 7 types
+  (`article, forum, product, collection, listing, documentation, service` — note
+  `collection`, not `category`).
+- `WashOptions` = `{ boilerplate?, level?, minify?, url? }`. `minify` defaults to
+  `false` (prettier-format); `url` is context-only and never fetched.
+- `WashResult` = `{ html: string; messages: Message[]; metadata?: Metadata }`.
+- `Message` = `{ type: 'info' | 'warning' | 'error'; text: string }`.
+- `Metadata` (optional sidecar) = `{ title?, author?, url?, hostname?,
+description?, sitename?, date?, categories?, tags?, image?, pageType?, license? }`.
+- Runtime guards: `isBoilerplateMode`, `isWashingLevel`, `isPageType`.
 
-### Per-type extraction profiles
+Both enumerations are plain string-union / `as const`-array types, **not**
+TypeScript `enum`s (locked decision #4).
 
-Each page type maps to an extraction profile that tunes the core algorithm for
-that type. The classifier's output selects the profile; the profile drives the
-type-specific extraction pass.
+### PageTypeClassifier (interface) — _pending (Phase 4)_
 
-### Confidence
+Page features → `(pageType, confidence)`. ONNX inference runs behind this
+interface, with `onnxruntime-node` as the default backend and `onnxruntime-web`
+(WASM) as a swappable alternative. The classifier runs a 3-stage cascade (URL
+heuristics → HTML signal analysis → ML).
 
-Both classification and extraction report a confidence signal so callers can
-gate on or fall back from low-confidence results.
+### Per-type extraction profiles — _pending (Phase 5)_
+
+Each page type maps to a profile (content selectors, preserve/boilerplate tags,
+`comments_are_content`, aggregate/collect post-passes) that tunes the core
+extraction pass selected by the classifier output.
 
 ## Module layout
 
-Pending — directories are scaffolded and currently empty.
-
-- `src/index.ts` — public entry point and re-exports (currently exposes only
-  `VERSION`).
-- `src/core/` — the core Trafilatura extraction algorithm (DOM traversal,
-  content scoring, cleanup).
-- `src/metadata/` — metadata extraction (title, author, date, sitename, tags).
-- `src/classifier/features/` — the page-type feature extractor (classifier
-  feature hot-path; uses htmlparser2).
-- `src/classifier/model/` — the ONNX model assets and inference backends
-  (`model.onnx`, `tfidf-vocab.json`); shipped in the npm tarball.
-- `src/profiles/` — per-page-type extraction profiles.
-- `test/` — fixture-based and unit tests.
-- `fixtures/` — HTML fixtures for tests.
+- `src/index.ts` — public entry point; re-exports the type surface + `VERSION`
+  (the `wash()` pipeline is wired at the orchestration step). _implemented (re-exports)_
+- `src/types.ts` — the public type surface (option unions, `WashOptions`,
+  `WashResult`, `Metadata`, `PageType`, guards). _implemented_
+- `src/core/` — Trafilatura extraction algorithm + whitelist re-serializer (emits
+  the kept content as an HTML subtree). _pending (Phase 2)_
+- `src/metadata/` — optional metadata sidecar (OG → JSON-LD → meta → DOM). _pending (Phase 3)_
+- `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
+  TF-IDF), htmlparser2 hot-path; parity with `training/extract_features.py`. _pending (Phase 4)_
+- `src/classifier/model/` — `model.onnx` + `tfidf-vocab.json` + the
+  `PageTypeClassifier` backends. Shipped in the npm tarball. _pending (Phase 4)_
+- `src/profiles/` — per-page-type extraction profiles + confidence. _pending (Phase 5)_
+- `src/washing/` — sanitize-html level presets + normalize/format pipeline. _pending (Phase 6)_
+- `src/pipeline.ts` — orchestrates decode → normalize → boilerplate(mode) →
+  wash(level) → format. _pending (orchestration step)_
+- `test/`, `fixtures/` — golden-fixture + unit tests; HTML fixtures. _pending_
 
 ## Dependencies
 
-- DOM parsing: `linkedom` + `parse5`, with `htmlparser2` in the classifier
-  feature hot-path.
-- ONNX inference: `onnxruntime-node` (default) and `onnxruntime-web` (WASM,
-  optional) behind one interface.
+- DOM parsing: `linkedom` (primary) + `parse5` (WHATWG normalization), with
+  `htmlparser2` in the classifier feature hot-path.
+- HTML washing: `sanitize-html` (default sanitizer), `prettier` (format),
+  `html-minifier-terser` (minify), `chardet` + `iconv-lite` (decode non-UTF-8
+  buffers). _added in Phase 6._
+- ONNX inference: `onnxruntime-node` (default) + `onnxruntime-web` (WASM,
+  optional) behind one interface; pinned ≥ 1.23.0.
 
 The classifier model is trained offline in the separate `@/training/` Python
 project (see [`@/training/SPEC.md`](../training/SPEC.md)) and exported as
