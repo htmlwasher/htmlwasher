@@ -5,13 +5,12 @@
 //      extractor that keeps the result AS an HTML subtree (never text/markdown).
 //   2. HTML washing — sanitize-html-based cleanup at five levels.
 //
-// The public entry point is wash(); it is assembled in src/pipeline.ts as the
-// boilerplate (Phase 2/5) and washing (Phase 6) pillars land. This module
-// currently re-exports the stable type surface and the package version.
-//
-// TODO(@/prompts/2026-6-24-init/prompt.md): export the wash() pipeline once the
-// boilerplate and washing pillars are wired (orchestration step).
+// The public entry point is wash() (src/pipeline.ts), composing the boilerplate
+// (Phase 2) and washing (Phase 6) pillars plus the metadata sidecar (Phase 3).
+// Page-type classification + per-type profile routing (Phase 4/5) plug into the
+// boilerplate stage as the trained classifier lands.
 
+export { wash } from './pipeline.js';
 export * from './types.js';
 
 /**

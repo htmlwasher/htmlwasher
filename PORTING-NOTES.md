@@ -23,6 +23,9 @@ and `~/r/contextractor`.
   (closes sanitize-html's gap), optional DOMPurify/jsdom hardened backend; 71
   tests pass. `washHtml`/`washBuffer` are async (prettier/minifier lazily imported)
   — so the public `wash()` will be async too. parse5 bumped to `^8`.
+- Orchestration — done. `src/pipeline.ts` exposes the public async `wash()`
+  composing metadata + boilerplate(mode) + wash(level); 6 integration tests pass.
+  Classifier-based profile routing plugs into the boilerplate stage in Phase 5.
 - Phases 4, 5, 7, 8 — pending (Phase 4 training runs in the background).
 
 ### Phase 2 notes

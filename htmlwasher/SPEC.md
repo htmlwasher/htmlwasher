@@ -22,13 +22,19 @@ network. It has two orthogonal, composable pillars:
 
 ## Public API surface
 
-### wash() — _pending (orchestration step)_
+### wash() — _implemented (`src/pipeline.ts`)_
 
-The single entry point. Combines both pillars:
+The single entry point. Combines both pillars (async — the washing formatter is
+loaded lazily):
 
 ```ts
-wash(html: string, options?: WashOptions): WashResult
+wash(html: string, options?: WashOptions): Promise<WashResult>
 ```
+
+Stages: metadata sidecar (from the original document) → boilerplate(mode) →
+wash(level). `mode: 'none'` bypasses extraction and washes the whole document.
+Page-type classification + per-type profile routing (Phase 4/5) plug into the
+boilerplate stage as the trained classifier lands.
 
 The two knobs are orthogonal — any boilerplate mode combines with any washing
 level. These options (plus the optional `url` context) are the entire user-facing
@@ -99,10 +105,10 @@ extraction pass selected by the classifier output.
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
   (sanitize-html + level preset; skipped for `correct`) → re-normalize (if
   transformTags) → DOCTYPE → format. Security at every level (script/on\*/
-  javascript:/data: stripped; styled adds a CSS-URL allow-list). Optional DOMPurify
-  - jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
-- `src/pipeline.ts` — orchestrates decode → normalize → boilerplate(mode) →
-  wash(level) → format. _pending (orchestration step)_
+  javascript:/data: stripped; styled adds a CSS-URL allow-list). Optional
+  DOMPurify/jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
+- `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → wash(level),
+  exposing the public `wash()`. _implemented_
 - `test/`, `fixtures/` — golden-fixture + unit tests; HTML fixtures. _pending_
 
 ## Dependencies
