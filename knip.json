@@ -1,0 +1,26 @@
+{
+  "ignore": [
+    ".claude/hooks/**",
+    "prompts/**",
+    "sources/**",
+    "training/**",
+    "**/fixtures/**"
+  ],
+  "ignoreDependencies": [
+    "cspell",
+    "@cspell/dict-bash",
+    "@cspell/dict-en-gb",
+    "@cspell/dict-git",
+    "@cspell/dict-rust"
+  ],
+  "workspaces": {
+    "trafilatura-alpha": {
+      "entry": "src/index.ts",
+      "project": "src/**"
+    },
+    "tools/live-crawl-tester": {
+      "entry": "src/index.ts",
+      "project": "src/**"
+    }
+  }
+}

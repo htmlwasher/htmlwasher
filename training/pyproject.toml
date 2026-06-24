@@ -1,0 +1,19 @@
+# Tooling config only for the offline trafilatura-alpha training pipeline.
+#
+# This project is OFFLINE-ONLY: it trains the page-type classifier and is never
+# packaged for distribution, never shipped at runtime, and is not a pnpm
+# workspace member. Runtime/training deps are listed (not installed) in
+# requirements.txt and resolved on demand via uv.
+
+[project]
+name = "trafilatura-alpha-training"
+version = "0.0.0"
+description = "Offline training pipeline for the trafilatura-alpha page-type classifier (not packaged, not shipped)."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

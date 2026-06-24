@@ -1,0 +1,25 @@
+{
+  "name": "@htmlwasher/live-crawl-tester",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polite live-site E2E tester for trafilatura-alpha across the 7 page types.",
+  "scripts": {
+    "test:live": "tsx src/index.ts",
+    "test": "vitest run --passWithNoTests",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "trafilatura-alpha": "workspace:*",
+    "undici": "^7.0.0",
+    "robots-parser": "^3.0.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "@types/node": "^26.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

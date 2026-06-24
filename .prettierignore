@@ -1,0 +1,9 @@
+# Prettier is scoped to Markdown only (Biome owns JS/TS/JSON/CSS).
+# Paths here mirror biome.json's ignore list. node_modules, dist, .turbo,
+# venv etc. are already skipped via .gitignore.
+.claude
+prompts
+sources
+training
+**/fixtures
+**/dist

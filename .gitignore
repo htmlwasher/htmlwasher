@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-types/
+*.tsbuildinfo
+.turbo/
+.cache/
+coverage/
+
+# Lockfiles are not committed (repo convention)
+pnpm-lock.yaml
+package-lock.json
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode
+.zed
+
+# Environment
+.env
+env/
+venv/
+ENV/
+__pypackages__/
+.ruff_cache/
+
+# Claude Code local overrides + autonomous output
+.claude/settings.local.json
+autonomous-task-output/
+
+# Cloned read-only reference repos (never commit these)
+sources/
+
+# Python training: venv + downloaded datasets (fetched on demand, never committed)
+training/.venv/
+training/data/
+training/datasets/
+training/**/*.parquet
+training/**/*.csv
+
+# NOTE: trafilatura-alpha/src/classifier/model/*.onnx and tfidf-vocab.json
+# ARE committed (shipped artifacts) — do not ignore them.

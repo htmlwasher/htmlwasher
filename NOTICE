@@ -1,0 +1,89 @@
+htmlwasher / trafilatura-alpha
+Copyright 2026 the htmlwasher authors
+
+This product is licensed under the Apache License, Version 2.0 (see the
+LICENSE file in the root of this repository).
+
+================================================================================
+Attribution for upstream and reference projects
+================================================================================
+
+trafilatura-alpha is a TypeScript port of Trafilatura. It is derived from,
+informed by, and references the projects listed below. Their authors are
+credited here as required by their respective licenses. The text of the
+Apache License, Version 2.0 referenced below is reproduced in this repository's
+LICENSE file.
+
+--------------------------------------------------------------------------------
+Trafilatura (the canonical original) — Apache-2.0
+--------------------------------------------------------------------------------
+Author:  Adrien Barbaresi
+Source:  https://github.com/adbar/trafilatura
+Docs:    https://trafilatura.readthedocs.io/
+
+The canonical original. trafilatura-alpha follows its extraction semantics,
+metadata rules, option behavior, and test corpus as the ground-truth reference.
+
+Citation:
+  Barbaresi, A. (2021). "Trafilatura: A Web Scraping Library and Command-Line
+  Tool for Text Discovery and Extraction." Proceedings of the Joint Conference
+  of the 59th Annual Meeting of the Association for Computational Linguistics
+  and the 11th International Joint Conference on Natural Language Processing:
+  System Demonstrations, 122-131. https://aclanthology.org/2021.acl-demo.15/
+
+--------------------------------------------------------------------------------
+go-trafilatura — Apache-2.0
+--------------------------------------------------------------------------------
+Author:  markusmobius (Markus Mobius)
+Source:  https://github.com/markusmobius/go-trafilatura
+
+A faithful Go port of the Python original, used as the primary readable
+reference for the core extraction algorithm.
+
+--------------------------------------------------------------------------------
+rs-trafilatura and web-page-classifier — MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Author:  Murrough Foley
+Sources: https://github.com/Murrough-Foley/rs-trafilatura
+         https://github.com/Murrough-Foley/web-page-classifier
+
+rs-trafilatura is referenced for its page-type-aware architecture and
+per-page-type extraction profiles; web-page-classifier is referenced for the
+page-type feature set and classifier design. These projects are dual-licensed
+MIT OR Apache-2.0; this port uses them under the Apache License, Version 2.0.
+
+--------------------------------------------------------------------------------
+WCXB — Web Content Extraction Benchmark dataset — CC-BY-4.0 (ATTRIBUTION REQUIRED)
+--------------------------------------------------------------------------------
+Author:  Murrough Foley
+Dataset: https://huggingface.co/datasets/murrough-foley/web-content-extraction-benchmark
+DOI:     10.5281/zenodo.19316874 (https://doi.org/10.5281/zenodo.19316874)
+License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+The WCXB dataset is used ONLY to train the page-type classifier model offline,
+in the training/ project. Its CC-BY-4.0 license REQUIRES attribution, which this
+notice provides.
+
+The model.onnx shipped with this library is trained fresh from this public
+dataset. It is NOT vendored or copied from rs-trafilatura's embedded model
+binary.
+
+--------------------------------------------------------------------------------
+trafilatura-rs — MIT OR Apache-2.0
+--------------------------------------------------------------------------------
+Author:  nchapman (Nathaniel Chapman)
+Source:  https://github.com/nchapman/trafilatura-rs
+
+A faithful Rust port of Trafilatura, used as a cross-check and tiebreaker for
+extraction behavior. Dual-licensed MIT OR Apache-2.0; used here under the
+Apache License, Version 2.0.
+
+--------------------------------------------------------------------------------
+Readability — Apache-2.0
+--------------------------------------------------------------------------------
+Author:  Mozilla
+Source:  https://github.com/mozilla/readability
+
+Not Trafilatura. Referenced as a TypeScript/DOM idiom reference for structuring
+readable-content extraction and DOM traversal in JavaScript.

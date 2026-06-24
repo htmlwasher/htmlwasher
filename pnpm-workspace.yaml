@@ -1,0 +1,3 @@
+packages:
+  - "trafilatura-alpha"
+  - "tools/*"
