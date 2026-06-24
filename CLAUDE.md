@@ -19,7 +19,7 @@ prompts/2026-6-24-init/    # build brief (prompt.md) + research context docs —
 
 ## Current status
 
-The repo is **scaffolded only**. The phased port implementation is specified in [`@/prompts/2026-6-24-init/prompt.md`](@/prompts/2026-6-24-init/prompt.md) and its [`@/prompts/2026-6-24-init/context/`](@/prompts/2026-6-24-init/context/) research docs. The extraction algorithm, classifier, and training logic are **not implemented yet** — skeletons are placeholders. Do not treat the port as done, and do not implement the actual port unless a task explicitly directs it.
+The phased port (Phases 0–8 of [`@/prompts/2026-6-24-init/prompt.md`](@/prompts/2026-6-24-init/prompt.md)) is **implemented**. `htmlwasher` exposes the public async `wash()` composing the boilerplate-removal core (Trafilatura-derived extraction + the trained ONNX page-type classifier + per-type profiles), the metadata sidecar, and the five HTML-washing levels. `training/` trains the classifier from WCXB and exports `model.onnx` + `tfidf-vocab.json`; `tools/wash-corpus-tester/` is the offline E2E tester. The TS↔Python feature extractor is at 100% parity; extraction scores F1 ≈ 0.79 on the adbar eval corpus, the classifier ~0.78 on the held-out WCXB test split. See [`@/PORTING-NOTES.md`](@/PORTING-NOTES.md) for the port map, per-phase notes, and known gaps, and each package's `SPEC.md` for the current API. Alpha — APIs may still change.
 
 ## Commands
 
