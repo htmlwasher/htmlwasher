@@ -109,12 +109,7 @@
     "multirepo",
     "miroslavsekera"
   ],
-  "ignoreWords": [
-    "Firecrawl",
-    "Jina",
-    "anthropics",
-    "DOMCONTENTLOADE"
-  ],
+  "ignoreWords": ["Firecrawl", "Jina", "anthropics", "DOMCONTENTLOADE"],
   "flagWords": ["hte", "teh", "recieve", "seperate"],
   "ignorePaths": [
     "node_modules/**",
@@ -135,14 +130,7 @@
       "pattern": "https?://\\S+"
     }
   ],
-  "ignoreRegExpList": [
-    "url",
-    "Urls",
-    "Email",
-    "HexValues",
-    "UUID",
-    "Base64"
-  ],
+  "ignoreRegExpList": ["url", "Urls", "Email", "HexValues", "UUID", "Base64"],
   "overrides": [
     {
       "filename": "**/fixtures/**",

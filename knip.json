@@ -1,11 +1,5 @@
 {
-  "ignore": [
-    ".claude/hooks/**",
-    "prompts/**",
-    "sources/**",
-    "training/**",
-    "**/fixtures/**"
-  ],
+  "ignore": [".claude/hooks/**", "prompts/**", "sources/**", "training/**", "**/fixtures/**"],
   "ignoreDependencies": [
     "cspell",
     "@cspell/dict-bash",
