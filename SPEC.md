@@ -115,6 +115,7 @@ htmlwasher/          The TypeScript library (the npm package, alpha)
   fixtures/                 Saved HTML + expected output (golden tests)
 tools/
   live-crawl-tester/        Separate TS workspace package: live-site E2E fetcher
+  wash-corpus-tester/       Separate TS workspace package: OFFLINE corpus E2E tester
 training/                   Offline Python pipeline (NOT a workspace member, NOT shipped)
 prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 # (the six read-only reference repos live OUTSIDE this repo at ~/r/htmlwasher-sources/)
@@ -162,6 +163,20 @@ User-Agent, rate-limits, times out with backoff retry, and caches fetched HTML t
 disk so reruns are reproducible offline. It is **not** a browser-automation or
 anti-bot crawler. It hits the network and is **not** part of the offline
 `pnpm test`. See `@/tools/live-crawl-tester/SPEC.md` for usage.
+
+### Component — tools/wash-corpus-tester (offline corpus E2E)
+
+A **separate** TypeScript workspace package — the **offline** counterpart to the
+live-crawl tester. It depends on the local `htmlwasher` package, reads saved WCXB
+HTML fixtures (≥3 per page type across all 7 types) plus a `corpus.json` manifest,
+and runs `wash()` over a fixed `boilerplate` x `level` combo matrix. It asserts
+hard security invariants (no `<script>` / `on*=` handler / `javascript:` URL
+survives any sanitizing level), structural invariants (non-empty output;
+`correct` ⊇ `minimal` tags), and soft page-type plausibility (aggregate accuracy
+floor). It is **entirely offline + deterministic** — it reads only local files,
+never the network — so it **is** part of the offline `pnpm test`. It emits
+`report.json` + `report.md` (git-ignored). See
+`@/tools/wash-corpus-tester/SPEC.md` for the full assertion matrix.
 
 ## Stack
 
@@ -243,6 +258,7 @@ The shipped `model.onnx` is trained fresh from the public WCXB dataset — it is
 
 - `@/htmlwasher/SPEC.md` — the library's public API and module behavior.
 - `@/tools/live-crawl-tester/SPEC.md` — the live-crawl E2E harness.
+- `@/tools/wash-corpus-tester/SPEC.md` — the offline corpus E2E tester.
 - `@/training/SPEC.md` — the offline Python training pipeline.
 
 ## Build phases

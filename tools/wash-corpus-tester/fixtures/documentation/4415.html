@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html class="client-nojs" lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<title>Performance Optimization - PostgreSQL wiki</title>
+
+<link rel="stylesheet" href="/load.php?lang=en&amp;modules=skins.monobook.styles&amp;only=styles&amp;skin=monobook"/>
+
+<meta name="ResourceLoaderDynamicStyles" content=""/>
+<link rel="stylesheet" href="/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=monobook"/>
+<meta name="generator" content="MediaWiki 1.39.17"/>
+<meta name="format-detection" content="telephone=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, minimum-scale=0.25, maximum-scale=5.0"/>
+<link rel="icon" href="/favicon.ico"/>
+<link rel="search" type="application/opensearchdescription+xml" href="/opensearch_desc.php" title="PostgreSQL wiki (en)"/>
+<link rel="EditURI" type="application/rsd+xml" href="https://wiki.postgresql.org/api.php?action=rsd"/>
+<link rel="alternate" type="application/atom+xml" title="PostgreSQL wiki Atom feed" href="/index.php?title=Special:RecentChanges&amp;feed=atom"/>
+</head>
+<body class="mediawiki ltr sitedir-ltr mw-hide-empty-elt ns-0 ns-subject page-Performance_Optimization rootpage-Performance_Optimization skin-monobook action-view skin--responsive"><div id="globalWrapper">
+	<div id="column-content">
+		<div id="content" class="mw-body" role="main">
+			<a id="top"></a>
+			<div id="siteNotice"><div id="localNotice"><div class="sitenotice" lang="en" dir="ltr"><p><b><a rel="nofollow" class="external text" href="https://wiki.postgresql.org/wiki/WikiEditing">Want to edit, but don't see an edit button when logged in?  Click here.</a></b>
+</p></div></div></div>
+			<div class="mw-indicators">
+			</div>
+			<h1 id="firstHeading" class="firstHeading mw-first-heading"><span class="mw-page-title-main">Performance Optimization</span></h1>
+			<div id="bodyContent" class="monobook-body">
+				<div id="siteSub">From PostgreSQL wiki</div>
+				<div id="contentSub" ></div>
+				
+				<div id="jump-to-nav"></div><a href="#column-one" class="mw-jump-link">Jump to navigation</a><a href="#searchInput" class="mw-jump-link">Jump to search</a>
+				
+				<div id="mw-content-text" class="mw-body-content mw-content-ltr" lang="en" dir="ltr"><div class="mw-parser-output"><p><br />
+</p>
+<div id="toc" class="toc" role="navigation" aria-labelledby="mw-toc-heading"><input type="checkbox" role="button" id="toctogglecheckbox" class="toctogglecheckbox" style="display:none" /><div class="toctitle" lang="en" dir="ltr"><h2 id="mw-toc-heading">Contents</h2><span class="toctogglespan"><label class="toctogglelabel" for="toctogglecheckbox"></label></span></div>
+<ul>
+<li class="toclevel-1 tocsection-1"><a href="#How_to_Effectively_Ask_Questions_Regarding_Performance_on_Postgres_Lists"><span class="tocnumber">1</span> <span class="toctext">How to Effectively Ask Questions Regarding Performance on Postgres Lists</span></a></li>
+<li class="toclevel-1 tocsection-2"><a href="#General_Setup_and_Optimization"><span class="tocnumber">2</span> <span class="toctext">General Setup and Optimization</span></a></li>
+<li class="toclevel-1 tocsection-3"><a href="#Critical_maintenance_for_performance"><span class="tocnumber">3</span> <span class="toctext">Critical maintenance for performance</span></a></li>
+<li class="toclevel-1 tocsection-4"><a href="#Database_architecture"><span class="tocnumber">4</span> <span class="toctext">Database architecture</span></a></li>
+<li class="toclevel-1 tocsection-5"><a href="#Database_Hardware_Selection_and_Setup"><span class="tocnumber">5</span> <span class="toctext">Database Hardware Selection and Setup</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#Benchmark_Workloads"><span class="tocnumber">6</span> <span class="toctext">Benchmark Workloads</span></a></li>
+</ul>
+</div>
+
+<h2><span class="mw-headline" id="How_to_Effectively_Ask_Questions_Regarding_Performance_on_Postgres_Lists">How to Effectively Ask Questions Regarding Performance on Postgres Lists</span></h2>
+<ul><li><a href="/wiki/Slow_Query_Questions" title="Slow Query Questions">Slow_Query_Questions</a></li></ul>
+<h2><span class="mw-headline" id="General_Setup_and_Optimization">General Setup and Optimization</span></h2>
+<ul><li><a href="/wiki/Tuning_Your_PostgreSQL_Server" title="Tuning Your PostgreSQL Server">Tuning Your PostgreSQL Server</a> by Greg Smith, Robert Treat, and Christopher Browne</li>
+<li><a rel="nofollow" class="external text" href="https://www.devart.com/dbforge/postgresql/studio/query-profiler.html">PostgreSQL Query Profiler in dbForge Studio</a> by Devart</li>
+<li><a rel="nofollow" class="external text" href="http://www.revsys.com/writings/postgresql-performance.html">Performance Tuning PostgreSQL</a> by Frank Wiles</li>
+<li><a rel="nofollow" class="external text" href="http://linuxfinances.info/info/quickstart.html">QuickStart Guide to Tuning  PostgreSQL</a> by Christopher Browne</li>
+<li><a rel="nofollow" class="external text" href="http://www.varlena.com/GeneralBits/Tidbits/perf.html">Performance Tuning</a> by Josh Berkus and Shridhar Daithankar</li>
+<li><a rel="nofollow" class="external text" href="http://old.zope.org/Members/pupq/pg_in_aggregates/howto_view">Replacing Slow Loops in PostgreSQL</a> by Joel Burton</li>
+<li><a rel="nofollow" class="external text" href="http://momjian.us/main/writings/pgsql/hw_performance/">PostgreSQL Hardware Performance Tuning</a> by Bruce Momjian</li>
+<li><a rel="nofollow" class="external text" href="http://www.targeted.org/articles/databases/fragmentation.html">The effects of data fragmentation in a mixed load database</a> by Dmitry Dvoinikov</li>
+<li><a rel="nofollow" class="external text" href="http://www.craigkerstiens.com/2012/10/01/understanding-postgres-performance/">Understanding Postgres Performance</a> by Craig Kerstiens</li>
+<li><a rel="nofollow" class="external text" href="http://www.craigkerstiens.com/2013/01/10/more-on-postgres-performance/">More on Postgres Performance</a> by Craig Kerstiens</li>
+<li><a rel="nofollow" class="external text" href="https://www.citusdata.com/blog/2016/10/12/count-performance/">Faster PostgreSQL counting</a> by Joe Nelson</li>
+<li><a rel="nofollow" class="external text" href="https://www.pgmustard.com/blog/2018/12/14/row-count-estimates-in-postgres/">Row count estimates in Postgres</a> by David Conlin</li>
+<li><a rel="nofollow" class="external text" href="https://www.pgmustard.com/blog/2019/03/04/index-only-scans-in-postgres/">Index-only scans in Postgres</a> by David Conlin</li>
+<li><a rel="nofollow" class="external text" href="https://info.crunchydata.com/blog/optimize-postgresql-server-performance">Optimize PostgreSQL Server Performance Through Configuration</a> by Tom Swartz</li></ul>
+<p>Performance courses are available from a number of companies. Check <a rel="nofollow" class="external text" href="http://www.postgresql.org/about/eventarchive">events and trainings</a> for further details.
+</p>
+<h2><span class="mw-headline" id="Critical_maintenance_for_performance">Critical maintenance for performance</span></h2>
+<ul><li><a href="/wiki/Introduction_to_VACUUM,_ANALYZE,_EXPLAIN,_and_COUNT" title="Introduction to VACUUM, ANALYZE, EXPLAIN, and COUNT">Introduction to VACUUM, ANALYZE, EXPLAIN, and COUNT</a> by Jim Nasby.</li>
+<li><a rel="nofollow" class="external text" href="https://www.devart.com/dbforge/postgresql/studio/postgresql-explain.html">PostgreSQL EXPLAIN for Analyzing Query Execution Plans</a> by Devart</li>
+<li><a href="/wiki/VACUUM_FULL" title="VACUUM FULL">VACUUM FULL</a> and why you should avoid it</li>
+<li><a href="/wiki/Planner_Statistics" title="Planner Statistics">Planner Statistics</a></li>
+<li><a href="/wiki/Using_EXPLAIN" title="Using EXPLAIN">Using EXPLAIN</a></li>
+<li><a href="/wiki/Logging_Difficult_Queries" title="Logging Difficult Queries">Logging Difficult Queries</a></li>
+<li><a href="/wiki/Logging_Checkpoints" title="Logging Checkpoints">Logging Checkpoints</a></li>
+<li><a href="/wiki/Bulk_Loading_and_Restores" title="Bulk Loading and Restores">Bulk Loading and Restores</a></li>
+<li><a href="/wiki/Performance_Analysis_Tools" title="Performance Analysis Tools">Performance Analysis Tools</a> by Craig Ringer</li></ul>
+<h2><span class="mw-headline" id="Database_architecture">Database architecture</span></h2>
+<ul><li><a href="/wiki/Priorities" title="Priorities">Limiting and prioritizing user/query/database resource usage</a> by Craig Ringer</li>
+<li><a href="/wiki/Prioritizing_databases_by_separating_into_multiple_clusters" title="Prioritizing databases by separating into multiple clusters">Prioritizing databases by separating into multiple clusters</a> by Craig Ringer</li>
+<li><a href="/wiki/Clustering" title="Clustering">Clustering</a></li>
+<li><a href="/wiki/Shared_Storage" title="Shared Storage">Shared Storage</a></li></ul>
+<h2><span class="mw-headline" id="Database_Hardware_Selection_and_Setup">Database Hardware Selection and Setup</span></h2>
+<ul><li><a href="/wiki/Database_Hardware" title="Database Hardware">Database Hardware</a></li>
+<li><a href="/wiki/Reliable_Writes" title="Reliable Writes">Reliable Writes</a></li></ul>
+<h2><span class="mw-headline" id="Benchmark_Workloads">Benchmark Workloads</span></h2>
+<ul><li><a href="/wiki/Category:Benchmarking" title="Category:Benchmarking">Category:Benchmarking</a></li></ul>
+
+</div>
+<div class="printfooter">Retrieved from "<a dir="ltr" href="https://wiki.postgresql.org/index.php?title=Performance_Optimization&amp;oldid=37631">https://wiki.postgresql.org/index.php?title=Performance_Optimization&amp;oldid=37631</a>"</div></div>
+				<div id="catlinks" class="catlinks"><div id="mw-normal-catlinks" class="mw-normal-catlinks"><a href="/wiki/Special:Categories" title="Special:Categories">Categories</a>: <ul><li><a href="/wiki/Category:Administration" title="Category:Administration">Administration</a></li><li><a href="/wiki/Category:Performance" title="Category:Performance">Performance</a></li><li><a href="/wiki/Category:Benchmarking" title="Category:Benchmarking">Benchmarking</a></li><li><a href="/wiki/Category:General_articles_and_guides" title="Category:General articles and guides">General articles and guides</a></li></ul></div></div>
+				
+				<div class="visualClear"></div>
+			</div>
+		</div>
+		<div class="visualClear"></div>
+	</div>
+	<div id="column-one" >
+		<h2>Navigation menu</h2>
+		<div role="navigation" class="portlet" id="p-cactions" aria-labelledby="p-cactions-label">
+			<h3 id="p-cactions-label" >Page actions</h3>
+			<div class="pBody">
+				<ul >
+				<li id="ca-nstab-main" class="selected mw-list-item"><a href="/wiki/Performance_Optimization" title="View the content page [c]" accesskey="c">Page</a></li><li id="ca-talk" class="new mw-list-item"><a href="/index.php?title=Talk:Performance_Optimization&amp;action=edit&amp;redlink=1" rel="discussion" title="Discussion about the content page (page does not exist) [t]" accesskey="t">Discussion</a></li><li id="ca-view" class="selected mw-list-item"><a href="/wiki/Performance_Optimization">Read</a></li><li id="ca-viewsource" class="mw-list-item"><a href="/index.php?title=Performance_Optimization&amp;action=edit" title="This page is protected.&#10;You can view its source [e]" accesskey="e">View source</a></li><li id="ca-history" class="mw-list-item"><a href="/index.php?title=Performance_Optimization&amp;action=history" title="Past revisions of this page [h]" accesskey="h">History</a></li>
+				
+				</ul>
+			</div>
+		</div>
+		
+<div role="navigation" class="portlet mw-portlet mw-portlet-cactions-mobile"
+	id="p-cactions-mobile" aria-labelledby="p-cactions-mobile-label">
+	<h3 id="p-cactions-mobile-label" >Page actions</h3>
+	<div class="pBody">
+		<ul ><li id="main-mobile" class="selected mw-list-item"><a href="/wiki/Performance_Optimization" title="Page">Page</a></li><li id="talk-mobile" class="new mw-list-item"><a href="/index.php?title=Talk:Performance_Optimization&amp;action=edit&amp;redlink=1" title=" (page does not exist)">Discussion</a></li><li id="ca-more" class="mw-list-item"><a href="#p-cactions">More</a></li><li id="ca-tools" class="mw-list-item"><a href="#p-tb" title="Tools">Tools</a></li></ul>
+		
+	</div>
+</div>
+
+		<div role="navigation" class="portlet" id="p-personal" aria-labelledby="p-personal-label">
+			<h3 id="p-personal-label" >Personal tools</h3>
+			<div class="pBody">
+				<ul >
+				<li id="pt-login" class="mw-list-item"><a href="/index.php?title=Special:UserLogin&amp;returnto=Performance+Optimization" title="You must log in to edit any pages on this site. [o]" accesskey="o">Log in</a></li>
+				</ul>
+			</div>
+		</div>
+		<div class="portlet" id="p-logo" role="banner">
+			<a href="/wiki/Main_Page" class="mw-wiki-logo"></a>
+		</div>
+		<div id="sidebar">
+		
+<div role="navigation" class="portlet mw-portlet mw-portlet-navigation"
+	id="p-navigation" aria-labelledby="p-navigation-label">
+	<h3 id="p-navigation-label" >Navigation</h3>
+	<div class="pBody">
+		<ul ><li id="n-mainpage" class="mw-list-item"><a href="/wiki/Main_Page" title="Visit the main page [z]" accesskey="z">Main Page</a></li><li id="n-randompage" class="mw-list-item"><a href="/wiki/Special:Random" title="Load a random page [x]" accesskey="x">Random page</a></li><li id="n-recentchanges" class="mw-list-item"><a href="/wiki/Special:RecentChanges" title="A list of recent changes in the wiki [r]" accesskey="r">Recent changes</a></li><li id="n-help" class="mw-list-item"><a href="https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Contents" title="The place to find out">Help</a></li></ul>
+		
+	</div>
+</div>
+
+		<div role="search" class="portlet" id="p-search">
+			<h3 id="p-search-label" ><label for="searchInput">Search</label></h3>
+			<div class="pBody" id="searchBody">
+				<form action="/index.php" id="searchform"><input type="hidden" value="Special:Search" name="title"><input type="search" name="search" placeholder="Search PostgreSQL wiki" aria-label="Search PostgreSQL wiki" autocapitalize="sentences" title="Search PostgreSQL wiki [f]" accesskey="f" id="searchInput"/><input type="submit" name="go" value="Go" title="Go to a page with this exact name if it exists" class="searchButton" id="searchButton"/> <input type="submit" name="fulltext" value="Search" title="Search the pages for this text" class="searchButton mw-fallbackSearchButton" id="mw-searchButton"/></form>
+			</div>
+		</div>
+		
+<div role="navigation" class="portlet mw-portlet mw-portlet-tb"
+	id="p-tb" aria-labelledby="p-tb-label">
+	<h3 id="p-tb-label" >Tools</h3>
+	<div class="pBody">
+		<ul ><li id="t-whatlinkshere" class="mw-list-item"><a href="/wiki/Special:WhatLinksHere/Performance_Optimization" title="A list of all wiki pages that link here [j]" accesskey="j">What links here</a></li><li id="t-recentchangeslinked" class="mw-list-item"><a href="/wiki/Special:RecentChangesLinked/Performance_Optimization" rel="nofollow" title="Recent changes in pages linked from this page [k]" accesskey="k">Related changes</a></li><li id="t-specialpages" class="mw-list-item"><a href="/wiki/Special:SpecialPages" title="A list of all special pages [q]" accesskey="q">Special pages</a></li><li id="t-print" class="mw-list-item"><a href="javascript:print();" rel="alternate" title="Printable version of this page [p]" accesskey="p">Printable version</a></li><li id="t-permalink" class="mw-list-item"><a href="/index.php?title=Performance_Optimization&amp;oldid=37631" title="Permanent link to this revision of this page">Permanent link</a></li><li id="t-info" class="mw-list-item"><a href="/index.php?title=Performance_Optimization&amp;action=info" title="More information about this page">Page information</a></li></ul>
+		
+	</div>
+</div>
+
+		
+		</div>
+		<a href="#sidebar" title="Jump to navigation"
+			class="menu-toggle" id="sidebar-toggle"></a>
+		<a href="#p-personal" title="user tools"
+			class="menu-toggle" id="p-personal-toggle"></a>
+		<a href="#globalWrapper" title="back to top"
+			class="menu-toggle" id="globalWrapper-toggle"></a>
+	</div>
+	
+	<div class="visualClear"></div>
+	<div id="footer" class="mw-footer" role="contentinfo"
+		>
+		<div id="f-poweredbyico" class="footer-icons">
+			<a href="https://www.mediawiki.org/"><img src="/resources/assets/poweredby_mediawiki_88x31.png" alt="Powered by MediaWiki" srcset="/resources/assets/poweredby_mediawiki_132x47.png 1.5x, /resources/assets/poweredby_mediawiki_176x62.png 2x" width="88" height="31" loading="lazy"/></a>
+		</div>
+		<ul id="f-list">
+			<li id="lastmod"> This page was last edited on 28 February 2023, at 12:13.</li>
+			<li id="privacy"><a href="/wiki/PostgreSQL_wiki:Privacy_policy">Privacy policy</a></li><li id="about"><a href="/wiki/PostgreSQL_wiki:About">About PostgreSQL wiki</a></li><li id="disclaimer"><a href="/wiki/PostgreSQL_wiki:General_disclaimer">Disclaimers</a></li>
+		</ul>
+	</div>
+</div>
+
+</body>
+</html>

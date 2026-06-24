@@ -42,7 +42,26 @@ and `~/r/contextractor`.
   (parse5 normalize → linkedom) for byte-exact body text.
 - Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
   `wash()` returns `pageType` + `confidence`. `none` skips classification.
-- Phase 8 — pending.
+- Phase 8 (offline wash-corpus tester) — done. `tools/wash-corpus-tester/`: 27
+  WCXB fixtures (≥3 per type × 7), 108 runs (4 boilerplate×level combos each),
+  asserting security invariants + page-type plausibility, with a stdout table +
+  `report.json`/`report.md`. Offline, deterministic, `pnpm test:corpus`.
+
+### Phase 8 notes
+
+- **Accuracy caveat:** the 27 fixtures are WCXB **dev-split** pages the model
+  trained on, so the tester's 100% page-type accuracy is inflated. The unbiased
+  number is the held-out **test-split accuracy 0.777** from training (Phase 4).
+  The tester is an end-to-end smoke/regression check, not an accuracy benchmark.
+- Security holds at all four sanitizing levels (no script/on\*/javascript: survives).
+  `correct` is normalize-only (the documented trust boundary) so it passes markup
+  through — recorded as soft warnings, not failures.
+- **`tools/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
+  is `wash-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
+  (an unimplemented network-fetch stub) is left untouched — deleting it would churn
+  ~15 incidental references across the `.claude/` config for no functional gain,
+  and the stub never actually fetches. The two are complementary: offline fixtures
+  here vs a future live-fetch harness there.
 
 ### Phase 7 gaps (systematic)
 
