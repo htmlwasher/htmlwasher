@@ -59,4 +59,27 @@ describe('wash() orchestration', () => {
     const { html } = await wash('');
     expect(typeof html).toBe('string');
   });
+
+  it('classifies the page and exposes pageType + confidence when extracting', async () => {
+    const { pageType, confidence } = await wash(PAGE, { boilerplate: 'balanced' });
+    expect(pageType).toBeDefined();
+    expect([
+      'article',
+      'forum',
+      'product',
+      'collection',
+      'listing',
+      'documentation',
+      'service',
+    ]).toContain(pageType);
+    expect(typeof confidence).toBe('number');
+    expect(confidence).toBeGreaterThan(0);
+    expect(confidence).toBeLessThanOrEqual(1);
+  });
+
+  it("omits pageType for boilerplate 'none' (no extraction, no classification)", async () => {
+    const { pageType, confidence } = await wash(PAGE, { boilerplate: 'none' });
+    expect(pageType).toBeUndefined();
+    expect(confidence).toBeUndefined();
+  });
 });

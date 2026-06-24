@@ -31,10 +31,11 @@ loaded lazily):
 wash(html: string, options?: WashOptions): Promise<WashResult>
 ```
 
-Stages: metadata sidecar (from the original document) → boilerplate(mode) →
-wash(level). `mode: 'none'` bypasses extraction and washes the whole document.
-Page-type classification + per-type profile routing (Phase 4/5) plug into the
-boilerplate stage as the trained classifier lands.
+Stages: metadata sidecar (from the original document) → classify → select profile
+→ boilerplate(mode) → wash(level). For any mode other than `none`, the page is
+classified and extraction is routed through the matching per-type profile; the
+detected `pageType` + `confidence` are returned. `mode: 'none'` bypasses
+extraction (and classification) and washes the whole document.
 
 The two knobs are orthogonal — any boilerplate mode combines with any washing
 level. These options (plus the optional `url` context) are the entire user-facing
@@ -55,7 +56,9 @@ surface; there are deliberately no `includeComments`/`includeTables`/
   `collection`, not `category`).
 - `WashOptions` = `{ boilerplate?, level?, minify?, url? }`. `minify` defaults to
   `false` (prettier-format); `url` is context-only and never fetched.
-- `WashResult` = `{ html: string; messages: Message[]; metadata?: Metadata }`.
+- `WashResult` = `{ html: string; messages: Message[]; metadata?: Metadata;
+pageType?: PageType; confidence?: number }` (`pageType`/`confidence` set when
+  extraction runs, omitted for `boilerplate: 'none'`).
 - `Message` = `{ type: 'info' | 'warning' | 'error'; text: string }`.
 - `Metadata` (optional sidecar) = `{ title?, author?, url?, hostname?,
 description?, sitename?, date?, categories?, tags?, image?, pageType?, license? }`.
@@ -85,11 +88,16 @@ Feature parity with the Python extractor is verified by `parity.test.ts` against
 exact). To match lexbor's spec-compliant tree, the classifier parses HTML via
 `parseDocumentSpec` (parse5 normalize → linkedom).
 
-### Per-type extraction profiles — _pending (Phase 5)_
+### Per-type extraction profiles — _implemented (Phase 5)_
 
-Each page type maps to a profile (content selectors, preserve/boilerplate tags,
-`comments_are_content`, aggregate/collect post-passes) that tunes the core
-extraction pass selected by the classifier output.
+Each page type maps to a profile (`src/profiles/`, `getProfile(pageType)`) ported
+from rs-trafilatura: content selectors (tried first), preserved tags, extra
+boilerplate selectors, `commentsAreContent`, and the aggregate/collect flags. The
+classifier's predicted type selects the profile, which feeds the core via
+`CoreOptions` (`contentSelectors`/`preserveTags`/`boilerplateSelectors`/
+`commentsAsContent`). `aggregateSections`/`collectRepeatedItems` post-passes and
+the dead `lenientBoilerplate`/`minParagraphDensity` fields are carried but not yet
+consumed (matching rs-trafilatura).
 
 ## Module layout
 
@@ -121,7 +129,7 @@ extraction pass selected by the classifier output.
 - `src/classifier/model/` — shipped `model.onnx` (float `[1,189]` → `label` int64 +
   `probabilities` `[1,7]`) + `tfidf-vocab.json` (vocab/idf/scaler/classLabels).
   Shipped in the npm tarball; loaded once at runtime. _implemented (Phase 4)_
-- `src/profiles/` — per-page-type extraction profiles + confidence. _pending (Phase 5)_
+- `src/profiles/` — the 7 per-page-type extraction profiles + `getProfile`. _implemented (Phase 5)_
 - `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize

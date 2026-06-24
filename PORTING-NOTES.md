@@ -35,7 +35,14 @@ and `~/r/contextractor`.
   in the same ballpark as upstream Trafilatura on this set. Expectations fixture
   (`fixtures/validation/eval-expectations.json`) derived from adbar's
   `tests/evaldata.py` (Apache-2.0; attribution in NOTICE).
-- Phases 4, 5 (part 2), 8 — pending (Phase 4 training runs in the background).
+- Phase 4 (classifier) — done. Real model trained on full WCXB (test acc 0.777,
+  macro-F1 0.663; ONNX↔native argmax 100%). TS runtime at 100% feature parity
+  (numeric 1246/1246, tfidf 1400/1400, argmax 14/14). Cross-DOM fixes: selectolax
+  comma-unions don't dedup; linkedom vs lexbor parsing → `parseDocumentSpec`
+  (parse5 normalize → linkedom) for byte-exact body text.
+- Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
+  `wash()` returns `pageType` + `confidence`. `none` skips classification.
+- Phase 8 — pending.
 
 ### Phase 7 gaps (systematic)
 

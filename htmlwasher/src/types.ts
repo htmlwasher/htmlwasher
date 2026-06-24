@@ -106,6 +106,10 @@ export interface WashResult {
   html: string;
   messages: Message[];
   metadata?: Metadata;
+  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'none'`). */
+  pageType?: PageType;
+  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'none'`). */
+  confidence?: number;
 }
 
 /** Runtime guard: is `value` a valid {@link BoilerplateMode}? */

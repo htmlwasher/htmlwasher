@@ -1,22 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // Orchestrates the two pillars into the public wash() API:
-//   metadata (sidecar) + boilerplate(mode) → wash(level).
+//   metadata (sidecar) + classify → profile → boilerplate(mode) → wash(level).
 //
-// The boilerplate stage currently routes by mode only; page-type classification
-// and per-type profile selection (Phase 4/5) plug into `runBoilerplate` once the
-// trained classifier lands. `none` bypasses extraction and washes the whole
-// document. wash() is async because the washing formatter (prettier / minifier)
-// is loaded lazily.
+// For any boilerplate mode other than `none`, the page is classified (3-stage
+// cascade) and extraction is routed through the matching per-type profile
+// (content selectors, preserved tags, boilerplate selectors, comments-as-content).
+// `none` bypasses extraction (and classification) and washes the whole document.
+// wash() is async: the classifier (ONNX) and the washing formatter load lazily.
 
+import { classifyPage } from './classifier/index.js';
 import { extractContentHTML } from './core/extract.js';
-import type { ExtractFocus } from './core/options.js';
+import type { CoreOptions, ExtractFocus } from './core/options.js';
 import { extractMetadata } from './metadata/index.js';
+import { getProfile } from './profiles/index.js';
 import {
   type BoilerplateMode,
   DEFAULT_BOILERPLATE_MODE,
   DEFAULT_WASHING_LEVEL,
   type Message,
   type Metadata,
+  type PageType,
   type WashOptions,
   type WashResult,
 } from './types.js';
@@ -28,24 +31,60 @@ const MODE_TO_FOCUS: Record<Exclude<BoilerplateMode, 'none'>, ExtractFocus> = {
   recall: 'recall',
 };
 
-/** Run the boilerplate-removal stage for a given mode; returns content HTML to wash. */
-function runBoilerplate(
+interface BoilerplateOutcome {
+  html: string;
+  pageType?: PageType;
+  confidence?: number;
+}
+
+/**
+ * Run the boilerplate-removal stage: classify the page, select its extraction
+ * profile, and extract the main content. Returns the content HTML to wash plus
+ * the classification. Falls back to the default (article) profile if the
+ * classifier is unavailable.
+ */
+async function runBoilerplate(
   html: string,
   mode: BoilerplateMode,
   url: string | undefined,
   messages: Message[],
-): string {
-  if (mode === 'none') return html; // wash the whole document
+): Promise<BoilerplateOutcome> {
+  if (mode === 'none') return { html }; // wash the whole document (no extraction)
+
   const focus = MODE_TO_FOCUS[mode];
-  const result = extractContentHTML(html, { focus, originalUrl: url });
+  let coreOptions: Partial<CoreOptions> = { focus, originalUrl: url };
+  let pageType: PageType | undefined;
+  let confidence: number | undefined;
+
+  try {
+    const classified = await classifyPage(html, url);
+    pageType = classified.pageType;
+    confidence = classified.confidence;
+    const profile = getProfile(pageType);
+    coreOptions = {
+      focus,
+      originalUrl: url,
+      contentSelectors: profile.contentSelectors,
+      preserveTags: profile.preserveTags,
+      boilerplateSelectors: profile.boilerplateSelectors,
+      commentsAsContent: profile.commentsAreContent,
+    };
+  } catch (error) {
+    messages.push({
+      type: 'warning',
+      text: `page-type classification unavailable; using the default profile: ${(error as Error).message}`,
+    });
+  }
+
+  const result = extractContentHTML(html, coreOptions);
   if (result.html === '') {
     messages.push({
       type: 'warning',
       text: 'boilerplate removal produced no content; washing the whole document',
     });
-    return html;
+    return { html, pageType, confidence };
   }
-  return result.html;
+  return { html: result.html, pageType, confidence };
 }
 
 function hasMetadata(meta: Metadata): boolean {
@@ -53,7 +92,8 @@ function hasMetadata(meta: Metadata): boolean {
 }
 
 /**
- * Clean a page: HTML in → cleaned HTML out (+ an optional metadata sidecar).
+ * Clean a page: HTML in → cleaned HTML out (+ an optional metadata sidecar and,
+ * when extraction runs, the detected page type and confidence).
  *
  * Two orthogonal knobs: the boilerplate-removal `mode` (default `'balanced'`;
  * `'none'` washes the whole document) and the washing `level` (default
@@ -77,9 +117,15 @@ export async function wash(html: string, options: WashOptions = {}): Promise<Was
     });
   }
 
-  const contentHtml = runBoilerplate(html, mode, options.url, messages);
-  const washed = await washHtml(contentHtml, level, { minify });
+  const boilerplate = await runBoilerplate(html, mode, options.url, messages);
+  const washed = await washHtml(boilerplate.html, level, { minify });
   messages.push(...washed.messages);
 
-  return metadata ? { html: washed.html, messages, metadata } : { html: washed.html, messages };
+  const result: WashResult = { html: washed.html, messages };
+  if (metadata) result.metadata = metadata;
+  if (boilerplate.pageType) {
+    result.pageType = boilerplate.pageType;
+    result.confidence = boilerplate.confidence;
+  }
+  return result;
 }
