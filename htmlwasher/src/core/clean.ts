@@ -79,6 +79,25 @@ export function cleanDocument(root: HElement, opts: CoreOptions): void {
     cleaningList.delete('form');
   }
 
+  // Profile: never strip/clean preserved tags (e.g. forum `<form>`).
+  if (opts.preserveTags) {
+    for (const tag of opts.preserveTags) {
+      cleaningList.delete(tag);
+      strippingList.delete(tag);
+    }
+  }
+
+  // Profile: drop page-type-specific boilerplate by CSS selector first.
+  if (opts.boilerplateSelectors) {
+    for (const selector of opts.boilerplateSelectors) {
+      try {
+        for (const el of getElementsByTagName(root, selector)) el.remove();
+      } catch {
+        // Ignore selectors linkedom cannot parse.
+      }
+    }
+  }
+
   for (const tag of strippingList) stripTags(root, tag);
 
   const paragraphCount = (): number => getElementsByTagName(root, 'p').length;

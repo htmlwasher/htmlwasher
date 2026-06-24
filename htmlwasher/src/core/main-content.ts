@@ -46,6 +46,20 @@ function matchesRule(el: HElement, rule: ContentRule): boolean {
   return false;
 }
 
+/** Try the profile's own content selectors first (in order). */
+function findByProfileSelectors(body: HElement, selectors: readonly string[]): HElement | null {
+  for (const selector of selectors) {
+    let match: HElement | null = null;
+    try {
+      match = body.querySelector(selector);
+    } catch {
+      continue; // skip selectors linkedom cannot parse
+    }
+    if (match && textLength(match) >= MIN_SELECTOR_CONTENT) return match;
+  }
+  return null;
+}
+
 /** Find the content root via the ported selector rules. */
 function findBySelectors(body: HElement): HElement | null {
   const all = getElementsByTagName(body, '*');
@@ -130,6 +144,11 @@ export function pruneUnwantedSections(subTree: HElement, opts: CoreOptions): voi
  * elements → scoring → the whole body. Never returns null (body is the floor).
  */
 export function findContentNode(body: HElement, opts: CoreOptions): HElement {
+  if (opts.contentSelectors && opts.contentSelectors.length > 0) {
+    const byProfile = findByProfileSelectors(body, opts.contentSelectors);
+    if (byProfile) return byProfile;
+  }
+
   const bySelector = findBySelectors(body);
   if (bySelector && textLength(bySelector) >= MIN_SELECTOR_CONTENT) return bySelector;
 

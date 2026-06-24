@@ -22,6 +22,12 @@ export interface CoreOptions {
   deduplicate: boolean;
   /** Original URL, used only to absolutize links (never fetched). */
   originalUrl?: string;
+  /** Profile content-node selectors tried before the default cascade. */
+  contentSelectors?: readonly string[];
+  /** Profile tags preserved from cleaning (e.g. forum `<form>`). */
+  preserveTags?: readonly string[];
+  /** Profile-specific boilerplate selectors removed during cleaning. */
+  boilerplateSelectors?: readonly string[];
 }
 
 export const DEFAULT_CORE_OPTIONS: CoreOptions = {

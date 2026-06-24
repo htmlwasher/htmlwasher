@@ -405,7 +405,13 @@ export const CONTENT_RULES: ContentRule[] = [
   },
 ];
 
-/** Always skipped entirely by the whitelist re-serializer (rs `is_always_excluded` tags). */
+/**
+ * Always skipped entirely by the whitelist re-serializer (rs
+ * push_filtered_html_children's always-excluded tags). Form controls and other
+ * interactive elements are NOT listed here — `cleanDocument` removes them via
+ * TAGS_TO_CLEAN, and a profile that *preserves* a tag (e.g. the forum `<form>`,
+ * which holds the thread) must reach the serializer and be unwrapped, not dropped.
+ */
 export const SERIALIZE_SKIP_TAGS = new Set([
   'nav',
   'aside',
@@ -415,13 +421,6 @@ export const SERIALIZE_SKIP_TAGS = new Set([
   'iframe',
   'svg',
   'ins',
-  'form',
-  'button',
-  'input',
-  'select',
-  'textarea',
-  'object',
-  'embed',
 ]);
 
 /**
