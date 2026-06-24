@@ -193,8 +193,8 @@ Project conventions accumulated from past reviews. Apply in Step AUGMENT alongsi
 This section starts lean and accumulates as reviews surface durable, repo-specific patterns. Add a new subsection only when a genuinely htmlwasher-specific invariant emerges — never generic best-practice advice (those live in Step AUGMENT's domain checks).
 
 ### Trafilatura port fidelity
-- htmlwasher is a faithful TypeScript port of Trafilatura — when porting behavior, match the reference implementations in `sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
-- `sources/` repos are READ-ONLY reference inputs (gitignored) — never edit them and never import from them at runtime
+- htmlwasher is a faithful TypeScript port of Trafilatura — when porting behavior, match the reference implementations in `~/r/htmlwasher-sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
+- `~/r/htmlwasher-sources/` repos are READ-ONLY reference inputs in an external sibling dir (OUTSIDE this repo) — never edit them and never import from them at runtime
 
 ### DOM and parser boundary
 - `linkedom` + `parse5` handle full-document parsing; `htmlparser2` is reserved for the classifier feature hot-path. Do not introduce a new DOM/HTML parser or move `htmlparser2` outside the classifier

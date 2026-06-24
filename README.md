@@ -33,7 +33,7 @@ This is a pnpm + turbo monorepo.
   end-to-end live-site fetcher (polite fetcher — robots.txt, rate limiting, disk
   cache) that runs extraction and classification over real URLs. It is a thin
   polite fetcher, not a browser-automation crawler.
-- `@/sources/` — six read-only reference repositories (rs-trafilatura,
+- `~/r/htmlwasher-sources/` — six read-only reference repositories (rs-trafilatura,
   web-page-classifier, go-trafilatura, adbar/trafilatura, trafilatura-rs,
   readability), cloned by `@/clone-other-repos.sh`. These are gitignored inputs
   only; never edit them.
@@ -46,7 +46,7 @@ These are placeholders for the scaffold; full functionality lands as the phases
 complete.
 
 ```bash
-# Fetch the six read-only reference repositories into sources/
+# Fetch the six read-only reference repositories into ~/r/htmlwasher-sources/ (outside this repo)
 bash clone-other-repos.sh
 
 # Install workspace dependencies

@@ -30,7 +30,7 @@ The seven page types are: `article`, `forum`, `product`, `collection`,
 `listing`, `documentation`, `service`.
 
 This is a **port with a divergent classifier**, not a from-scratch design. It
-leans on the upstream and reference implementations cloned into `@/sources/`
+leans on the upstream and reference implementations cloned into `~/r/htmlwasher-sources/`
 (see the Source authority hierarchy below). The published library is named
 `trafilatura-alpha` and is **alpha** — early-stage and not yet production-ready.
 
@@ -116,8 +116,8 @@ trafilatura-alpha/          The TypeScript library (the npm package, alpha)
 tools/
   live-crawl-tester/        Separate TS workspace package: live-site E2E fetcher
 training/                   Offline Python pipeline (NOT a workspace member, NOT shipped)
-sources/                    Six read-only reference repos (gitignored inputs)
 prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
+# (the six read-only reference repos live OUTSIDE this repo at ~/r/htmlwasher-sources/)
 ```
 
 ### Component — trafilatura-alpha (the library)
@@ -190,7 +190,7 @@ Run from the repo root (`@/package.json`):
 
 ```bash
 pnpm install            # Install workspace dependencies
-pnpm run clone-sources  # Clone the six read-only reference repos into sources/
+pnpm run clone-sources  # Clone the six read-only reference repos into ~/r/htmlwasher-sources/
 pnpm build              # pnpm fix, then turbo build across workspace packages
 pnpm test               # turbo test — the offline vitest suite
 pnpm lint               # Biome check + markdownlint + Prettier --check on Markdown
@@ -205,7 +205,7 @@ via uv and is independent of the Node toolchain.
 
 ## Source authority hierarchy
 
-The six reference repos under `@/sources/` are **read-only inputs**, cloned by
+The six reference repos under `~/r/htmlwasher-sources/` are **read-only inputs**, cloned by
 `@/clone-other-repos.sh` and gitignored — never edit them. When sources disagree,
 follow this authority hierarchy:
 
@@ -224,7 +224,7 @@ follow this authority hierarchy:
 - **readability** (Mozilla) — not Trafilatura; a TypeScript/DOM idiom reference
   only (how to structure DOM traversal in JavaScript).
 
-Rust appears in `@/sources/` (rs-trafilatura, trafilatura-rs, web-page-classifier)
+Rust appears in `~/r/htmlwasher-sources/` (rs-trafilatura, trafilatura-rs, web-page-classifier)
 purely as read-only reference — it is **never built** in this repo.
 
 ## Licensing and attribution

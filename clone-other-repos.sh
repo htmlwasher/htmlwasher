@@ -65,22 +65,24 @@
 # The script is IDEMPOTENT: if a repo is already cloned it fetches and re-checks
 # out the chosen branch instead of failing. Re-run it any time to refresh.
 #
-# IMPORTANT: repos are cloned into a dedicated SOURCES directory:
-#   /Users/miroslavsekera/r/htmlwasher/sources/
-# This keeps the six reference repos out of the project root (which holds the
-# clone script, prompts/, tools/, and the trafilatura-alpha library). They are
-# NOT cloned into the current working directory.
+# IMPORTANT: repos are cloned into a dedicated SOURCES directory that lives
+# OUTSIDE this repository, as a SIBLING of it (never a subfolder of the product
+# repo):
+#   ~/r/htmlwasher-sources/        (i.e. ../htmlwasher-sources relative to this script)
+# This keeps the six reference repos completely out of the product repo (which
+# holds the clone script, prompts/, tools/, and the htmlwasher library). They
+# are NOT cloned inside the repo and NOT into the current working directory.
 # =============================================================================
 
 set -euo pipefail
 
 # --- Where to clone -----------------------------------------------------------
-# All reference repos go into a "sources/" subfolder of the htmlwasher project.
-# (Script-relative derivation is shown commented below if you ever move this
-# script -- it resolves to "<dir-of-this-script>/sources".)
-BASE_DIR="/Users/miroslavsekera/r/htmlwasher/sources"
-# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# BASE_DIR="$SCRIPT_DIR/sources"
+# All reference repos go into a "htmlwasher-sources/" directory that is a SIBLING
+# of this repo (OUTSIDE it), never a subfolder of the product repo. Derived
+# script-relative so no username is baked in and it follows the script if moved:
+# it resolves to "<dir-of-this-script>/../htmlwasher-sources".
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/htmlwasher-sources"
 
 # Candidate "development" branch names, in order of preference.
 PREFERRED_BRANCHES=("dev" "develop" "development" "next")

@@ -17,7 +17,7 @@ Use the `@/` prefix for all repo-root-relative paths in prompts, commands, rules
 
 ## Cross-repo references
 
-`@/` only addresses paths inside this repo. For a path in a sibling repo (e.g. a reference repo under `~/r/<repo>`), use a descriptive, home-relative reference (`~/r/<repo>/...`) rather than a hardcoded `/Users/<name>/` path. In runnable bash blocks, write the in-repo destination relative to the repo root (`./trafilatura-alpha`) and any cross-repo source home-relative (`~/r/<repo>/...`) so no username is baked in. (Note: the read-only reference repos under `@/sources/` are in-repo, gitignored inputs — address them with `@/sources/...`, not a home-relative path.)
+`@/` only addresses paths inside this repo. For a path in a sibling repo (e.g. a reference repo under `~/r/<repo>`), use a descriptive, home-relative reference (`~/r/<repo>/...`) rather than a hardcoded `/Users/<name>/` path. In runnable bash blocks, write any in-repo destination relative to the repo root (`./htmlwasher`) and any cross-repo source home-relative (`~/r/<repo>/...`) so no username is baked in. (Note: the read-only reference repos live OUTSIDE this repo at `~/r/htmlwasher-sources/` — they are a sibling directory, not in-repo, so address them home-relative as `~/r/htmlwasher-sources/...`, never `@/sources/...`.)
 
 ## Exempt
 

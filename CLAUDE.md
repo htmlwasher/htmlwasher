@@ -13,7 +13,7 @@ training/                  # OFFLINE Python project (3.12+, uv-managed): trains 
 tools/
 └── live-crawl-tester/     # separate TS workspace pkg: E2E live-site fetcher (polite: robots.txt,
                            #   rate limit, disk cache). NOT Crawlee/Playwright.
-sources/                   # six READ-ONLY reference repos (gitignored), cloned by clone-other-repos.sh
+# (the six READ-ONLY reference repos are cloned OUTSIDE this repo into ~/r/htmlwasher-sources/, by clone-other-repos.sh)
 prompts/2026-6-24-init/    # build brief (prompt.md) + research context docs — do not modify
 ```
 
@@ -30,7 +30,7 @@ pnpm test              # All vitest tests via turbo (offline; excludes the live-
 pnpm lint              # Biome check + markdownlint + Prettier --check on Markdown (read-only)
 pnpm lint:md           # Markdown only: markdownlint + Prettier --check
 pnpm fix:md            # Markdown only: markdownlint --fix + Prettier --write (Biome owns JS/TS/JSON)
-pnpm clone-sources     # `bash clone-other-repos.sh` — fetch the six read-only reference repos into sources/
+pnpm clone-sources     # `bash clone-other-repos.sh` — fetch the six read-only reference repos into ~/r/htmlwasher-sources/
 npx cspell "**/*.md"   # Spell check (cspell dictionaries: bash, en-gb, git, rust)
 npx knip               # Dead-code: unused exports/files/deps (config in knip.json)
 # Offline Python training (run from training/):
@@ -46,12 +46,12 @@ Biome owns JS/TS/JSON lint+format; Prettier + markdownlint-cli2 own Markdown; cs
 
 - **Node 22+**, **pnpm 10+** — the library and the live-crawl tester
 - **Python 3.12+ with [uv](https://docs.astral.sh/uv/)** — only for the offline `training/` pipeline
-- **git** — to clone the six read-only reference repos into `sources/`
-- **No Rust toolchain is required to build htmlwasher.** Rust appears only as read-only reference under `sources/` (never built here); `rust-analyzer` is enabled solely to READ those references.
+- **git** — to clone the six read-only reference repos into `~/r/htmlwasher-sources/`
+- **No Rust toolchain is required to build htmlwasher.** Rust appears only as read-only reference under `~/r/htmlwasher-sources/` (never built here); `rust-analyzer` is enabled solely to READ those references.
 
-## sources/ is read-only
+## Reference sources are read-only (external)
 
-The repos under `sources/` are gitignored reference inputs cloned by `@/clone-other-repos.sh`. **Never edit them.** They define the port's behavior by an authority hierarchy:
+The reference repos live at **`~/r/htmlwasher-sources/`** — an external sibling directory **outside** this repo (NOT inside it, NOT committed), cloned by `@/clone-other-repos.sh`. **Never edit them.** They define the port's behavior by an authority hierarchy:
 
 - **`rs-trafilatura` + `web-page-classifier`** define **WHAT** to build (the divergent fork with ML page-typing — the primary port target).
 - **`go-trafilatura` + `adbar/trafilatura`** define **HOW extraction should behave** — defer to these when rs-trafilatura is thin or ambiguous.
@@ -60,7 +60,7 @@ The repos under `sources/` are gitignored reference inputs cloned by `@/clone-ot
 
 ## TypeScript LSP
 
-The `typescript-lsp@claude-plugins-official` plugin wires `typescript-language-server` into the built-in `LSP` tool — go-to-definition, find-all-references, hover types, and real-time diagnostics across `.ts`/`.tsx`/`.js`/`.jsx`. Python (`pyright-lsp`) and Rust (`rust-analyzer-lsp`) are also enabled — pyright for the `training/` Python, rust-analyzer to READ the Rust references under `sources/`.
+The `typescript-lsp@claude-plugins-official` plugin wires `typescript-language-server` into the built-in `LSP` tool — go-to-definition, find-all-references, hover types, and real-time diagnostics across `.ts`/`.tsx`/`.js`/`.jsx`. Python (`pyright-lsp`) and Rust (`rust-analyzer-lsp`) are also enabled — pyright for the `training/` Python, rust-analyzer to READ the Rust references under `~/r/htmlwasher-sources/`.
 
 - Use `Grep`/`Glob` for **discovery** (finding files, searching patterns)
 - Use `LSP` for **understanding** (definitions, references, type errors) — prefer it over reading whole files

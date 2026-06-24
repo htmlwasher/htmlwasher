@@ -6,7 +6,7 @@
 
 ---
 
-> **TLDR**: Phased brief for Claude Code to build **htmlwasher** — a TypeScript library that takes HTML in and returns cleaned HTML out (no conversion to Markdown/XML/TEI/text, no scraping). It combines a **Trafilatura-derived boilerplate-removal core** (page-type-aware, with a from-scratch ONNX page-type classifier and per-type profiles) that emits HTML, gated by a `Precision | Balanced | Recall | None` mode, with an **HTML washing/sanitization stage** (`Minimal | Standard | Permissive | Styled | Correct` levels, modeled on the `sanitize-html`-based htmlprocessing-server pipeline). Work the build order in §5, leaning on the Trafilatura reference repos under `@/sources/` and the htmlwasher/contextractor reference projects under `~/r/tools` and `~/r/contextractor`. Use when implementing htmlwasher.
+> **TLDR**: Phased brief for Claude Code to build **htmlwasher** — a TypeScript library that takes HTML in and returns cleaned HTML out (no conversion to Markdown/XML/TEI/text, no scraping). It combines a **Trafilatura-derived boilerplate-removal core** (page-type-aware, with a from-scratch ONNX page-type classifier and per-type profiles) that emits HTML, gated by a `Precision | Balanced | Recall | None` mode, with an **HTML washing/sanitization stage** (`Minimal | Standard | Permissive | Styled | Correct` levels, modeled on the `sanitize-html`-based htmlprocessing-server pipeline). Work the build order in §5, leaning on the Trafilatura reference repos under `~/r/htmlwasher-sources/` and the htmlwasher/contextractor reference projects under `~/r/tools` and `~/r/contextractor`. Use when implementing htmlwasher.
 
 ---
 
@@ -37,6 +37,7 @@ Before writing any code, read the research documents in this folder's `context/`
 
 **Supporting docs (read selectively — they expand on specific decisions):**
 
+- [`./context/08-html-output-cleanup-pipeline-and-security.md`](./context/08-html-output-cleanup-pipeline-and-security.md) — **the htmlwasher-specific synthesis (read before Phases 2, 5, 6)**: how to emit the kept content as a whitelist-re-rendered HTML subtree (NOT verbatim `outerHTML`), the boilerplate-mode → `favor_precision`/`favor_recall` thresholds, the exact washing-level presets, the 2026 library choices (`sanitize-html` ≥ 2.17.2 default + DOMPurify hardened opt-in; parse5/prettier/html-minifier-terser/linkedom/onnxruntime versions), and the untrusted-HTML security model. Grounded in deep reads of `~/r/htmlwasher-sources/`, `~/r/tools/packages/htmlprocessing-server`, and `~/r/contextractor`.
 - [`./context/07-classifier-bilingual-port-deep-dive.md`](./context/07-classifier-bilingual-port-deep-dive.md) — **companion to doc 03**: deeper analysis of ONNX vs native bindings vs m2cgen, training compute (no GPU needed), feature-extraction library picks (selectolax for Python, htmlparser2 for TS), and the *reuse-vs-rebuild* verdict (**rebuild fresh** — the rs-trafilatura model is a custom non-XGBoost-native binary). Read alongside doc 03 when implementing Phase 4.
 - [`./context/06-ml-extraction-landscape.md`](./context/06-ml-extraction-landscape.md) — adjacent context on the 2026 ML extraction landscape (MinerU-HTML, ReaderLM, Docling, VLMs). **Not directly required for htmlwasher**, but useful for: (a) the licensing-trap table when evaluating any neural addition, (b) future "neural fallback" routing of low-confidence pages, (c) why we *don't* go neural for the classifier itself.
 - [`./context/04-niche-opportunities-map.md`](./context/04-niche-opportunities-map.md) — strategic positioning map (forums, multilingual, WARC, Lambda, EU residency). **Not prescriptive for htmlwasher**, but useful for: (a) framing the README positioning, (b) choosing test fixtures aligned with target niches (forums and multilingual are high-value), (c) understanding why bundle size and deployment surface matter.
@@ -46,7 +47,7 @@ Before writing any code, read the research documents in this folder's `context/`
 
 The context docs above are syntheses; the underlying primary sources are below. Consult them directly when you need ground truth (the local `context/` files are the reasoning; these links are the evidence).
 
-**Trafilatura implementations — the boilerplate-removal pillar (also cloned into `sources/`, see Section 2):**
+**Trafilatura implementations — the boilerplate-removal pillar (cloned into `~/r/htmlwasher-sources/`, see Section 2):**
 - Upstream Trafilatura (adbar): https://github.com/adbar/trafilatura  · docs https://trafilatura.readthedocs.io/  · PyPI https://pypi.org/project/trafilatura/
 - go-trafilatura (markusmobius): https://github.com/markusmobius/go-trafilatura
 - trafilatura-rs (nchapman, faithful Rust port): https://github.com/nchapman/trafilatura-rs
@@ -83,18 +84,18 @@ The context docs above are syntheses; the underlying primary sources are below. 
 
 ## 2. Source repositories & AUTHORITY HIERARCHY
 
-The Trafilatura source repos are cloned by `@/clone-other-repos.sh` into **`@/sources/`** (confirm the location before starting; if they are elsewhere, ask). Each repo has a defined role. **When sources disagree, follow this hierarchy:**
+The Trafilatura source repos are cloned by `@/clone-other-repos.sh` into **`~/r/htmlwasher-sources/`** (confirm the location before starting; if they are elsewhere, ask). Each repo has a defined role. **When sources disagree, follow this hierarchy:**
 
 | Repo (local path) | Role | Authority |
 |---|---|---|
-| `@/sources/rs-trafilatura` | **Primary port target.** Page-type-aware architecture, per-type extraction profiles, confidence scoring, classifier wiring, `favor_precision`/`favor_recall` toggles. | Defines **WHAT** to build (the feature set & architecture). |
-| `@/sources/web-page-classifier` | **The classifier.** The 189 features (89 numeric + 100 TF-IDF), the 3-stage URL->HTML->ML cascade, the 7 page types. | Defines the **classifier behavior & features** to replicate byte-for-byte. |
-| `@/sources/go-trafilatura` | **Faithful core reference.** Near line-by-line Go port of the Python original; cleanest readable source for the extraction algorithm. | **Disambiguator** for extraction logic when rs-trafilatura is unclear. |
-| `@/sources/trafilatura` (adbar) | **Canonical original.** Ground-truth semantics for every option, metadata rules, edge cases, AND the **test corpus**. | **Final authority** on extraction *semantics* and the validation oracle. |
-| `@/sources/trafilatura-rs` (nchapman) | Faithful Rust port. | Cross-check / tiebreaker. |
-| `@/sources/readability` (mozilla) | NOT Trafilatura. Canonical JS/DOM readable-content extractor. | **TS/DOM idiom reference only** — how to structure DOM traversal in JS. |
+| `~/r/htmlwasher-sources/rs-trafilatura` | **Primary port target.** Page-type-aware architecture, per-type extraction profiles, confidence scoring, classifier wiring, `favor_precision`/`favor_recall` toggles. | Defines **WHAT** to build (the feature set & architecture). |
+| `~/r/htmlwasher-sources/web-page-classifier` | **The classifier.** The 189 features (89 numeric + 100 TF-IDF), the 3-stage URL->HTML->ML cascade, the 7 page types. | Defines the **classifier behavior & features** to replicate byte-for-byte. |
+| `~/r/htmlwasher-sources/go-trafilatura` | **Faithful core reference.** Near line-by-line Go port of the Python original; cleanest readable source for the extraction algorithm. | **Disambiguator** for extraction logic when rs-trafilatura is unclear. |
+| `~/r/htmlwasher-sources/trafilatura` (adbar) | **Canonical original.** Ground-truth semantics for every option, metadata rules, edge cases, AND the **test corpus**. | **Final authority** on extraction *semantics* and the validation oracle. |
+| `~/r/htmlwasher-sources/trafilatura-rs` (nchapman) | Faithful Rust port. | Cross-check / tiebreaker. |
+| `~/r/htmlwasher-sources/readability` (mozilla) | NOT Trafilatura. Canonical JS/DOM readable-content extractor. | **TS/DOM idiom reference only** — how to structure DOM traversal in JS. |
 
-**Cleanup-pillar references (NOT in `@/sources/` — read-only sibling projects under `~/r/`):**
+**Cleanup-pillar references (NOT in `~/r/htmlwasher-sources/` — read-only sibling projects under `~/r/`):**
 
 | Project (local path) | Role | Authority |
 |---|---|---|
@@ -102,7 +103,7 @@ The Trafilatura source repos are cloned by `@/clone-other-repos.sh` into **`@/so
 | `~/r/tools/apps/htmlwasher-api`, `~/r/tools/apps/htmlwasher-site`, https://www.htmlwasher.com/ | The product wrapping that engine (API contract, level copy). | **Product positioning** for the washing levels. |
 | `~/r/contextractor`, `~/r/tools/apps/contextractor-site`, https://www.contextractor.com/ | Content extraction on rs-trafilatura: the `precision`/`balanced`/`recall` modes that map to `favorPrecision`/`favorRecall`. | **Reference for the boilerplate-mode mapping** (htmlwasher adds `None`). |
 
-**Rule of thumb:** rs-trafilatura + web-page-classifier tell you *what features and architecture to build* for boilerplate removal; go-trafilatura + adbar tell you *how the extraction must actually behave*; htmlprocessing-server tells you *how the HTML washing must behave*. rs-trafilatura is a divergent fork, so treat its extraction internals as intent and verify behavior against go-trafilatura/adbar. **Never edit any read-only reference** under `@/sources/`, `~/r/tools`, or `~/r/contextractor`.
+**Rule of thumb:** rs-trafilatura + web-page-classifier tell you *what features and architecture to build* for boilerplate removal; go-trafilatura + adbar tell you *how the extraction must actually behave*; htmlprocessing-server tells you *how the HTML washing must behave*. rs-trafilatura is a divergent fork, so treat its extraction internals as intent and verify behavior against go-trafilatura/adbar. **Never edit any read-only reference** under `~/r/htmlwasher-sources/`, `~/r/tools`, or `~/r/contextractor`.
 
 ---
 
@@ -112,13 +113,14 @@ Do not redesign these — they are settled in the research:
 
 1. **Language/runtime:** TypeScript on Node.js (target the LTS in use). Strict mode (`"strict": true`).
 2. **DOM:** parse HTML with a real DOM library — prefer **linkedom** (fast and lenient — it parses HTML via **htmlparser2** under the hood, not parse5) as the primary DOM; use **parse5** for WHATWG-spec-compliant **normalization** in the washing pipeline; `cheerio` acceptable only where a jQuery-like API is genuinely simpler. Pick ONE primary DOM and be consistent. Document the choice. Note: context doc 07 also flags **htmlparser2** as the speed leader for feature extraction (Cheerio Issue #1259 notes parse5 is ~½ htmlparser2's speed) — and it is the same parser linkedom wraps — so consider htmlparser2 specifically inside the classifier's feature extractor where it's a tight inner loop.
-3. **Output is HTML, always.** `htmlwasher` takes HTML in and returns cleaned **HTML** out. **No conversion** — no Markdown, no XML, no XML/TEI, no plain text. The boilerplate-removal pillar keeps the extracted main content as an HTML subtree (do not serialize to text/markdown); the washing pillar returns sanitized/normalized HTML. (Metadata — title/author/date — may be returned as an optional sidecar object alongside the HTML, but is never the content output and never replaces it; see Phase 3.)
+3. **Output is HTML, always.** `htmlwasher` takes HTML in and returns cleaned **HTML** out. **No conversion** — no Markdown, no XML, no XML/TEI, no plain text. The boilerplate-removal pillar keeps the extracted main content as an HTML subtree, emitted by **re-serializing the kept node through a tag/attribute whitelist** (port go-trafilatura's `postCleaning` + rs-trafilatura's `push_filtered_html_children` — NOT a verbatim `outerHTML` of the original subtree, which would leak boilerplate and untrusted markup; see context doc 08 §1); the washing pillar returns sanitized/normalized HTML. (Metadata — title/author/date — may be returned as an optional sidecar object alongside the HTML, but is never the content output and never replaces it; see Phase 3.)
 4. **Two orthogonal, composable knobs — both plain string unions, NOT TS `enum`s** (use `as const` arrays + a union type, like htmlprocessing-server's `PROCESSING_MODES`):
    - **Boilerplate-removal mode** — `'precision' | 'balanced' | 'recall' | 'none'`. Maps to the Trafilatura/rs-trafilatura toggles exactly as contextractor does (`~/r/contextractor/packages/crawler/src/createCrawler.ts`): `precision` -> `favor_precision` (less noise, may miss content); `balanced` -> neither flag (neutral default); `recall` -> `favor_recall` (more content, may include noise); **`none` -> skip boilerplate removal entirely** (wash the whole document). `none` is htmlwasher's addition — contextractor has no `none`.
    - **HTML washing level** — `'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'`. Reproduce the htmlprocessing-server presets (see Phase 6). `standard` is the default. There are **exactly these five** — do NOT add `*-reader` variants (no "Minimal Reader", etc.); the Readability-preprocessing concern is handled by the boilerplate pillar instead.
-5. **HTML washing engine:** model the cleanup on `~/r/tools/packages/htmlprocessing-server` — use **`sanitize-html`** (the library it uses; pin a recent 2.x) as the sanitizer, **parse5** for normalization, **prettier** (`parser: "html"`) for pretty output and **html-minifier-terser** for the `minify` option, and **chardet + iconv-lite** to decode non-UTF-8 buffers. If a clearly better-maintained library exists, you may substitute it, but `sanitize-html` is the proven default and matches the reference. **Security is non-negotiable regardless of level:** always strip `<script>`, all `on*` event-handler attributes, and `javascript:` URLs (sanitize-html does the latter two by default; replicate htmlprocessing-server's `filterEventHandlers`).
+   - **The washing level is htmlwasher's ONLY content-inclusion control.** There are deliberately **no `include_comments` / `include_tables` / `include_images` / `include_links` toggles** — those old Trafilatura/contextractor checkboxes **do not exist** in htmlwasher. What survives is decided by the level's tag allow-list: images appear only at `standard`+ (never `minimal`); classes + inline `style` + `<style>` only at `styled`; tables and links (`<a href>`) survive at every level. Comments are governed automatically by the page-type profile (forums treat comments as content), not by a user toggle.
+5. **HTML washing engine:** model the cleanup on `~/r/tools/packages/htmlprocessing-server` — use **`sanitize-html`** (the library it uses; pin **≥ 2.17.2** for the CVE-2026-40186 fix) as the default sanitizer, with an **opt-in DOMPurify + jsdom "hardened" mode behind the same interface** for callers who re-render output into a live DOM/email/webview; **parse5** (≥ 8.x) for normalization, **prettier** (`parser: "html"`) for pretty output and **html-minifier-terser** for the `minify` option (note it is the maintained fork of the abandoned `html-minifier`, itself quiescent — `html-minifier-next` is an alternative), and **chardet + iconv-lite** to decode non-UTF-8 buffers. `sanitize-html` is the proven default and matches the reference. **Security is non-negotiable at EVERY level (including `styled` and `correct`):** always strip `<script>`, all `on*` event-handler attributes, and `javascript:`/untrusted `data:` URLs (replicate htmlprocessing-server's `filterEventHandlers`); the `styled` level must additionally run a **CSS-URL allow-list** because `sanitize-html` does NOT filter inline-`style` URLs by default. See context doc 08 §5–6 for the full library analysis + security checklist.
 6. **Classifier model:** **retrain a standard XGBoost model from the public WCXB dataset and export to ONNX.** Do NOT try to reverse-engineer rs-trafilatura's embedded ~1.1 MB custom binary — it is not XGBoost-native or ONNX, and reversing it is wasted effort (see context docs 03 and 07).
-7. **Inference in Node:** **onnxruntime-node** by default. Also provide an **onnxruntime-web (WASM)** path behind the same interface for zero-native-binary / serverless deployment. Keep inference behind an `interface PageTypeClassifier` so the backend is swappable. **Pin a known-good onnxruntime version** — context doc 07 notes 1.21.x–1.22.x had a category-only-trees bug (fixed in 1.23.0).
+7. **Inference in Node:** **onnxruntime-node** by default. Also provide an **onnxruntime-web (WASM)** path behind the same interface for zero-native-binary / serverless deployment. Keep inference behind an `interface PageTypeClassifier` so the backend is swappable. **Pin a known-good onnxruntime version (≥ 1.23.0)** — 1.21.x–1.22.x carry two TreeEnsemble correctness bugs that hit small/shallow XGBoost trees (the `is_leaf`/root-branch-as-leaf bug #24679→#25410, and the category-only-trees `same_node_` bug #24636→#24654), both fixed in 1.23.0; current stable is 1.27.0 (see context doc 08 §5.1).
 8. **Feature parity is the hard part, not the trees.** The 189 features (89 numeric DOM/URL + 100 TF-IDF) MUST be computed identically to how the model was trained, or predictions diverge. Train the model and compute features from the SAME TypeScript feature-extraction code path wherever possible (see Phase 4), and lock the TF-IDF vocabulary + IDF weights as a shipped JSON artifact. **Feature-count caveat:** web-page-classifier's code is authoritative — `N_NUMERIC_FEATURES = 89`, its embedded binary header, and the live feature extractor all use **89 numeric** (189 total); the README *body* still says 81/181, so trust the source. **TF-IDF gotcha:** scikit-learn's default (`smooth_idf=True`) uses a nonstandard `idf = ln((1+n)/(1+df)) + 1` with L2 normalization (the bare `ln(n/df) + 1` is only the non-default `smooth_idf=False` form) — replicate whichever the training uses, exactly.
 9. **Determinism:** tree models are threshold comparisons and are cross-platform deterministic once features match — exploit this for reproducible golden tests. **Compare argmax class, not exact probabilities**, in cross-language parity tests (small float-handling differences across runtimes can flip borderline probability values).
 
@@ -130,10 +132,10 @@ The TypeScript library is the **htmlwasher** package (npm name `htmlwasher`). Pl
 
 ```
 @/
-  clone-other-repos.sh               # clones the 6 Trafilatura reference repos into sources/
-  sources/                           # the 6 cloned reference repos (read-only inputs)
-    rs-trafilatura/  web-page-classifier/  go-trafilatura/
-    trafilatura/  trafilatura-rs/  readability/
+  clone-other-repos.sh               # clones the 6 Trafilatura reference repos OUTSIDE the repo,
+                                     #   into the sibling dir ~/r/htmlwasher-sources/ (NOT in this repo):
+                                     #   rs-trafilatura web-page-classifier go-trafilatura
+                                     #   trafilatura trafilatura-rs readability
   prompts/2026-6-24-init/            # this brief (prompt.md) + context/ research docs
   htmlwasher/                        # the TS library (HTML in -> cleaned HTML out)
     src/
@@ -174,7 +176,7 @@ wash(html: string, options?: {
 }): { html: string; messages: Message[]; metadata?: Metadata }
 ```
 
-The two knobs are orthogonal: any boilerplate mode combines with any washing level (e.g. `boilerplate: 'balanced'` + `level: 'standard'`).
+The two knobs are orthogonal: any boilerplate mode combines with any washing level (e.g. `boilerplate: 'balanced'` + `level: 'standard'`). These two (plus `minify`) are the **entire** user-facing surface — there are deliberately **no `includeComments` / `includeTables` / `includeImages` / `includeLinks` options**. The washing `level` is the single tag-inclusion knob (it subsumes images/tables/links), and comments are decided by the classified page type.
 
 ---
 
@@ -190,7 +192,7 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 - **Gate:** `pnpm test` runs (even with a trivial passing test); `tsc --noEmit` is clean.
 
 ### Phase 2 — Boilerplate-removal core (emits HTML)
-- Port the core extraction algorithm from **go-trafilatura** (disambiguating against **adbar** semantics): main-content detection, the readability/dom-distiller-style fallback cascade, comment extraction, table handling, and the precision/recall toggles. **Keep the result as an HTML subtree** — do NOT serialize to text/markdown/XML.
+- Port the core extraction algorithm from **go-trafilatura** (disambiguating against **adbar** semantics): main-content detection, the readability/dom-distiller-style fallback cascade, comment extraction, table handling, and the precision/recall toggles. **Keep the result as an HTML subtree** — do NOT serialize to text/markdown/XML. Emit it via a **whitelist re-serializer**: port go-trafilatura's `postCleaning` (attribute allow-list + empty-node prune, `html-processing.go:401`) and rs-trafilatura's `push_filtered_html_children` (tag/attribute whitelist, unwrap non-whitelisted tags, skip boilerplate inline, `src/extract.rs:2700`). Keep a **generous** content tag set here (headings, paragraphs, lists, blockquotes, code, **tables, links with `href`, images**, structural wrappers) so the washing level — not a per-content toggle — does the final narrowing; do NOT re-expose the reference's `include_tables`/`include_links`/`include_images` options. See context doc 08 §1.
 - Write **unit tests per module** as you go.
 - **Gate:** unit tests cover each core function; a handful of adbar test-corpus pages yield a sensible main-content **HTML** fragment.
 
@@ -264,6 +266,7 @@ Requirements:
 - **Non-goals:**
   - **No conversion.** HTML in, HTML out — never Markdown, XML, XML/TEI, or plain text. (The boilerplate pillar keeps an HTML subtree; the washing pillar returns sanitized/normalized HTML.)
   - **No scraping / crawling / fetching.** htmlwasher never touches the network; the `tools/` tester is offline over saved fixtures. Crawling lives in Contextractor, not here (see context doc 05).
+  - **No granular content toggles.** No `include_comments` / `include_tables` / `include_images` / `include_links` checkboxes (the Trafilatura/contextractor content options). The washing **level** is the single tag-inclusion control; comments follow the page-type profile.
   - Matching rs-trafilatura's exact benchmark numbers (they're self-reported — see context doc 02); supporting non-Node runtimes beyond the WASM path; adding a neural HTML extractor like MinerU-HTML or ReaderLM-v2 (out of scope — context doc 06 covers what these are and why we defer).
 - **Validate on our own data:** per the research, treat our own held-out results as the source of truth, not the upstream author's WCXB leaderboard.
 
