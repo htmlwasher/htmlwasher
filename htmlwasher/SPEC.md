@@ -78,7 +78,12 @@ extraction pass selected by the classifier output.
 - `src/types.ts` — the public type surface (option unions, `WashOptions`,
   `WashResult`, `Metadata`, `PageType`, guards). _implemented_
 - `src/core/` — Trafilatura extraction algorithm + whitelist re-serializer (emits
-  the kept content as an HTML subtree). _pending (Phase 2)_
+  the kept content as an HTML subtree). Entry: `extractContentHTML(html, opts?)` →
+  `{ html, textLength, fallbackUsed }`. Modules: `dom` (linkedom helpers),
+  `constants` (go-trafilatura tag catalogs + content selectors), `clean`
+  (docCleaning + link-density), `main-content` (selector/semantic/scoring
+  cascade), `serialize-filtered` (postCleaning + whitelist re-serializer),
+  `extract` (orchestration). _implemented (Phase 2)_
 - `src/metadata/` — optional metadata sidecar (OG → JSON-LD → meta → DOM). _pending (Phase 3)_
 - `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
   TF-IDF), htmlparser2 hot-path; parity with `training/extract_features.py`. _pending (Phase 4)_

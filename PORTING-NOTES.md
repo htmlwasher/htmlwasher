@@ -11,8 +11,32 @@ and `~/r/contextractor`.
 ## Status
 
 - Phase 0 (orientation) — done (this document).
-- Phase 1 (scaffold) — baseline gate already green (`tsc --noEmit` clean, `pnpm test` passes).
-- Phases 2–8 — pending.
+- Phase 1 (scaffold) — done. Type surface in `src/types.ts`; baseline gate green.
+- Phase 2 (boilerplate core) — done. `src/core/` extracts main-content HTML; 45
+  unit tests + 4 real adbar pages pass. See "Phase 2 notes" below.
+- Phases 3–8 — pending.
+
+### Phase 2 notes
+
+- **Emit path:** we follow rs-trafilatura's filter-serialize approach (select a
+  content node → `postCleaning` → whitelist re-serialize via
+  `serialize-filtered.ts`), NOT go-trafilatura's per-element body rebuild
+  (`main-extractor.go` `handle*` handlers). The brief §5 sanctions this. The
+  per-element handlers were therefore not ported.
+- **Cleaning** (`clean.ts`) is a faithful port of `html-processing.go`
+  (`docCleaning`, `pruneHTML`, `linkDensityTest(+Tables)`, `deleteByLinkDensity`)
+  with the precision/recall thresholds. Tag catalogs in `constants.ts` are
+  verbatim from `settings.go`.
+- **Selectors:** content rules 1–5 ported from `internal/selector/content.go`
+  (rule 2 = any bare `<article>`), then `<article>`/`<main>`/`[role=main]`, then a
+  readability-style scoring fallback, then the body.
+- **linkedom gotcha:** `parseHTML` does not wrap loose input in `<html><body>`
+  (it promotes the first element to the root). `parseDocument` normalizes: full
+  docs as-is, stray `<body>` wrapped in `<html>`, bare fragments in
+  `<html><body>`.
+- **Deferred:** comment extraction, the per-type profile post-passes
+  (aggregate/collect), and the `extraction_quality` heuristic move to Phase 5;
+  the 27-feature ML quality model stays out of scope.
 
 ## Authority hierarchy (recap)
 
