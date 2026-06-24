@@ -7,10 +7,17 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "htmlwasher": "dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     }
   },
   "files": [
@@ -26,6 +33,7 @@
   },
   "dependencies": {
     "chardet": "^2.1.0",
+    "commander": "^14.0.0",
     "html-minifier-terser": "^7.2.0",
     "htmlparser2": "^10.0.0",
     "iconv-lite": "^0.6.3",

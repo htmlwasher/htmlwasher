@@ -42,6 +42,46 @@ level. These options (plus the optional `url` context) are the entire user-facin
 surface; there are deliberately no `includeComments`/`includeTables`/
 `includeImages`/`includeLinks` toggles.
 
+### CLI — _implemented (`src/cli.ts` + `src/cli-program.ts`)_
+
+The same `wash()` pipeline, exposed as an **offline** command-line tool. Installed
+via the `bin` entry (`htmlwasher → dist/cli.js`) and importable as `htmlwasher/cli`.
+It reads HTML from a file argument or stdin and writes cleaned HTML (or the full
+JSON result) to stdout or a file. **It NEVER fetches a URL** — `--url` is passed to
+`wash()` as classifier/metadata context only, exactly like the library `url` option.
+
+```text
+htmlwasher [input] [options]
+```
+
+- Positional `[input]` — path to an HTML file. Omit it (or pass `-`) to read HTML
+  from **stdin**. A bare invocation with an interactive TTY and no piped input
+  fails with exit code 1 rather than hanging.
+
+| Option                     | Maps to `wash()` | Notes                                                                            |
+| -------------------------- | ---------------- | -------------------------------------------------------------------------------- |
+| `-b, --boilerplate <mode>` | `boilerplate`    | `precision\|balanced\|recall\|none`; default `balanced`. Validated.              |
+| `-l, --level <level>`      | `level`          | `minimal\|standard\|permissive\|styled\|correct`; default `standard`. Validated. |
+| `-m, --minify`             | `minify`         | minify the output instead of pretty-formatting.                                  |
+| `-u, --url <url>`          | `url`            | context only — **never fetched**.                                                |
+| `-o, --output <file>`      | —                | write the result to a file instead of stdout.                                    |
+| `--json`                   | —                | emit `{ html, metadata, pageType, confidence, messages }` as pretty JSON.        |
+| `-q, --quiet`              | —                | suppress the stderr diagnostics + `[pageType conf]` line.                        |
+
+I/O semantics: stdout carries the cleaned HTML (or JSON); stderr carries the
+`messages` diagnostics and a `[pageType confidence]` line (suppressed by `--quiet`,
+and skipped under `--json`, whose payload already carries them). A reader that
+closes early (`| head`) ends the stream quietly (EPIPE is treated as success).
+
+The testable core is `runWash(opts: ResolvedCliOptions, io: { stdin, stdout, stderr })`
+→ `Promise<number>` (exit code: 0 success, 1 handled error — missing input file,
+empty stdin, write failure). It never calls `process.exit()`. `buildProgram()` builds
+the commander program; its action parses argv into `ResolvedCliOptions` and runs
+`runWash` against the real process streams. `runCli(program, argv)` parses and maps
+thrown errors to `process.exitCode = 1` (never `process.exit()` mid-pipe, so stdout
+flushes). `isMainEntry(import.meta.url)` realpath-compares so `cli.ts` self-runs only
+as the program entry point.
+
 ### Types — _implemented in `src/types.ts`_
 
 - `BOILERPLATE_MODES` (`as const`) + `BoilerplateMode` =
@@ -139,6 +179,11 @@ consumed (matching rs-trafilatura).
   DOMPurify/jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → wash(level),
   exposing the public `wash()`. _implemented_
+- `src/cli-program.ts` — the offline CLI core: `buildProgram()` (commander),
+  `runWash(opts, io)` (testable, stream-injected, returns an exit code), `runCli`,
+  `isMainEntry`. Wraps `wash()`; never fetches. _implemented_
+- `src/cli.ts` — `#!/usr/bin/env node` entry (`bin: htmlwasher`, export
+  `htmlwasher/cli`); self-runs `runCli` only when it is the program entry point. _implemented_
 - `test/`, `fixtures/` — golden-fixture + unit tests; HTML fixtures. _pending_
 
 ## Dependencies

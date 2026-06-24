@@ -50,6 +50,40 @@ Security is enforced at every washing level: `<script>`, `on*` event handlers,
 and `javascript:`/`data:` URLs are always stripped; the `styled` level adds a
 CSS-URL allow-list. `correct` is normalize-only (the caller's trust boundary).
 
+## CLI
+
+htmlwasher ships a command-line tool with the same `wash()` pipeline. It is
+**offline only**: it reads HTML from a file argument or stdin and writes cleaned
+HTML to stdout (Unix-pipe friendly). It **never fetches the network** — `--url` is
+context only (classifier/metadata heuristics), exactly like the library option.
+
+```sh
+npm install -g htmlwasher        # or: npx htmlwasher …
+```
+
+```sh
+# Clean a file with the default knobs (balanced + standard)
+htmlwasher article.html -b balanced -l standard
+
+# Pipe HTML in via stdin and minify the output
+cat page.html | htmlwasher --minify
+
+# Emit the full result (html + metadata + pageType + confidence + messages) as JSON
+htmlwasher page.html --json > out.json
+
+# Write cleaned HTML to a file instead of stdout (stays quiet on stdout)
+htmlwasher page.html -o clean.html
+```
+
+It reads a single file argument, or stdin when the argument is omitted or `-`.
+Cleaned HTML (or `--json`) goes to **stdout**; diagnostics and a
+`[pageType confidence]` line go to **stderr** (silence them with `-q, --quiet`).
+Options: `-b, --boilerplate <precision|balanced|recall|none>`,
+`-l, --level <minimal|standard|permissive|styled|correct>`, `-m, --minify`,
+`-u, --url <url>` (never fetched), `-o, --output <file>`, `--json`, `-q, --quiet`.
+Invalid option values and a missing input file exit non-zero with a clear stderr
+message.
+
 ## Attribution
 
 htmlwasher is a TypeScript port of Trafilatura and references several upstream
