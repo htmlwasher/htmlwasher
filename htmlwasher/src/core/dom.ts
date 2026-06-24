@@ -4,6 +4,7 @@
 // only the members linkedom actually implements are reachable from typed code.
 
 import { parseHTML } from 'linkedom';
+import { parse as parse5Parse, serialize as parse5Serialize } from 'parse5';
 
 /** Node types we care about (subset of the DOM `Node.*_NODE` constants). */
 export const ELEMENT_NODE = 1;
@@ -47,6 +48,8 @@ export interface HElement extends HNode {
   hasAttribute(name: string): boolean;
   /** Nearest self-or-ancestor element matching the selector (standard DOM `closest`). */
   closest(selectors: string): HElement | null;
+  /** Whether this element matches the selector (standard DOM `matches`). */
+  matches(selectors: string): boolean;
   querySelector(selectors: string): HElement | null;
   querySelectorAll(selectors: string): ArrayLike<HElement> & Iterable<HElement>;
   append(...nodes: (HNode | string)[]): void;
@@ -95,6 +98,26 @@ export function parseDocument(html: string): HDocument {
     full = `<!doctype html><html><body>${input}</body></html>`;
   }
   const { document } = parseHTML(full);
+  return document as unknown as HDocument;
+}
+
+/**
+ * Parse an HTML string into a document whose tree matches a spec-compliant HTML5
+ * parser (parse5) byte-for-byte. linkedom's own parser diverges from the WHATWG
+ * tree-construction algorithm in ways that break feature parity with the Python
+ * classifier extractor (which uses lexbor): notably it (a) keeps a SECOND `<body>`
+ * when one is nested in the markup instead of coercing it into the single document
+ * body, and (b) drops some trailing whitespace text nodes inside `<body>`. parse5
+ * (already a dependency) follows the same spec as lexbor, so we parse + serialize
+ * with parse5 first to normalize the tree, then hand the normalized HTML to linkedom
+ * so the rest of the package keeps a single, consistent DOM type.
+ *
+ * Use this (not {@link parseDocument}) wherever byte-identical DOM-text/structure
+ * parity with the Python feature extractor matters (the classifier).
+ */
+export function parseDocumentSpec(html: string): HDocument {
+  const normalized = parse5Serialize(parse5Parse(html ?? ''));
+  const { document } = parseHTML(normalized);
   return document as unknown as HDocument;
 }
 

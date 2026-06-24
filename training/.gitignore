@@ -6,3 +6,9 @@ datasets/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# Regenerated build outputs. The committed copies live under
+# htmlwasher/src/classifier/model/ — these training-local copies are
+# rewritten on every `python train.py` run and must not be committed.
+model.onnx
+tfidf-vocab.json

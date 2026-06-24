@@ -64,12 +64,26 @@ description?, sitename?, date?, categories?, tags?, image?, pageType?, license? 
 Both enumerations are plain string-union / `as const`-array types, **not**
 TypeScript `enum`s (locked decision #4).
 
-### PageTypeClassifier (interface) — _pending (Phase 4)_
+### PageTypeClassifier — _implemented (Phase 4)_
 
-Page features → `(pageType, confidence)`. ONNX inference runs behind this
-interface, with `onnxruntime-node` as the default backend and `onnxruntime-web`
-(WASM) as a swappable alternative. The classifier runs a 3-stage cascade (URL
-heuristics → HTML signal analysis → ML).
+`new PageTypeClassifier(backend?).classifyPage(html, url?)` →
+`Promise<{ pageType, confidence }>`; module-level `classifyPage(html, url?)` uses a
+cached default. ONNX inference runs behind the `InferenceBackend` interface
+(`run(features: number[]) => Promise<number[]>`): `OnnxNodeClassifier`
+(`onnxruntime-node`, default) and `OnnxWebClassifier` (`onnxruntime-web` WASM,
+lazily imported optionalDependency) are swappable. The classifier runs the 3-stage
+cascade with the agreement rule from `extract.rs`:
+
+- Stage-1 `classifyUrl(url)` — ordered URL heuristics (mod.rs constant lists).
+- Stage-2 `refineWithSignals` / `refineWithHtmlSignals` — refines ONLY `article`.
+- Stage-3 ML — `buildFeatureVector` (189) → ONNX → argmax via `classLabels`.
+- Selection: URL+ML agree on non-article → conf `1.0`; refined+ML agree → `0.95`;
+  else ML argmax + max softmax prob.
+
+Feature parity with the Python extractor is verified by `parity.test.ts` against
+`fixtures/classifier/parity.json` (numeric + TF-IDF within `1e-6`, ONNX argmax
+exact). To match lexbor's spec-compliant tree, the classifier parses HTML via
+`parseDocumentSpec` (parse5 normalize → linkedom).
 
 ### Per-type extraction profiles — _pending (Phase 5)_
 
@@ -96,9 +110,17 @@ extraction pass selected by the classifier output.
   adbar `metadata.py`/`json_metadata.py`/`xpaths.py`. `date.ts` is a reduced
   htmldate equivalent. _implemented (Phase 3)_
 - `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
-  TF-IDF), htmlparser2 hot-path; parity with `training/extract_features.py`. _pending (Phase 4)_
-- `src/classifier/model/` — `model.onnx` + `tfidf-vocab.json` + the
-  `PageTypeClassifier` backends. Shipped in the npm tarball. _pending (Phase 4)_
+  TF-IDF); byte-for-byte parity with `training/extract_features.py`. Entries:
+  `extractNumericFeatures(html, url)` (89), `titleMetaText(html)` + `computeTfidf`
+  (100), `buildFeatureVector(html, url)` (189 = scaled numeric ++ tfidf). `dom-query`
+  (selectolax-parity helpers: UTF-8 byte lengths, non-deduped comma-union matching).
+  _implemented (Phase 4)_
+- `src/classifier/` — `classifier` (`PageTypeClassifier`, backends, cascade),
+  `url-heuristics` (`classifyUrl`), `html-signals` (Stage-2 refinement),
+  `url-constants` (mod.rs lists), `model-paths` (artifact resolver). _implemented (Phase 4)_
+- `src/classifier/model/` — shipped `model.onnx` (float `[1,189]` → `label` int64 +
+  `probabilities` `[1,7]`) + `tfidf-vocab.json` (vocab/idf/scaler/classLabels).
+  Shipped in the npm tarball; loaded once at runtime. _implemented (Phase 4)_
 - `src/profiles/` — per-page-type extraction profiles + confidence. _pending (Phase 5)_
 - `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
