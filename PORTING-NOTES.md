@@ -18,7 +18,12 @@ and `~/r/contextractor`.
   precedence; 60 unit tests pass; correct title/author/date/sitename on real adbar
   pages. `date.ts` is a reduced htmldate equivalent; DOM XPaths translated to CSS
   (regex-anchored class/id predicates loosened to substring — documented per module).
-- Phases 4–8 — pending.
+- Phase 6 (washing levels) — done. `src/washing/` ports the htmlprocessing-server
+  pipeline; 5 levels, security at every level + the styled CSS-URL allow-list
+  (closes sanitize-html's gap), optional DOMPurify/jsdom hardened backend; 71
+  tests pass. `washHtml`/`washBuffer` are async (prettier/minifier lazily imported)
+  — so the public `wash()` will be async too. parse5 bumped to `^8`.
+- Phases 4, 5, 7, 8 — pending (Phase 4 training runs in the background).
 
 ### Phase 2 notes
 

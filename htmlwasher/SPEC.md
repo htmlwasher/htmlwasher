@@ -94,7 +94,13 @@ extraction pass selected by the classifier output.
 - `src/classifier/model/` — `model.onnx` + `tfidf-vocab.json` + the
   `PageTypeClassifier` backends. Shipped in the npm tarball. _pending (Phase 4)_
 - `src/profiles/` — per-page-type extraction profiles + confidence. _pending (Phase 5)_
-- `src/washing/` — sanitize-html level presets + normalize/format pipeline. _pending (Phase 6)_
+- `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened? })`
+  / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
+  prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
+  (sanitize-html + level preset; skipped for `correct`) → re-normalize (if
+  transformTags) → DOCTYPE → format. Security at every level (script/on\*/
+  javascript:/data: stripped; styled adds a CSS-URL allow-list). Optional DOMPurify
+  - jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates decode → normalize → boilerplate(mode) →
   wash(level) → format. _pending (orchestration step)_
 - `test/`, `fixtures/` — golden-fixture + unit tests; HTML fixtures. _pending_
