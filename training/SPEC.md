@@ -30,16 +30,19 @@ yet):
 
 ### Stage FEATURES — `extract_features.py`
 
-- Compute the **181 features** per page: **81 numeric** DOM/URL signals + **100
-  TF-IDF** features.
+- Compute the **189 features** per page: **89 numeric** DOM/URL signals + **100
+  TF-IDF** features. (The reference classifier's code uses 89 numeric / 189
+  total; its README body still says 81/181 — the code is authoritative.)
 - HTML parsing via `selectolax` (Python side).
 - **Parity requirement:** these features MUST match the TypeScript extractor in
   `@/trafilatura-alpha/src/classifier/features/` exactly (feature list,
   ordering, normalization, missing-value handling). Parity is validated by the
   TS↔Python feature-parity tests (target ≥99% exact match).
-- **TF-IDF detail:** replicate scikit-learn's nonstandard `idf = ln(n/df) + 1`
-  with L2 normalization. The resulting vocabulary + IDF weights are serialized
-  to `tfidf-vocab.json`.
+- **TF-IDF detail:** replicate scikit-learn's nonstandard idf exactly — its
+  default (`smooth_idf=True`) is `idf = ln((1+n)/(1+df)) + 1` with L2
+  normalization (the bare `ln(n/df) + 1` is only the non-default
+  `smooth_idf=False` form). The resulting vocabulary + IDF weights are
+  serialized to `tfidf-vocab.json`.
 
 ### Stage TRAIN — `train.py`
 

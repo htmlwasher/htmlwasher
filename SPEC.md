@@ -44,7 +44,7 @@ profile and produce a confidence score.
 HTML → DOM (linkedom + parse5) → core extraction → metadata → classifier → profile + confidence → result
                                                                  │
                                                  3-stage URL → HTML → ML cascade
-                                                 (181 features, ONNX inference)
+                                                 (189 features, ONNX inference)
 ```
 
 ### Core extraction
@@ -68,8 +68,11 @@ A 3-stage cascade equivalent to web-page-classifier's, returning
 
 - **URL heuristics** — fast path on URL structure.
 - **HTML signal analysis** — DOM/structural signals.
-- **ML inference** — an XGBoost model evaluated over **181 features** (81 numeric
+- **ML inference** — an XGBoost model evaluated over **189 features** (89 numeric
   DOM/URL signals + 100 TF-IDF features), trained offline and exported to ONNX.
+  The reference web-page-classifier's code (`N_NUMERIC_FEATURES = 89`) and binary
+  header use 89 numeric (189 total); its README body still says 81/181 — trust
+  the code.
 
 Inference runs behind a single `PageTypeClassifier` interface with swappable
 backends: **`onnxruntime-node`** (default) and **`onnxruntime-web`** (WASM, for
@@ -81,8 +84,10 @@ shipped model artifacts in `@/trafilatura-alpha/src/classifier/model/`.
 Feature parity is the hard constraint: the TypeScript feature extractor MUST
 produce the same feature vectors as the Python training pipeline, or predictions
 diverge. The TF-IDF vocabulary and IDF weights are shipped as a locked
-`tfidf-vocab.json` artifact (scikit-learn's nonstandard `idf = ln(n/df) + 1` with
-L2 normalization is replicated exactly). Cross-language parity tests compare the
+`tfidf-vocab.json` artifact (scikit-learn's nonstandard idf is replicated exactly:
+its default `smooth_idf=True` form is `idf = ln((1+n)/(1+df)) + 1` with L2
+normalization; the bare `ln(n/df) + 1` is only the non-default `smooth_idf=False`).
+Cross-language parity tests compare the
 **argmax class**, not exact probabilities, since float-handling differences across
 runtimes can flip borderline probability values.
 
@@ -102,7 +107,7 @@ trafilatura-alpha/          The TypeScript library (the npm package, alpha)
   src/core/                 Core extraction algorithm
   src/metadata/             Metadata extraction
   src/classifier/           Page-type classifier (interface + ONNX backends)
-    features/               181-feature extractor (parity with training/)
+    features/               189-feature extractor (parity with training/)
     model/                  Shipped artifacts: model.onnx + tfidf-vocab.json
   src/profiles/             Per-page-type extraction profiles + confidence
   src/index.ts              Public entry point
@@ -119,7 +124,7 @@ prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 
 The published npm package `trafilatura-alpha`. Strict TypeScript (Node 22+,
 NodeNext modules). Holds the core extraction algorithm, metadata extraction, the
-page-type classifier (181-feature extractor + ONNX backends), and the
+page-type classifier (189-feature extractor + ONNX backends), and the
 per-page-type profiles. The model artifacts (`model.onnx`, `tfidf-vocab.json`)
 are committed shipped artifacts — they are deliberately **not** gitignored.
 See `@/trafilatura-alpha/SPEC.md` for the public API and module-level behavior.
@@ -134,7 +139,7 @@ library ships:
 
 - `download_wcxb.py` — fetches the WCXB dataset from Hugging Face / Zenodo on
   demand (datasets are gitignored, never committed).
-- `extract_features.py` — reproduces the 181 features exactly, for parity with
+- `extract_features.py` — reproduces the 189 features exactly, for parity with
   the TypeScript extractor.
 - `train.py` — trains an `XGBClassifier` (multi-class softprob over 7 classes),
   exports `model.onnx` via skl2onnx / onnxmltools, and emits `tfidf-vocab.json`
@@ -209,7 +214,7 @@ follow this authority hierarchy:
   classifier wiring). A divergent fork — treat its extraction internals as intent
   and verify behavior against go-trafilatura / adbar.
 - **web-page-classifier** — defines the **classifier behavior and features** to
-  replicate (the 181 features, the 3-stage cascade, the 7 page types).
+  replicate (the 189 features, the 3-stage cascade, the 7 page types).
 - **go-trafilatura** — faithful, cleanly readable core reference; the
   **disambiguator** for extraction logic when rs-trafilatura is unclear.
 - **adbar/trafilatura** — the canonical original; the **final authority** on
@@ -251,7 +256,7 @@ phase, tracked in `@/prompts/2026-6-24-init/prompt.md`:
   tsconfig, vitest, lint); gate is a passing `pnpm test` and clean type-check.
 - **Phase 2 — Core extraction:** port the core algorithm from go-trafilatura.
 - **Phase 3 — Metadata:** port metadata extraction.
-- **Phase 4 — Feature extraction + ML model:** build the 181-feature extractor in
+- **Phase 4 — Feature extraction + ML model:** build the 189-feature extractor in
   both Python and TypeScript, train the model, export `model.onnx` +
   `tfidf-vocab.json`, wire the 3-stage cascade; gate is >=99% TS/Python feature
   parity and matching argmax predictions.

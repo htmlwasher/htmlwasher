@@ -32,7 +32,7 @@ These are described here for context only — do not expect them to exist yet:
 - `download_wcxb.py` — fetch the WCXB dataset from Hugging Face
   (`murrough-foley/web-content-extraction-benchmark`) or Zenodo
   (DOI `10.5281/zenodo.19316874`). Downloaded data is `.gitignore`d.
-- `extract_features.py` — compute the **181 features** (81 numeric DOM/URL
+- `extract_features.py` — compute the **189 features** (89 numeric DOM/URL
   signals + 100 TF-IDF) with byte-for-byte **parity** to the TypeScript
   extractor in `@/trafilatura-alpha/src/classifier/features/`.
 - `train.py` — train an `XGBClassifier`, export `model.onnx`, emit

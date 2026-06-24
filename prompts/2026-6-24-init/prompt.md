@@ -6,6 +6,8 @@
 
 ---
 
+> **TLDR**: Phased brief for Claude Code to build `trafilatura-alpha` — a faithful TypeScript port of Trafilatura with page-type-aware extraction and a from-scratch ONNX page-type classifier (7 types). Work the build order in §5 (scaffold → core extraction → metadata → feature-extraction + ML model → per-type profiles → corpus validation → live-crawl tester), leaning on the reference repos cloned under `@/sources/`. Use when implementing the port.
+
 ## 0. Mission
 
 Build a faithful, well-tested **TypeScript port of Trafilatura** with **page-type-aware extraction**, including:
@@ -28,7 +30,7 @@ Before writing any code, read the research documents in this folder's `context/`
 
 - [`./context/01-trafilatura-forks-and-ports-landscape.md`](./context/01-trafilatura-forks-and-ports-landscape.md) — the Python -> Go -> Rust lineage and which repo is authoritative for what.
 - [`./context/02-rs-trafilatura-skeptical-assessment.md`](./context/02-rs-trafilatura-skeptical-assessment.md) — why rs-trafilatura's benchmark claims are unverified, and why we validate on our own data.
-- [`./context/03-classifier-reimplementation-feasibility.md`](./context/03-classifier-reimplementation-feasibility.md) — **the most important one for Phase 4**: exactly how the classifier works, the 181 features, the ONNX path, training requirements, and licensing. Follow its recommendations.
+- [`./context/03-classifier-reimplementation-feasibility.md`](./context/03-classifier-reimplementation-feasibility.md) — **the most important one for Phase 4**: exactly how the classifier works, the 189 features, the ONNX path, training requirements, and licensing. Follow its recommendations.
 
 **Supporting docs (read selectively — they expand on specific decisions):**
 
@@ -59,10 +61,10 @@ The context docs above are syntheses; the underlying primary sources are below. 
 
 **Independent academic context (why heuristics + per-type routing, not neural):**
 - Bevendorff, Gupta, Kiesel & Stein, "An Empirical Comparison of Web Content Extraction Algorithms," SIGIR '23 (DOI 10.1145/3539618.3591920): https://downloads.webis.de/publications/papers/bevendorff_2023c.pdf
-- Barbaresi, "Trafilatura: A Web Scraping Library...," ACL-IJCNLP 2021 System Demos (DOI 10.18653/v1/2021.acl-demo.15): https://aclanthology.org/2021.acl-demo.15/
+- Barbaresi, "Trafilatura: A Web Scraping Library...," ACL-IJCNLP 2021 System Demonstrations (DOI 10.18653/v1/2021.acl-demo.15): https://aclanthology.org/2021.acl-demo.15/
 
 **ONNX / inference (Phase 4 export & Node runtime):**
-- ONNX `TreeEnsemble` operator (ai.onnx.ml): https://onnx.ai/onnx/operators/onnx_aionnxml_TreeEnsemble.html
+- ONNX tree operators (ai.onnx.ml): an XGBoost model exported via onnxmltools currently emits a `TreeEnsembleClassifier` node (https://onnx.ai/onnx/operators/onnx_aionnxml_TreeEnsembleClassifier.html), deprecated since ai.onnx.ml v5 in favor of the consolidated `TreeEnsemble` (https://onnx.ai/onnx/operators/onnx_aionnxml_TreeEnsemble.html), which onnxmltools does not yet emit
 - onnxruntime-node: https://www.npmjs.com/package/onnxruntime-node  · onnxruntime-web: https://www.npmjs.com/package/onnxruntime-web
 - skl2onnx / onnxmltools (XGBoost -> ONNX export): https://onnx.ai/sklearn-onnx/  · https://github.com/onnx/onnxmltools
 
@@ -74,16 +76,16 @@ The context docs above are syntheses; the underlying primary sources are below. 
 
 ## 2. Source repositories & AUTHORITY HIERARCHY
 
-The source repos are cloned by `/Users/miroslavsekera/r/htmlwasher/clone-other-repos.sh` into **`/Users/miroslavsekera/r/htmlwasher/sources/`** (confirm the location before starting; if they are elsewhere, ask). Each repo has a defined role. **When sources disagree, follow this hierarchy:**
+The source repos are cloned by `@/clone-other-repos.sh` into **`@/sources/`** (confirm the location before starting; if they are elsewhere, ask). Each repo has a defined role. **When sources disagree, follow this hierarchy:**
 
 | Repo (local path) | Role | Authority |
 |---|---|---|
-| `/Users/miroslavsekera/r/htmlwasher/sources/rs-trafilatura` | **Primary port target.** Page-type-aware architecture, per-type extraction profiles, confidence scoring, classifier wiring. | Defines **WHAT** to build (the feature set & architecture). |
-| `/Users/miroslavsekera/r/htmlwasher/sources/web-page-classifier` | **The classifier.** The 181 features (81 numeric + 100 TF-IDF), the 3-stage URL->HTML->ML cascade, the 7 page types. | Defines the **classifier behavior & features** to replicate byte-for-byte. |
-| `/Users/miroslavsekera/r/htmlwasher/sources/go-trafilatura` | **Faithful core reference.** Near line-by-line Go port of the Python original; cleanest readable source for the extraction algorithm. | **Disambiguator** for extraction logic when rs-trafilatura is unclear. |
-| `/Users/miroslavsekera/r/htmlwasher/sources/trafilatura` (adbar) | **Canonical original.** Ground-truth semantics for every option, metadata rules, edge cases, AND the **test corpus**. | **Final authority** on extraction *semantics* and the validation oracle. |
-| `/Users/miroslavsekera/r/htmlwasher/sources/trafilatura-rs` (nchapman) | Faithful Rust port. | Cross-check / tiebreaker. |
-| `/Users/miroslavsekera/r/htmlwasher/sources/readability` (mozilla) | NOT Trafilatura. Canonical JS/DOM readable-content extractor. | **TS/DOM idiom reference only** — how to structure DOM traversal in JS. |
+| `@/sources/rs-trafilatura` | **Primary port target.** Page-type-aware architecture, per-type extraction profiles, confidence scoring, classifier wiring. | Defines **WHAT** to build (the feature set & architecture). |
+| `@/sources/web-page-classifier` | **The classifier.** The 189 features (89 numeric + 100 TF-IDF), the 3-stage URL->HTML->ML cascade, the 7 page types. | Defines the **classifier behavior & features** to replicate byte-for-byte. |
+| `@/sources/go-trafilatura` | **Faithful core reference.** Near line-by-line Go port of the Python original; cleanest readable source for the extraction algorithm. | **Disambiguator** for extraction logic when rs-trafilatura is unclear. |
+| `@/sources/trafilatura` (adbar) | **Canonical original.** Ground-truth semantics for every option, metadata rules, edge cases, AND the **test corpus**. | **Final authority** on extraction *semantics* and the validation oracle. |
+| `@/sources/trafilatura-rs` (nchapman) | Faithful Rust port. | Cross-check / tiebreaker. |
+| `@/sources/readability` (mozilla) | NOT Trafilatura. Canonical JS/DOM readable-content extractor. | **TS/DOM idiom reference only** — how to structure DOM traversal in JS. |
 
 **Rule of thumb:** rs-trafilatura + web-page-classifier tell you *what features and architecture to build*; go-trafilatura + adbar tell you *how the extraction must actually behave*. rs-trafilatura is a divergent fork, so treat its extraction internals as intent and verify behavior against go-trafilatura/adbar.
 
@@ -94,10 +96,10 @@ The source repos are cloned by `/Users/miroslavsekera/r/htmlwasher/clone-other-r
 Do not redesign these — they are settled in the research:
 
 1. **Language/runtime:** TypeScript on Node.js (target the LTS in use). Strict mode (`"strict": true`).
-2. **DOM:** parse HTML with a real DOM library — prefer **linkedom** (fast, spec-ish) with **parse5** as the underlying parser; `cheerio` acceptable only where a jQuery-like API is genuinely simpler. Pick ONE primary and be consistent. Document the choice. Note: context doc 07 also flags **htmlparser2** as the speed leader for feature extraction (Cheerio Issue #1259 notes parse5 is ~½ htmlparser2's speed); consider htmlparser2 specifically inside the classifier's feature extractor where it's a tight inner loop.
+2. **DOM:** parse HTML with a real DOM library — prefer **linkedom** (fast and lenient — it parses HTML via **htmlparser2** under the hood, not parse5) as the primary DOM; use **parse5** directly only where WHATWG-spec-compliant parsing matters; `cheerio` acceptable only where a jQuery-like API is genuinely simpler. Pick ONE primary and be consistent. Document the choice. Note: context doc 07 also flags **htmlparser2** as the speed leader for feature extraction (Cheerio Issue #1259 notes parse5 is ~½ htmlparser2's speed) — and it is the same parser linkedom wraps — so consider htmlparser2 specifically inside the classifier's feature extractor where it's a tight inner loop.
 3. **Classifier model:** **retrain a standard XGBoost model from the public WCXB dataset and export to ONNX.** Do NOT try to reverse-engineer rs-trafilatura's embedded ~1.1 MB custom binary — it is not XGBoost-native or ONNX, and reversing it is wasted effort (see context docs 03 and 07).
 4. **Inference in Node:** **onnxruntime-node** by default. Also provide an **onnxruntime-web (WASM)** path behind the same interface for zero-native-binary / serverless deployment. Keep inference behind an `interface PageTypeClassifier` so the backend is swappable. **Pin a known-good onnxruntime version** — context doc 07 notes 1.21.x–1.22.x had a category-only-trees bug.
-5. **Feature parity is the hard part, not the trees.** The 181 features (81 numeric DOM/URL + 100 TF-IDF) MUST be computed identically to how the model was trained, or predictions diverge. Train the model and compute features from the SAME TypeScript feature-extraction code path wherever possible (see Phase 4), and lock the TF-IDF vocabulary + IDF weights as a shipped JSON artifact. **TF-IDF gotcha:** scikit-learn uses a nonstandard `idf = ln(n/df) + 1` with L2 normalization — replicate exactly.
+5. **Feature parity is the hard part, not the trees.** The 189 features (89 numeric DOM/URL + 100 TF-IDF) MUST be computed identically to how the model was trained, or predictions diverge. Train the model and compute features from the SAME TypeScript feature-extraction code path wherever possible (see Phase 4), and lock the TF-IDF vocabulary + IDF weights as a shipped JSON artifact. **Feature-count caveat:** web-page-classifier's code is authoritative — `N_NUMERIC_FEATURES = 89`, its embedded binary header, and the live feature extractor all use **89 numeric** (189 total); the README *body* still says 81/181, so trust the source. **TF-IDF gotcha:** scikit-learn's default (`smooth_idf=True`) uses a nonstandard `idf = ln((1+n)/(1+df)) + 1` with L2 normalization (the bare `ln(n/df) + 1` is only the non-default `smooth_idf=False` form) — replicate whichever the training uses, exactly.
 6. **Output:** primary output is clean text + structured metadata (mirror go-trafilatura's HTML/markdown output options). Support `include_comments`, `include_tables`, `favor_precision`, `favor_recall` equivalents.
 7. **Determinism:** tree models are threshold comparisons and are cross-platform deterministic once features match — exploit this for reproducible golden tests. **Compare argmax class, not exact probabilities**, in cross-language parity tests (small float-handling differences across runtimes can flip borderline probability values).
 
@@ -105,10 +107,10 @@ Do not redesign these — they are settled in the research:
 
 ## 4. Project structure to create
 
-The TypeScript library is the **trafilatura-alpha** package. Place it inside this product repo. First inspect the existing layout of `/Users/miroslavsekera/r/htmlwasher` and integrate cleanly (if it's a monorepo/workspaces, add a package; otherwise create a top-level library dir). Proposed layout:
+The TypeScript library is the **trafilatura-alpha** package. Place it inside this product repo. First inspect the existing layout of `@/` (the repository root) and integrate cleanly (if it's a monorepo/workspaces, add a package; otherwise create a top-level library dir). Proposed layout:
 
 ```
-/Users/miroslavsekera/r/htmlwasher/
+@/
   clone-other-repos.sh               # clones the 6 reference repos into sources/
   sources/                           # the 6 cloned reference repos (read-only inputs)
     rs-trafilatura/  web-page-classifier/  go-trafilatura/
@@ -119,7 +121,7 @@ The TypeScript library is the **trafilatura-alpha** package. Place it inside thi
       core/                          # extraction algorithm (from go-trafilatura/adbar)
       metadata/                      # metadata extraction
       classifier/
-        features/                    # the 181-feature extractor (from web-page-classifier)
+        features/                    # the 189-feature extractor (from web-page-classifier)
         model/                       # model.onnx + tfidf-vocab.json (shipped artifacts)
         classifier.ts                # PageTypeClassifier interface + onnx backends
       profiles/                      # per-page-type extraction profiles (from rs-trafilatura)
@@ -131,7 +133,7 @@ The TypeScript library is the **trafilatura-alpha** package. Place it inside thi
     README.md                        # incl. licenses/attribution (see Section 8)
   training/                          # model training (Python, run offline, NOT shipped)
     download_wcxb.py                 # fetch dataset from HF/Zenodo
-    extract_features.py              # 181 features (parity with TS extractor)
+    extract_features.py              # 189 features (parity with TS extractor)
     train.py                         # XGBClassifier -> model.onnx + tfidf-vocab.json
     requirements.txt
     README.md
@@ -149,8 +151,8 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 - Read the three core `context/` docs (01, 02, 03) and skim the four supporting docs (04, 05, 06, 07). Skim the six source repos. Map go-trafilatura's file structure (it's the cleanest read) to your planned `src/` layout. Write a short `PORTING-NOTES.md` recording the mapping and any open questions.
 
 ### Phase 1 — Scaffold
-- Initialize the `trafilatura-alpha` TS package: strict tsconfig, a test runner (**vitest** preferred), linting (your call), and a CI-friendly `npm test`.
-- **Gate:** `npm test` runs (even with a trivial passing test); `tsc --noEmit` is clean.
+- Initialize the `trafilatura-alpha` TS package: strict tsconfig, a test runner (**vitest** preferred), linting (your call), and a CI-friendly `pnpm test`.
+- **Gate:** `pnpm test` runs (even with a trivial passing test); `tsc --noEmit` is clean.
 
 ### Phase 2 — Core extraction
 - Port the core extraction algorithm from **go-trafilatura** (disambiguating against **adbar** semantics): main-content detection, the readability/dom-distiller-style fallback cascade, comment extraction, table handling, and the precision/recall toggles.
@@ -162,10 +164,10 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 - **Gate:** unit tests for each metadata field against known fixtures.
 
 ### Phase 4 — Feature extraction + the ML model (the crux)
-- In `training/`, implement `extract_features.py` reproducing the **181 features** (81 numeric DOM/URL signals + 100 TF-IDF) exactly as described in web-page-classifier (read its source for the precise feature list, ordering, normalization, and missing-value handling).
+- In `training/`, implement `extract_features.py` reproducing the **189 features** (89 numeric DOM/URL signals + 100 TF-IDF) exactly as described in web-page-classifier (read its source for the precise feature list, ordering, normalization, and missing-value handling).
 - In `src/classifier/features/`, implement the **same** extractor in TypeScript. These two MUST agree.
 - `download_wcxb.py`: fetch the WCXB dataset (CC-BY-4.0) from Hugging Face `murrough-foley/web-content-extraction-benchmark` (or Zenodo DOI `10.5281/zenodo.19316874`).
-- `train.py`: train an `XGBClassifier` (200 trees, max_depth 8, `multi:softprob`, 7 classes, SMOTE oversampling), export to **`model.onnx`** via `onnxmltools`/`skl2onnx`, and emit **`tfidf-vocab.json`** (vocabulary + IDF weights). Copy both into `src/classifier/model/`. **No GPU needed** — context doc 07 confirms training takes seconds-to-minutes on CPU at this scale (~1,500–10,000 samples, 181 features, 200 trees).
+- `train.py`: train an `XGBClassifier` (200 trees, max_depth 8, `multi:softprob`, 7 classes, SMOTE oversampling), export to **`model.onnx`** via `onnxmltools`/`skl2onnx`, and emit **`tfidf-vocab.json`** (vocabulary + IDF weights). Copy both into `src/classifier/model/`. **No GPU needed** — context doc 07 confirms training takes seconds-to-minutes on CPU at this scale (~1,500–10,000 samples, 189 features, 200 trees).
 - Wire `src/classifier/classifier.ts`: load `model.onnx` with onnxruntime-node, implement the **3-stage cascade** (URL heuristics -> HTML signal analysis -> ML), and return `(pageType, confidence)`.
 - **Golden parity tests (critical):** build a fixture set of WCXB pages; assert the **TS feature extractor produces the same feature vectors** as the Python one (export Python vectors to JSON, compare), and that the ONNX model yields the same `argmax` class. **Target >=99% exact feature match**; investigate any mismatch as a bug.
 - **Gate:** classifier reproduces the trained model's predictions in Node; feature parity >=99%; report classifier accuracy on a held-out split.
@@ -189,7 +191,7 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 - **Every `src/` module has a co-located unit test.** Use vitest. Cover happy paths, empty/malformed HTML, missing metadata, and the precision/recall toggles.
 - **Golden tests** use saved fixtures in `fixtures/` (HTML in, expected output committed) so they're deterministic and offline.
 - **Feature-parity tests** compare TS vs Python feature vectors (Phase 4).
-- `npm test` must run the whole suite headless and pass in CI.
+- `pnpm test` must run the whole suite headless and pass in CI.
 
 ---
 
@@ -203,7 +205,7 @@ Requirements:
 - For each URL: fetch the HTML, run extraction + classification, and report: detected page type, confidence, extracted title/author/date, a text-length sanity check, and **PASS/FAIL** against simple assertions (e.g. non-empty main text, plausible title, page type matches the expected label in the config).
 - **Be a polite crawler:** respect `robots.txt`, set a descriptive User-Agent, rate-limit (e.g. 1 request/sec, concurrency <=2), timeout + retry with backoff, and **cache fetched HTML to disk** so reruns don't re-hit sites (and so failures are reproducible offline). This is a thin polite fetcher, **not** a Crawlee/Playwright setup — context doc 05 explains why a full anti-bot stack is out of scope for a library test harness.
 - Output a readable summary (table to stdout + a JSON/markdown report file). Non-zero exit code if any assertion fails.
-- Provide an `npm run test:live` script. Make a clear note that this hits the network and is **not** part of the offline `npm test`.
+- Provide a `pnpm test:live` script. Make a clear note that this hits the network and is **not** part of the offline `pnpm test`.
 
 ---
 
@@ -221,10 +223,10 @@ Requirements:
 
 - [ ] `trafilatura-alpha/` TS library: core extraction + metadata + classifier + per-type profiles + confidence.
 - [ ] `model.onnx` + `tfidf-vocab.json` trained from WCXB, loaded via onnxruntime-node (and a WASM backend behind the same interface).
-- [ ] Full **unit test** suite (vitest), golden fixtures, and TS<->Python **feature-parity tests**, all green via `npm test`.
+- [ ] Full **unit test** suite (vitest), golden fixtures, and TS<->Python **feature-parity tests**, all green via `pnpm test`.
 - [ ] Validation harness vs adbar's test corpus with a short results writeup in `PORTING-NOTES.md`.
 - [ ] `training/` Python pipeline (download -> features -> train -> export ONNX), reproducible from `requirements.txt`.
-- [ ] `tools/live-crawl-tester/` project that crawls live sites across all 7 page types, caches HTML, respects robots.txt, and reports PASS/FAIL via `npm run test:live`.
+- [ ] `tools/live-crawl-tester/` project that crawls live sites across all 7 page types, caches HTML, respects robots.txt, and reports PASS/FAIL via `pnpm test:live`.
 - [ ] READMEs with usage + full license attribution.
 
 Work incrementally, commit per phase, keep `PORTING-NOTES.md` current, and ask if the source-repo location or the host-repo structure is not what this brief assumes.
