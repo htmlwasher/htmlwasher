@@ -110,11 +110,15 @@ htmlwasher/          The TypeScript library (the npm package, alpha)
     features/               189-feature extractor (parity with training/)
     model/                  Shipped artifacts: model.onnx + tfidf-vocab.json
   src/profiles/             Per-page-type extraction profiles + confidence
-  src/index.ts              Public entry point
+  src/washing/              HTML washing levels (sanitize-html presets + format)
+  src/pipeline.ts           Orchestration: the public async wash()
+  src/index.ts              Public entry point (wash + types + VERSION)
+  src/cli.ts                CLI entry (bin: htmlwasher) + src/cli-program.ts
   test/                     Unit tests (mirrors src/)
   fixtures/                 Saved HTML + expected output (golden tests)
 tools/
   live-crawl-tester/        Separate TS workspace package: live-site E2E fetcher
+  wash-corpus-tester/       Separate TS workspace package: OFFLINE corpus E2E tester
 training/                   Offline Python pipeline (NOT a workspace member, NOT shipped)
 prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 # (the six read-only reference repos live OUTSIDE this repo at ~/r/htmlwasher-sources/)
@@ -124,10 +128,23 @@ prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 
 The published npm package `htmlwasher`. Strict TypeScript (Node 22+,
 NodeNext modules). Holds the core extraction algorithm, metadata extraction, the
-page-type classifier (189-feature extractor + ONNX backends), and the
-per-page-type profiles. The model artifacts (`model.onnx`, `tfidf-vocab.json`)
-are committed shipped artifacts — they are deliberately **not** gitignored.
-See `@/htmlwasher/SPEC.md` for the public API and module-level behavior.
+page-type classifier (189-feature extractor + ONNX backends), the per-page-type
+profiles, and the HTML-washing levels. It exposes two surfaces over the same
+pipeline:
+
+- **Library** — the async `wash(html, { boilerplate, level, config, minify, url })`
+  (`minify: true` emits minified HTML instead of prettier-formatted; `config` is a
+  fully-custom JSON `SanitizeConfig` that takes precedence over the named `level`)
+  returning `{ html, messages, metadata?, pageType?, confidence? }`.
+- **CLI** — `bin: htmlwasher` (`src/cli.ts` + `src/cli-program.ts`, commander):
+  reads an HTML file argument or stdin and writes cleaned HTML to stdout (or
+  `-o <file>`), with `-b/--boilerplate`, `-l/--level`, `-c/--config <file.json>`,
+  `-m/--minify`, `-u/--url`, `--json`, `-q/--quiet`. It is **offline** — it never
+  fetches a URL.
+
+The model artifacts (`model.onnx`, `tfidf-vocab.json`) are committed shipped
+artifacts — they are deliberately **not** gitignored. See `@/htmlwasher/SPEC.md`
+for the public API and module-level behavior.
 
 ### Component — training (offline Python pipeline)
 
@@ -149,19 +166,28 @@ library ships:
 Training runs on CPU (no GPU required) at this scale. See
 `@/training/SPEC.md` for the pipeline detail.
 
-### Component — tools/live-crawl-tester (E2E harness)
+### Component — tools/live-crawl-tester (scaffold stub)
 
-A **separate** TypeScript workspace package that proves the library works on the
-real web. It depends on the local `htmlwasher` package, reads a
-configurable URL list (at least 3 real URLs per page type across all 7 types,
-including multilingual / EU sources), fetches each page, runs extraction +
-classification, and reports per-URL PASS/FAIL against simple assertions.
+A **separate** TypeScript workspace package reserved for a future live-site E2E
+harness (a thin polite fetcher — `robots.txt`, descriptive User-Agent, rate
+limit, disk cache — never a browser-automation crawler). It is currently an
+**unimplemented stub** and is NOT part of the htmlwasher pipeline; htmlwasher
+itself never fetches. The actual offline end-to-end tester is
+`tools/wash-corpus-tester` (below). See `@/tools/live-crawl-tester/SPEC.md`.
 
-It is a **thin polite fetcher** — it respects `robots.txt`, sets a descriptive
-User-Agent, rate-limits, times out with backoff retry, and caches fetched HTML to
-disk so reruns are reproducible offline. It is **not** a browser-automation or
-anti-bot crawler. It hits the network and is **not** part of the offline
-`pnpm test`. See `@/tools/live-crawl-tester/SPEC.md` for usage.
+### Component — tools/wash-corpus-tester (offline corpus E2E)
+
+A **separate** TypeScript workspace package — the **offline** counterpart to the
+live-crawl tester. It depends on the local `htmlwasher` package, reads saved WCXB
+HTML fixtures (≥3 per page type across all 7 types) plus a `corpus.json` manifest,
+and runs `wash()` over a fixed `boilerplate` x `level` combo matrix. It asserts
+hard security invariants (no `<script>` / `on*=` handler / `javascript:` URL
+survives any sanitizing level), structural invariants (non-empty output;
+`correct` ⊇ `minimal` tags), and soft page-type plausibility (aggregate accuracy
+floor). It is **entirely offline + deterministic** — it reads only local files,
+never the network — so it **is** part of the offline `pnpm test`. It emits
+`report.json` + `report.md` (git-ignored). See
+`@/tools/wash-corpus-tester/SPEC.md` for the full assertion matrix.
 
 ## Stack
 
@@ -243,6 +269,7 @@ The shipped `model.onnx` is trained fresh from the public WCXB dataset — it is
 
 - `@/htmlwasher/SPEC.md` — the library's public API and module behavior.
 - `@/tools/live-crawl-tester/SPEC.md` — the live-crawl E2E harness.
+- `@/tools/wash-corpus-tester/SPEC.md` — the offline corpus E2E tester.
 - `@/training/SPEC.md` — the offline Python training pipeline.
 
 ## Build phases

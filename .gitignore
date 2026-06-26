@@ -31,6 +31,9 @@ __pypackages__/
 .claude/settings.local.json
 autonomous-task-output/
 
+# Scratch / temp working files (reports, ad-hoc notes) — never committed
+temp/
+
 # Cloned read-only reference repos (never commit these)
 sources/
 

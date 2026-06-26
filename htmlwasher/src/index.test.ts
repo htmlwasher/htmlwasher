@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { VERSION } from "./index.js";
+import { VERSION } from './index.js';
 
-describe("htmlwasher scaffold", () => {
-  it("exports a non-empty VERSION string", () => {
-    expect(typeof VERSION).toBe("string");
+describe('htmlwasher scaffold', () => {
+  it('exports a non-empty VERSION string', () => {
+    expect(typeof VERSION).toBe('string');
     expect(VERSION.length).toBeGreaterThan(0);
   });
 });

@@ -87,3 +87,24 @@ Source:  https://github.com/mozilla/readability
 
 Not Trafilatura. Referenced as a TypeScript/DOM idiom reference for structuring
 readable-content extraction and DOM traversal in JavaScript.
+
+--------------------------------------------------------------------------------
+Runtime npm dependencies — permissive (MIT / ISC / BSD-class)
+--------------------------------------------------------------------------------
+htmlwasher's HTML-washing pillar and DOM/inference layers are built on the
+following open-source libraries, used under their respective permissive licenses:
+
+  sanitize-html         — the default HTML sanitizer (the washing levels). MIT.
+  DOMPurify             — the opt-in "hardened" sanitizer backend. (MPL-2.0/Apache-2.0)
+  parse5                — WHATWG-compliant HTML normalization. MIT.
+  linkedom              — the primary DOM. ISC.
+  htmlparser2           — fast HTML parsing. MIT.
+  prettier              — HTML pretty-printing. MIT.
+  html-minifier-terser  — HTML minification. MIT.
+  chardet, iconv-lite   — byte→string decoding. MIT.
+  jsdom                 — DOM for the hardened backend. MIT.
+  onnxruntime-node /
+  onnxruntime-web       — ONNX inference for the page-type classifier. MIT.
+
+These are dependencies, not vendored source; their full license texts ship in
+their respective npm packages under node_modules.

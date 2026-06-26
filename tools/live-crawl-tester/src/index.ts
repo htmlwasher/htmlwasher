@@ -10,7 +10,7 @@
 
 function main(): void {
   console.log(
-    "live-crawl-tester: not yet implemented — see @/prompts/2026-6-24-init/prompt.md Section 7",
+    'live-crawl-tester: not yet implemented — see @/prompts/2026-6-24-init/prompt.md Section 7',
   );
 }
 

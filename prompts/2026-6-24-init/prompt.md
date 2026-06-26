@@ -117,7 +117,8 @@ Do not redesign these — they are settled in the research:
 4. **Two orthogonal, composable knobs — both plain string unions, NOT TS `enum`s** (use `as const` arrays + a union type, like htmlprocessing-server's `PROCESSING_MODES`):
    - **Boilerplate-removal mode** — `'precision' | 'balanced' | 'recall' | 'none'`. Maps to the Trafilatura/rs-trafilatura toggles exactly as contextractor does (`~/r/contextractor/packages/crawler/src/createCrawler.ts`): `precision` -> `favor_precision` (less noise, may miss content); `balanced` -> neither flag (neutral default); `recall` -> `favor_recall` (more content, may include noise); **`none` -> skip boilerplate removal entirely** (wash the whole document). `none` is htmlwasher's addition — contextractor has no `none`.
    - **HTML washing level** — `'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'`. Reproduce the htmlprocessing-server presets (see Phase 6). `standard` is the default. There are **exactly these five** — do NOT add `*-reader` variants (no "Minimal Reader", etc.); the Readability-preprocessing concern is handled by the boilerplate pillar instead.
-   - **The washing level is htmlwasher's ONLY content-inclusion control.** There are deliberately **no `include_comments` / `include_tables` / `include_images` / `include_links` toggles** — those old Trafilatura/contextractor checkboxes **do not exist** in htmlwasher. What survives is decided by the level's tag allow-list: images appear only at `standard`+ (never `minimal`); classes + inline `style` + `<style>` only at `styled`; tables and links (`<a href>`) survive at every level. Comments are governed automatically by the page-type profile (forums treat comments as content), not by a user toggle.
+   - **Plus a fully-custom washing config (keep the presets too).** Beyond the five named levels, accept a fully-custom `config?: SanitizeConfig` — the same `SanitizeConfig` shape the presets use (`allowedTags` / `allowedAttributes` / `allowedClasses` / `selfClosing` / `nonTextTags` / `transformTags`), all **plain JSON data, never JavaScript** (do NOT accept a `.js`/`.ts` module or any executable/importable config). When `config` is set it drives the sanitize stage, **taking precedence over the preset `level`** would select (and it always runs the sanitize stage — so a custom config sanitizes even when `level` is `correct`). Expose it on **both** surfaces with identical semantics: library `WashOptions.config?: SanitizeConfig`; CLI `-c, --config <file.json>` (read + `JSON.parse` + validate, precedence over `--level`). **Validate at the boundary** with a runtime guard (`isSanitizeConfig`, mirroring `isWashingLevel`/`isBoilerplateMode`) — reject unknown/wrong-typed fields with a clear message on both surfaces; no `zod` (manual guards only). The **security floor still holds** for custom configs: `<script>`/`on*` are always stripped, and a config that allows inline `style` still gets the CSS-URL allow-list. The boilerplate-removal modes stay a fixed enumeration (NOT customizable).
+   - **The washing level (or custom config) is htmlwasher's ONLY content-inclusion control.** There are deliberately **no `include_comments` / `include_tables` / `include_images` / `include_links` toggles** — those old Trafilatura/contextractor checkboxes **do not exist** in htmlwasher. What survives is decided by the level's tag allow-list (or the custom config): images appear only at `standard`+ (never `minimal`); classes + inline `style` + `<style>` only at `styled`; tables and links (`<a href>`) survive at every level. Comments are governed automatically by the page-type profile (forums treat comments as content), not by a user toggle.
 5. **HTML washing engine:** model the cleanup on `~/r/tools/packages/htmlprocessing-server` — use **`sanitize-html`** (the library it uses; pin **≥ 2.17.2** for the CVE-2026-40186 fix) as the default sanitizer, with an **opt-in DOMPurify + jsdom "hardened" mode behind the same interface** for callers who re-render output into a live DOM/email/webview; **parse5** (≥ 8.x) for normalization, **prettier** (`parser: "html"`) for pretty output and **html-minifier-terser** for the `minify` option (note it is the maintained fork of the abandoned `html-minifier`, itself quiescent — `html-minifier-next` is an alternative), and **chardet + iconv-lite** to decode non-UTF-8 buffers. `sanitize-html` is the proven default and matches the reference. **Security is non-negotiable at EVERY level (including `styled` and `correct`):** always strip `<script>`, all `on*` event-handler attributes, and `javascript:`/untrusted `data:` URLs (replicate htmlprocessing-server's `filterEventHandlers`); the `styled` level must additionally run a **CSS-URL allow-list** because `sanitize-html` does NOT filter inline-`style` URLs by default. See context doc 08 §5–6 for the full library analysis + security checklist.
 6. **Classifier model:** **retrain a standard XGBoost model from the public WCXB dataset and export to ONNX.** Do NOT try to reverse-engineer rs-trafilatura's embedded ~1.1 MB custom binary — it is not XGBoost-native or ONNX, and reversing it is wasted effort (see context docs 03 and 07).
 7. **Inference in Node:** **onnxruntime-node** by default. Also provide an **onnxruntime-web (WASM)** path behind the same interface for zero-native-binary / serverless deployment. Keep inference behind an `interface PageTypeClassifier` so the backend is swappable. **Pin a known-good onnxruntime version (≥ 1.23.0)** — 1.21.x–1.22.x carry two TreeEnsemble correctness bugs that hit small/shallow XGBoost trees (the `is_leaf`/root-branch-as-leaf bug #24679→#25410, and the category-only-trees `same_node_` bug #24636→#24654), both fixed in 1.23.0; current stable is 1.27.0 (see context doc 08 §5.1).
@@ -149,34 +150,66 @@ The TypeScript library is the **htmlwasher** package (npm name `htmlwasher`). Pl
       washing/                       # HTML washing: sanitize-html presets + normalize/format
         presets/                     # minimal, standard, permissive, styled (SanitizeConfig)
         wash.ts                      # level union + sanitize/normalize/format pipeline
-      pipeline.ts                    # orchestrates decode -> normalize -> boilerplate(mode) -> wash(level) -> format
+      pipeline.ts                    # orchestrates decode -> classify -> profile -> boilerplate(mode) -> wash(level) -> format
       index.ts                       # public wash() API
+      cli.ts                         # offline CLI entry (bin: htmlwasher) + cli-program.ts — file/stdin -> stdout, NEVER fetches
     test/                            # unit tests (mirrors src/)
     fixtures/                        # saved HTML + expected cleaned-HTML output (golden tests)
     package.json
     tsconfig.json
-    README.md                        # incl. licenses/attribution (see Section 8)
+    README.md                        # incl. licenses/attribution (see Section 8) + CLI usage
+    SPEC.md                          # public API + module behavior (keep in sync with code)
   training/                          # model training (Python, run offline, NOT shipped)
     download_wcxb.py                 # fetch dataset from HF/Zenodo
     extract_features.py              # 189 features (parity with TS extractor)
     train.py                         # XGBClassifier -> model.onnx + tfidf-vocab.json
     requirements.txt
     README.md
+    SPEC.md
   tools/
     wash-corpus-tester/              # OFFLINE E2E over saved HTML fixtures (Section 7) — no network
+  SPEC.md                            # root: system overview, architecture, stack, build
+  README.md                          # root: repo overview + quick start (library + CLI)
 ```
 
-The public API is roughly:
+Every package and the repo root carries a `SPEC.md`; keep each `SPEC.md` AND
+`README.md` in sync with the code in the same change that touches the public
+surface (the repo enforces this via its spec/test-maintenance rules).
+
+The public API is roughly (note: `wash()` is **async** — the washing formatter
+and the ONNX classifier load lazily):
 
 ```ts
 wash(html: string, options?: {
   boilerplate?: 'precision' | 'balanced' | 'recall' | 'none'  // default 'balanced'
   level?: 'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'  // default 'standard'
+  config?: SanitizeConfig                                     // fully-custom JSON washing config; precedence over `level`
   minify?: boolean                                            // default false (prettier-format)
-}): { html: string; messages: Message[]; metadata?: Metadata }
+  url?: string                                                // context only — NEVER fetched
+}): Promise<{
+  html: string; messages: Message[]; metadata?: Metadata;
+  pageType?: PageType; confidence?: number                    // set when extraction runs (omitted for boilerplate:'none')
+}>
 ```
 
-The two knobs are orthogonal: any boilerplate mode combines with any washing level (e.g. `boilerplate: 'balanced'` + `level: 'standard'`). These two (plus `minify`) are the **entire** user-facing surface — there are deliberately **no `includeComments` / `includeTables` / `includeImages` / `includeLinks` options**. The washing `level` is the single tag-inclusion knob (it subsumes images/tables/links), and comments are decided by the classified page type.
+The two knobs are orthogonal: any boilerplate mode combines with any washing level (e.g. `boilerplate: 'balanced'` + `level: 'standard'`). These two — plus the optional fully-custom `config` (which replaces the named `level` when present) and `minify` — are the **entire** user-facing surface — there are deliberately **no `includeComments` / `includeTables` / `includeImages` / `includeLinks` options**. The washing `level` (or `config`) is the single tag-inclusion knob (it subsumes images/tables/links), and comments are decided by the classified page type.
+
+**CLI (offline) — same surface, both bin and lib.** Ship a `htmlwasher` CLI
+(`bin: htmlwasher` → `dist/cli.js`, plus an `./cli` export) built on `commander`,
+modeled on **contextractor** (<https://www.contextractor.com/>; local
+`~/r/contextractor/packages/standalone` — `cli.ts` + `cli-program.ts`,
+`#!/usr/bin/env node` + an `isMainEntry` guard wrapping a testable `runWash(opts, io)`
+core) — but **offline only**: it NEVER fetches a URL (contextractor crawls; htmlwasher
+does not). It reads an HTML **file
+argument** or **stdin** (`-`/omitted) and writes cleaned HTML to **stdout** (or
+`-o <file>`); diagnostics + the `[pageType confidence]` line go to **stderr**. The
+Unix-pipe convention (file arg for the common case, stdin for piping, stdout for
+composition) is deliberate. Options map 1:1 to `wash()`: `-b/--boilerplate`,
+`-l/--level`, `-c/--config <file.json>` (a custom `SanitizeConfig`; read + parsed +
+validated, precedence over `--level`), `-m/--minify` (surfaces the same minify
+switch), `-u/--url` (context only), plus `--json` (emit the full result object),
+`-o/--output`, `-q/--quiet`. Set `process.exitCode` rather than calling
+`process.exit()` mid-pipe so stdout flushes.
 
 ---
 
@@ -223,7 +256,8 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
     - **`permissive`** — full HTML5 content: structural elements (`article/section/main/header/footer/nav/aside`), `details/summary`, `div/span`, `map/area`, `track`, bidi/ruby. Still NO classes/IDs and NO inline styles.
     - **`styled`** — like `permissive` PLUS CSS styling: allow `class` and inline `style` on all tags (a `'*': ['class','style']` entry) and keep the `<style>` tag's CSS (drop `style` from `nonTextTags`). Still strips scripts, `on*` handlers, and `javascript:` URLs.
   - **`correct`** is NOT a sanitization preset: it is normalize-only (skip the sanitize step entirely), so all tags/attributes are preserved — parse5 just makes the HTML well-formed and prettier reformats it. This is the htmlcorrector behavior.
-- **Gate:** unit tests assert, per level, the exact tag/attribute allow-list behavior on representative HTML; `correct` preserves all tags; every level strips `<script>`/`on*`/`javascript:`; the orchestrated `pipeline.ts` runs `boilerplate(mode)` then `wash(level)` and returns `{ html, messages }`.
+  - **Custom config (keep the presets):** in addition to the five named levels, accept a fully-custom `config?: SanitizeConfig` (same shape as the presets, pure JSON). `washHtml` resolves `options.config ?? getSanitizeConfig(level)` — a custom config drives the sanitize stage and **wins over `level`** (and always sanitizes, even when `level` is `correct`). Enforce the security floor on custom configs in the sanitizer seam (force-strip `<script>` from `allowedTags` and keep it in `nonTextTags`, alongside the existing `on*` filter) and run the CSS-URL allow-list whenever the active config permits inline `style`. Validate with `isSanitizeConfig` (manual guard, no `zod`); the library `wash()` throws a `TypeError` on a malformed config and the CLI exits non-zero with a clear stderr message.
+- **Gate:** unit tests assert, per level, the exact tag/attribute allow-list behavior on representative HTML; `correct` preserves all tags; every level (and any custom config) strips `<script>`/`on*`/`javascript:`; a custom `config` overrides `level` and reaches the sanitizer even under `correct`; `isSanitizeConfig` accepts a valid config and rejects unknown/wrong-typed fields; the orchestrated `pipeline.ts` runs `boilerplate(mode)` then `wash(level | config)` and returns `{ html, messages }`.
 
 ### Phase 7 — Validation against the reference corpus
 - Build a validation harness that runs the full pipeline over **adbar's test corpus** and compares the extracted **main-content HTML** against expected outputs (precision/recall/F1-style scoring on the kept text content of the HTML).
@@ -235,13 +269,16 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 
 ---
 
-## 6. Testing requirements (unit)
+## 6. Testing, review & quality gates
 
 - **Every `src/` module has a co-located unit test.** Use vitest. Cover happy paths, empty/malformed HTML, missing metadata, the boilerplate modes (incl. `none`), and every washing level (incl. `correct`).
 - **Golden tests** use saved fixtures in `fixtures/` (HTML in, expected cleaned HTML committed) so they're deterministic and offline.
-- **Washing tests** assert the per-level allow-list behavior and the security invariants (`<script>`/`on*`/`javascript:` always stripped).
-- **Feature-parity tests** compare TS vs Python feature vectors (Phase 4).
-- `pnpm test` must run the whole suite headless and pass in CI.
+- **Washing tests** assert the per-level allow-list behavior and the security invariants (`<script>`/`on*`/`javascript:` always stripped — at every level, incl. `styled` and `correct`).
+- **Feature-parity tests** compare TS vs Python feature vectors (Phase 4) — assert the full 189-vector matches and the ONNX argmax class agrees.
+- **CLI tests** drive a testable `runWash(opts, io)` core with in-memory streams + a fixture file: default HTML-to-stdout, `--minify`, `--json`, `-o <file>`, invalid-option exit codes, and missing-input handling.
+- `pnpm test` must run the whole suite headless and pass in CI; the training tests run via `uv run pytest` (+ `uvx ruff check`).
+- **Full-repo code review + autofix (quality gate before "done").** Run a complete review of the WHOLE repo — inspired by `/meta:code-review-autofix` (per-domain TS/Python/security checklists, ideally multi-agent with adversarial verification of each finding) — and **fix every confirmed finding, not just list them**. Then **rerun the entire suite** (`pnpm build && pnpm lint && pnpm test`, plus the training `pytest`/`ruff`) and autofix any failure; never silence with `any`/`@ts-ignore`. End-to-end validation (not just unit tests) is what catches integration bugs like a filter that's dead in the real pipeline (see §10).
+- **Docs stay in sync.** Any change to the public surface updates the relevant `SPEC.md` AND `README.md` (and `PORTING-NOTES.md`) in the same change.
 
 ---
 
@@ -274,12 +311,60 @@ Requirements:
 
 ## 9. Deliverables checklist
 
-- [ ] `htmlwasher/` TS library: boilerplate removal (HTML subtree) + classifier + per-type profiles + confidence + the `Precision/Balanced/Recall/None` mode, AND the HTML washing levels `Minimal/Standard/Permissive/Styled/Correct`, exposed via a single `wash(html, options)` API that returns cleaned **HTML** (+ optional metadata sidecar). No conversion, no scraping.
+- [ ] `htmlwasher/` TS library: boilerplate removal (HTML subtree) + classifier + per-type profiles + confidence + the `Precision/Balanced/Recall/None` mode, AND the HTML washing levels `Minimal/Standard/Permissive/Styled/Correct` (plus a fully-custom JSON `SanitizeConfig` that overrides the named level, validated at the boundary), exposed via a single `wash(html, options)` API that returns cleaned **HTML** (+ optional metadata sidecar). No conversion, no scraping.
+- [ ] An **offline `htmlwasher` CLI** (`bin`) wrapping the same `wash()`: file-arg/stdin → stdout (or `-o`), `-b/-l/-m/-u/--json/-q` options, never fetches.
 - [ ] `model.onnx` + `tfidf-vocab.json` trained from WCXB, loaded via onnxruntime-node (and a WASM backend behind the same interface).
 - [ ] Full **unit test** suite (vitest): per-module tests, washing-level + security tests, golden fixtures, and TS<->Python **feature-parity tests**, all green via `pnpm test`.
 - [ ] Validation harness vs adbar's test corpus (cleaned-HTML scoring) with a short results writeup in `PORTING-NOTES.md`.
 - [ ] `training/` Python pipeline (download -> features -> train -> export ONNX), reproducible from `requirements.txt`.
 - [ ] `tools/wash-corpus-tester/` **offline** project that runs saved HTML fixtures across all 7 page types through htmlwasher and reports PASS/FAIL via `pnpm test:corpus`. No network.
-- [ ] READMEs with usage + full license attribution.
+- [ ] **READMEs and `SPEC.md`s** (root + each package) current, with usage (library + CLI) + full license attribution.
+- [ ] **Full-repo code review + autofix** completed (every confirmed finding fixed), with the whole suite green afterward (`pnpm build && pnpm lint && pnpm test` + training `pytest`/`ruff`).
+- [ ] Repo is **TypeScript + Python** (TS runtime/library/CLI + offline Python `training/`), NOT collapsed to pure TS — the two meet only at the ONNX artifacts + the feature-parity contract.
 
 Work incrementally, commit per phase, keep `PORTING-NOTES.md` current, and ask if the source-repo location or the host-repo structure is not what this brief assumes.
+
+---
+
+## 10. Implementation outcomes & learnings (post-build)
+
+Phases 0–8 + the CLI are **implemented and green**: 307 library unit tests + the
+offline corpus tester + 14 training pytests pass; classifier held-out test accuracy
+≈ 0.78 (macro-F1 0.66); TS↔Python feature parity **100%** on the fixtures; adbar
+eval **F1 ≈ 0.80** (P 0.79 / R 0.81). The repo is **TypeScript + Python by design**
+(do NOT collapse to pure TS): training is Python (XGBoost / scikit-learn / ONNX
+export — no JS equivalent of that maturity), the runtime is TS (onnxruntime), and
+the two are joined ONLY by the exported `model.onnx`/`tfidf-vocab.json` and the
+byte-for-byte feature-parity contract (`training/FEATURES.md`). Feature extraction
+is therefore implemented twice (`training/extract_features.py` + TS
+`src/classifier/features/`) and MUST be kept in parity — a dedicated parity test
+enforces it.
+
+Hard-won gotchas (a re-run should bake these in from the start):
+
+- **Run the name-based boilerplate filter BEFORE `postCleaning`, with a backoff.**
+  `postCleaning` strips `class`/`id`, which blinds any serializer-stage name guard,
+  so the `BOILERPLATE_TOKENS`/`COMMENT_TOKENS` filter silently does nothing if it
+  runs at serialize time. Run it over the content node's DESCENDANTS before
+  `postCleaning` (honoring `commentsAsContent`), and back off to the unfiltered
+  extraction if filtering would empty the content (collection/listing pages live in
+  boilerplate-named containers — go-trafilatura's "do not delete all the content").
+- **Classifier DOM parity needs lexbor-equivalent parsing.** linkedom's parser
+  diverges from selectolax/lexbor on nested `<body>` and trailing whitespace text
+  nodes; parse via parse5-normalize → linkedom (`parseDocumentSpec`) to get
+  byte-exact body text. selectolax comma-union selectors do **not** deduplicate
+  (match each sub-selector separately). Use **UTF-8 byte lengths** everywhere (not
+  JS UTF-16 `.length`) and an explicit **CPython `str.split`/`str.strip` whitespace
+  codepoint class** (JS `\s`/`.trim()` differ on U+001C–U+001F / U+0085 / U+FEFF).
+- **linkedom does not wrap loose fragments** in `<html><body>` — normalize in the
+  parse step. Use `nextElementSibling` (not `nextSibling`) for last-element checks,
+  since pretty-printed HTML interleaves whitespace text nodes.
+- **The offline corpus tester imports `htmlwasher` from `dist/`** — rebuild before a
+  direct `pnpm test:corpus`; the turbo `pnpm test` rebuilds first.
+- **Pin onnxruntime exactly** (both `-node` and `-web` in lockstep) and validate the
+  shipped vocab artifact at load. Metadata XPaths translate to CSS (regex-anchored
+  class/id predicates loosen to substring — document per module).
+- **A post-implementation multi-agent code review pays off:** it caught the dead
+  boilerplate filter (unit tests passed because they exercised the serializer in
+  isolation, bypassing `postCleaning`). End-to-end validation, not just unit tests,
+  is what surfaces this class of bug.

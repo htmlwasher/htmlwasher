@@ -30,6 +30,7 @@
     "prompts/**",
     "sources/**",
     "training/**",
+    "temp/**",
     "**/fixtures/**"
   ]
 }
