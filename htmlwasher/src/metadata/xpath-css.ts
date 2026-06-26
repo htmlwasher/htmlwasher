@@ -8,6 +8,7 @@
 // enumerates. See each consumer module for the exact XPath it stands in for.
 
 import { type HDocument, trim } from '../core/dom.js';
+import { iterText } from './text.js';
 
 /**
  * extract_metainfo: try each selector in order; return the first element whose
@@ -23,7 +24,8 @@ export function selectMetaInfo(
   if (!root) return undefined;
   for (const selector of selectors) {
     for (const elem of root.querySelectorAll(selector)) {
-      const content = trim(elem.textContent);
+      // canonical extract_metainfo: trim(" ".join(elem.itertext())) — space-join.
+      const content = trim(iterText(elem));
       if (content && content.length > 2 && content.length < lenLimit) {
         return content;
       }

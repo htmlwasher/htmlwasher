@@ -9,7 +9,12 @@ import { cleanDocument } from './clean.js';
 import { getElementsByTagName, type HElement, parseDocument, trim } from './dom.js';
 import { findContentNode, pruneUnwantedSections } from './main-content.js';
 import { type CoreOptions, resolveCoreOptions } from './options.js';
-import { isBoilerplateNamed, postCleaning, renderFilteredHTML } from './serialize-filtered.js';
+import {
+  isAlwaysExcludedName,
+  isBoilerplateNamed,
+  postCleaning,
+  renderFilteredHTML,
+} from './serialize-filtered.js';
 
 /** Below this many chars of extracted text we try the whole-body fallback. */
 const MIN_EXTRACTED_TEXT = 200;
@@ -43,6 +48,22 @@ function removeBoilerplateNamed(root: HElement, opts: CoreOptions): void {
   }
 }
 
+/**
+ * Remove UNCONDITIONALLY-excluded descendants (rs `is_always_excluded_name`
+ * class/id substrings AND any `itemtype`*=`breadcrumblist` node). Mirrors rs
+ * push_filtered_html_children, where these checks run OUTSIDE the
+ * `filter_named_boilerplate` gate — so they fire even on the §10 backoff path,
+ * unlike the gated `removeBoilerplateNamed`. Like that pass, this MUST run before
+ * postCleaning, which strips id/class/itemtype and would blind the check.
+ */
+function removeAlwaysExcludedNamed(root: HElement, opts: CoreOptions): void {
+  const els = getElementsByTagName(root, '*');
+  for (let i = els.length - 1; i >= 0; i--) {
+    const el = els[i];
+    if (el && isAlwaysExcludedName(el, opts)) el.remove();
+  }
+}
+
 function renderClone(
   node: HElement,
   opts: CoreOptions,
@@ -50,6 +71,10 @@ function renderClone(
 ): { html: string; textLength: number } {
   const clone = node.cloneNode(true);
   pruneUnwantedSections(clone, opts);
+  // Always-excluded names + BreadcrumbList microdata are dropped UNCONDITIONALLY
+  // (both branches, including the §10 backoff where dropBoilerplateNamed is false),
+  // matching rs. The recall-able boilerplate-token list is gated below.
+  removeAlwaysExcludedNamed(clone, opts);
   if (dropBoilerplateNamed) removeBoilerplateNamed(clone, opts);
   postCleaning(clone);
   const html = renderFilteredHTML(clone, opts);

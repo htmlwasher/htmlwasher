@@ -32,6 +32,14 @@ describe('extractTitle', () => {
   it('returns undefined for an empty document', () => {
     expect(titleOf('<html><body></body></html>')).toBeUndefined();
   });
+
+  it('space-joins a selector title split across adjacent inline elements (itertext)', () => {
+    // Two h1s skip the single-h1 branch; the h2[class*=title] selector then wins
+    // via selectMetaInfo, which must space-join "Post"+"Title" → "Post Title".
+    const html =
+      '<html><body><h1>a</h1><h1>b</h1><h2 class="entry-title"><span>Post</span><span>Title</span></h2></body></html>';
+    expect(titleOf(html)).toBe('Post Title');
+  });
 });
 
 describe('examineTitleElement', () => {

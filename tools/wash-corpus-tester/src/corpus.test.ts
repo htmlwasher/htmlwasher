@@ -11,12 +11,26 @@
 // Fully offline + deterministic: same fixtures always yield the same result.
 
 import { describe, expect, it } from 'vitest';
-import { PAGE_TYPE_ACCURACY_FLOOR, runCorpus } from './corpus-runner.js';
+import {
+  type AssertionFailure,
+  COMBOS,
+  type CorpusReport,
+  PAGE_TYPE_ACCURACY_FLOOR,
+  runCorpus,
+} from './corpus-runner.js';
 import { printReport, renderSummary, writeReports } from './report.js';
+
+// runCorpus reads every fixture and washes each through the full combo matrix —
+// expensive, so compute it once and share across the assertions below.
+let reportPromise: Promise<CorpusReport> | undefined;
+const getReport = (): Promise<CorpusReport> => {
+  reportPromise ??= runCorpus();
+  return reportPromise;
+};
 
 describe('htmlwasher corpus (offline E2E)', () => {
   it('cleans every fixture with zero security/hard failures and plausible page types', async () => {
-    const report = await runCorpus();
+    const report = await getReport();
 
     // Surface the table + summary in the test output, and persist the reports.
     printReport(report);
@@ -36,5 +50,42 @@ describe('htmlwasher corpus (offline E2E)', () => {
 
     // Overall verdict mirrors the two checks above.
     expect(report.ok).toBe(true);
+  });
+
+  it('exercises the precision boilerplate mode and the styled washing level', () => {
+    // Regression for validation-corpus-2: these two were never run across the
+    // corpus, so a CSS-URL-allow-list (styled) or precision-extraction
+    // regression could pass silently. The combo matrix must cover both.
+    const combos = COMBOS.map((c) => `${c.boilerplate}x${c.level}`);
+    expect(combos).toContain('precisionxminimal');
+    expect(combos).toContain('balancedxstyled');
+  });
+
+  it('runs the correct-superset baseline on the SAME boilerplate input (not vacuous)', () => {
+    // Regression for validation-corpus-0: the `correct-superset` assertion must
+    // compare `none`x`correct` against `none`x`minimal` (same full-document
+    // input), not against `balanced`x`minimal` (an extraction-stripped subset).
+    // If it ever reverts to the cross-input comparison, the assertion becomes
+    // near-vacuous (a full doc always supersets its own extracted subset).
+    const combos = COMBOS.map((c) => `${c.boilerplate}x${c.level}`);
+    expect(combos).toContain('nonexcorrect');
+    expect(combos).toContain('nonexminimal');
+  });
+
+  it('includes a non-English (Czech) fixture so classifier English-bias regressions surface', async () => {
+    // Regression for validation-corpus-3: the offline harness must exercise at
+    // least one non-English page; otherwise a non-English classification
+    // regression passes silently.
+    const report = await getReport();
+    const czech = report.fixtures.find((f) => f.file === 'article/cs-9001.html');
+    expect(
+      czech,
+      'Czech fixture article/cs-9001.html must be registered in corpus.json',
+    ).toBeDefined();
+    // Its security/structural HARD assertions must all pass like any other page.
+    const czechHardFailures: AssertionFailure[] = report.hardFailures.filter(
+      (f) => f.fixture === 'article/cs-9001.html',
+    );
+    expect(czechHardFailures, JSON.stringify(czechHardFailures, null, 2)).toHaveLength(0);
   });
 });

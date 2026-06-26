@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Metadata extraction orchestrator. Faithful port of trafilatura/metadata.py
 // `extract_metadata`: examine_meta (OpenGraph → meta tags) → drop a space-less
-// author → JSON-LD override → title → author → url → hostname → date → sitename
-// → categories → tags → license. Each field follows the precedence:
-//   OpenGraph → JSON-LD (overrides) → name/itemprop/property meta → DOM/XPath.
+// author → JSON-LD → title → author → url → hostname → date → sitename →
+// categories → tags → license → clean_and_trim.
+//
+// Per-field merge (NOT a blanket override): meta/OpenGraph (examine_meta) fill
+// first, then JSON-LD fills empty title/categories/pageType, APPENDS authors
+// (normalizeAuthors), and conditionally replaces sitename (isPlausibleSitename)
+// — it does NOT override an already-set title and never touches description.
+// DOM/XPath then fills any remaining empties.
 
 import { type HDocument, parseDocument } from '../core/dom.js';
 import type { Metadata } from '../types.js';
@@ -15,8 +20,38 @@ import { extractJsonLd } from './json-ld.js';
 import { extractLicense } from './license.js';
 import { examineMeta } from './meta-tags.js';
 import { normalizeSitename } from './sitename.js';
+import { lineProcessing, unescapeHtml } from './text.js';
 import { extractTitle } from './title.js';
 import { extractDomain, extractUrl } from './url.js';
+
+/** The string-valued Metadata fields clean_and_trim normalizes. */
+const STRING_FIELDS = [
+  'title',
+  'author',
+  'url',
+  'hostname',
+  'description',
+  'sitename',
+  'date',
+  'license',
+] as const;
+
+/**
+ * Faithful port of `Document.clean_and_trim` (trafilatura/settings.py:300-309),
+ * the final step of `extract_metadata`. For every string field: cap the length
+ * to 10000 chars FIRST, THEN run `line_processing(unescape(value))` — order
+ * matters. This decodes HTML entities and normalizes whitespace (it does NOT
+ * strip tags, matching canonical) and bounds field length (brief Security).
+ * `lineProcessing` returns undefined for an all-whitespace result.
+ */
+function cleanAndTrim(metadata: Metadata): void {
+  for (const key of STRING_FIELDS) {
+    let value = metadata[key];
+    if (typeof value !== 'string') continue;
+    if (value.length > 10000) value = `${value.slice(0, 9999)}…`;
+    metadata[key] = lineProcessing(unescapeHtml(value));
+  }
+}
 
 /** Drop empty-string and empty-array fields so the result is a clean sidecar. */
 function pruneEmpty(metadata: Metadata): Metadata {
@@ -54,7 +89,8 @@ export function extractMetadataFromDocument(
     metadata.author = undefined;
   }
 
-  // JSON-LD overrides og/meta; never throws on malformed input
+  // JSON-LD: fill-if-empty title/categories/pageType, append authors,
+  // conditionally replace sitename; never throws on malformed input.
   try {
     extractJsonLd(doc, metadata);
   } catch {
@@ -105,6 +141,9 @@ export function extractMetadataFromDocument(
 
   // license
   metadata.license = extractLicense(doc);
+
+  // clean_and_trim: cap each string field then unescape + line-process.
+  cleanAndTrim(metadata);
 
   return pruneEmpty(metadata);
 }

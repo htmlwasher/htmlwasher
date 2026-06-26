@@ -53,7 +53,17 @@ export const COMBOS = [
   { boilerplate: 'balanced', level: 'standard' },
   { boilerplate: 'balanced', level: 'minimal' },
   { boilerplate: 'none', level: 'correct' },
+  // Same full-document (`none`) input as `none`x`correct`, but the sanitizing
+  // `minimal` level — the baseline for the `correct-superset` assertion so that
+  // both sides share the SAME boilerplate input and differ only by level.
+  { boilerplate: 'none', level: 'minimal' },
   { boilerplate: 'recall', level: 'permissive' },
+  // `precision` boilerplate (most aggressive extraction) and the `styled`
+  // sanitizing level (the only level that keeps inline style/class and the
+  // <style> tag) are otherwise never exercised end-to-end across real fixtures;
+  // `styled` is where a CSS-URL allow-list regression would surface.
+  { boilerplate: 'balanced', level: 'styled' },
+  { boilerplate: 'precision', level: 'minimal' },
 ] as const;
 
 type Combo = (typeof COMBOS)[number];
@@ -273,7 +283,10 @@ function assertCombo(
   }
 
   // STRUCTURAL: `correct` (normalize-only) keeps at least as many distinct tag
-  // names as `minimal` on the same fixture.
+  // names as `minimal` on the SAME boilerplate input (both `none` — the whole
+  // document, no extraction), so the two differ only by washing level. This is
+  // the real invariant: normalize-only `correct` must not drop tags that the
+  // sanitizing `minimal` level keeps.
   if (combo.boilerplate === 'none' && combo.level === 'correct') {
     const correctTagCount = distinctTagNames(html).size;
     if (correctTagCount < minimalTagCount) {
@@ -312,7 +325,11 @@ export async function runCorpus(): Promise<CorpusReport> {
       washed.set(`${combo.boilerplate}x${combo.level}`, result);
     }
 
-    const minimalResult = washed.get('balancedxminimal');
+    // Baseline for the `correct-superset` assertion: the `none`x`minimal` combo
+    // shares the SAME full-document input as `none`x`correct`, so the comparison
+    // isolates the level difference (sanitizing vs normalize-only) rather than a
+    // boilerplate-mode difference (full doc vs extracted subset).
+    const minimalResult = washed.get('nonexminimal');
     const minimalTagCount =
       minimalResult !== undefined ? distinctTagNames(minimalResult.html).size : 0;
 

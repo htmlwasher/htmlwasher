@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOILERPLATE_MODES,
   DEFAULT_BOILERPLATE_MODE,
+  DEFAULT_MAX_INPUT_BYTES,
   DEFAULT_WASHING_LEVEL,
   isBoilerplateMode,
   isPageType,
@@ -38,6 +39,10 @@ describe('option unions', () => {
   it('defaults are balanced + standard', () => {
     expect(DEFAULT_BOILERPLATE_MODE).toBe('balanced');
     expect(DEFAULT_WASHING_LEVEL).toBe('standard');
+  });
+
+  it('DEFAULT_MAX_INPUT_BYTES is 10 MB (per context doc 08)', () => {
+    expect(DEFAULT_MAX_INPUT_BYTES).toBe(10 * 1024 * 1024);
   });
 });
 

@@ -95,6 +95,36 @@ def _onnx_argmax(features_189: list[float]) -> int:
     return int(np.asarray(out[0]).ravel()[0])
 
 
+# Hand-rolled parity fixture (not from WCXB). It carries a <template> element so the
+# regenerated parity.json captures the lexbor/linkedom <template>-exclusion contract:
+# selectolax (lexbor) does NOT read the template's body text, so neither must the TS
+# extractor. Already-checked-in HTML at htmlwasher/fixtures/classifier/<file>.
+TEMPLATE_FIXTURE = {
+    "file": "4853.html",
+    "url": "https://shop.example.com/product/acme-widget",
+    "pageType": "product",
+}
+
+
+def _record_for_fixture(file: str, url: str, page_type: str, vocab: dict) -> dict:
+    """Build a parity record for an already-present fixture file (no copy)."""
+    html = (FIXTURE_DIR / file).read_text(encoding="utf-8", errors="replace")
+    numeric = extract_numeric_features(html, url)
+    text = title_meta_text(html)
+    tfidf = _tfidf_vector(text, vocab)
+    scaled = _scaled_numeric(numeric, vocab)
+    argmax = _onnx_argmax(scaled + tfidf)
+    return {
+        "file": file,
+        "url": url,
+        "pageType": page_type,
+        "numeric": numeric,
+        "tfidf": tfidf,
+        "argmax": argmax,
+        "argmaxLabel": CLASS_LABELS[argmax],
+    }
+
+
 def main() -> None:
     vocab = _load_vocab()
     pages = build_index()
@@ -134,6 +164,16 @@ def main() -> None:
                     "argmaxLabel": CLASS_LABELS[argmax],
                 }
             )
+
+    # Append the hand-rolled <template> parity fixture (already on disk).
+    records.append(
+        _record_for_fixture(
+            TEMPLATE_FIXTURE["file"],
+            TEMPLATE_FIXTURE["url"],
+            TEMPLATE_FIXTURE["pageType"],
+            vocab,
+        )
+    )
 
     PARITY_JSON.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Wrote {len(records)} parity fixtures to {FIXTURE_DIR}")

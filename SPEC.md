@@ -2,17 +2,18 @@
 
 ## Status
 
-This SPEC describes the **intended architecture** of a scaffolded repository. The
-implementation is **pending** and is being built in phases (Phase 0 through Phase 7) per the build brief at `@/prompts/2026-6-24-init/prompt.md`. At the time of
-writing, the root workspace configuration exists but the component directories
-(`@/htmlwasher/`, `@/tools/live-crawl-tester/`, `@/training/`) and their
-source skeletons are not yet created.
+The phased port (Phases 0–8 of the build brief at
+`@/prompts/2026-6-24-init/prompt.md`) is **implemented**. The component directories
+(`@/htmlwasher/`, `@/tools/wash-corpus-tester/`, `@/training/`) exist with their
+source, tests, and shipped artifacts (`model.onnx`, `tfidf-vocab.json`), and the
+full offline test suite is green. `htmlwasher` is published as an **alpha** npm
+package — APIs may still change before a stable release.
 
-Treat every API, module, and artifact named below as a **design target**, not an
-implemented contract. Do not assume any function, class, schema field, or output
-format described here is callable yet. As each phase lands, this SPEC and the
-per-component SPEC files are updated to reflect what actually exists (see
-`@/.claude/rules/spec-maintenance.md`).
+Each component's SPEC.md describes its current implemented contract; see
+`@/PORTING-NOTES.md` for the port map and known gaps, and
+`@/.claude/rules/spec-maintenance.md` for the ongoing spec-maintenance rule.
+(`@/tools/live-crawl-tester/` is an out-of-brief, unimplemented scaffold — see its
+component note below.)
 
 ## Overview
 
@@ -74,12 +75,14 @@ A 3-stage cascade equivalent to web-page-classifier's, returning
   header use 89 numeric (189 total); its README body still says 81/181 — trust
   the code.
 
-Inference runs behind a single `PageTypeClassifier` interface with swappable
+Inference runs behind a single `InferenceBackend` interface (the swappable seam;
+`PageTypeClassifier` is the concrete cascade class that holds one) with swappable
 backends: **`onnxruntime-node`** (default) and **`onnxruntime-web`** (WASM, for
-zero-native-binary / serverless deployment). The onnxruntime version is pinned to
-a known-good release. Lives under `@/htmlwasher/src/classifier/`, with the
-feature extractor in `@/htmlwasher/src/classifier/features/` and the
-shipped model artifacts in `@/htmlwasher/src/classifier/model/`.
+zero-native-binary / serverless deployment). The onnxruntime version is pinned
+exactly (`1.27.0`, both backends in lockstep). Lives under
+`@/htmlwasher/src/classifier/`, with the feature extractor in
+`@/htmlwasher/src/classifier/features/` and the shipped model artifacts in
+`@/htmlwasher/src/classifier/model/`.
 
 Feature parity is the hard constraint: the TypeScript feature extractor MUST
 produce the same feature vectors as the Python training pipeline, or predictions
@@ -117,8 +120,8 @@ htmlwasher/          The TypeScript library (the npm package, alpha)
   test/                     Unit tests (mirrors src/)
   fixtures/                 Saved HTML + expected output (golden tests)
 tools/
-  live-crawl-tester/        Separate TS workspace package: live-site E2E fetcher
-  wash-corpus-tester/       Separate TS workspace package: OFFLINE corpus E2E tester
+  live-crawl-tester/        Out-of-brief, UNIMPLEMENTED scaffold (network fetcher; not in pnpm test)
+  wash-corpus-tester/       Separate TS workspace package: OFFLINE corpus E2E tester (the delivered Phase 8 tester)
 training/                   Offline Python pipeline (NOT a workspace member, NOT shipped)
 prompts/2026-6-24-init/     Build brief (prompt.md) + research context docs
 # (the six read-only reference repos live OUTSIDE this repo at ~/r/htmlwasher-sources/)
@@ -197,7 +200,8 @@ never the network — so it **is** part of the offline `pnpm test`. It emits
   in the classifier feature hot-path (it is the speed leader for the tight
   feature-extraction inner loop).
 - **ONNX inference** — **onnxruntime-node** (default) and **onnxruntime-web**
-  (WASM) behind one `PageTypeClassifier` interface; version pinned.
+  (WASM) behind one `InferenceBackend` interface; version pinned exactly to
+  `1.27.0` (both backends in lockstep).
 - **vitest** — TypeScript unit tests (offline, headless, deterministic golden
   fixtures).
 - **Biome** — JS / TS / JSON lint + format.
@@ -224,10 +228,11 @@ pnpm fix                # Biome --fix --unsafe + format, then markdownlint --fix
 pnpm format             # Biome format + Markdown fix
 ```
 
-The offline `pnpm test` never hits the network. The live-crawl tester is run
-separately (its own script under `@/tools/live-crawl-tester/`) and is excluded
-from `pnpm test`. The Python training pipeline is run offline under `@/training/`
-via uv and is independent of the Node toolchain.
+The offline `pnpm test` never hits the network; it includes the offline
+`@/tools/wash-corpus-tester/` E2E run. The out-of-brief `@/tools/live-crawl-tester/`
+scaffold is unimplemented and (if ever implemented) would hit the network, so it is
+excluded from `pnpm test`. The Python training pipeline is run offline under
+`@/training/` via uv and is independent of the Node toolchain.
 
 ## Source authority hierarchy
 
@@ -281,13 +286,22 @@ phase, tracked in `@/prompts/2026-6-24-init/prompt.md`:
   to the planned `src/` layout; record findings in `PORTING-NOTES.md`.
 - **Phase 1 — Scaffold:** initialize the `htmlwasher` package (strict
   tsconfig, vitest, lint); gate is a passing `pnpm test` and clean type-check.
-- **Phase 2 — Core extraction:** port the core algorithm from go-trafilatura.
-- **Phase 3 — Metadata:** port metadata extraction.
-- **Phase 4 — Feature extraction + ML model:** build the 189-feature extractor in
-  both Python and TypeScript, train the model, export `model.onnx` +
+- **Phase 2 — Boilerplate-removal core:** port the core algorithm from
+  go-trafilatura (emits HTML).
+- **Phase 3 — Metadata:** port metadata extraction (optional sidecar).
+- **Phase 4 — Feature extraction + the ML classifier:** build the 189-feature
+  extractor in both Python and TypeScript, train the model, export `model.onnx` +
   `tfidf-vocab.json`, wire the 3-stage cascade; gate is >=99% TS/Python feature
   parity and matching argmax predictions.
-- **Phase 5 — Per-type profiles + confidence:** route extraction by page type.
-- **Phase 6 — Validation:** run the full pipeline over adbar's test corpus;
-  document gaps in `PORTING-NOTES.md`.
-- **Phase 7 — Live-crawl tester:** build `@/tools/live-crawl-tester/`.
+- **Phase 5 — Per-type profiles + confidence + boilerplate modes:** route
+  extraction by page type.
+- **Phase 6 — HTML washing levels:** reproduce the htmlprocessing-server presets
+  (`minimal`/`standard`/`permissive`/`styled`/`correct`).
+- **Phase 7 — Validation against the reference corpus:** run the full pipeline over
+  adbar's eval corpus; document gaps in `PORTING-NOTES.md`.
+- **Phase 8 — Offline wash-corpus tester:** build `@/tools/wash-corpus-tester/`
+  (the delivered offline E2E tester).
+
+`@/tools/live-crawl-tester/` is not a brief phase — it is an out-of-brief,
+unimplemented scaffold (see the per-component SPEC list above), not the delivered
+E2E tester.

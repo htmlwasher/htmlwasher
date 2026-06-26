@@ -26,6 +26,20 @@ describe('normalizeAuthors', () => {
     expect(normalizeAuthors(undefined, 'jane@example.com')).toBeUndefined();
   });
 
+  it('only discards on a START-anchored email (mirrors Python re.match)', () => {
+    // mid-string email does NOT discard the whole string (re.match anchors at
+    // position 0); the name survives and is processed normally. Canonical
+    // mangles the trailing email via twitter/join cleanup → "John Doe john com".
+    expect(normalizeAuthors(undefined, 'John Doe john@x.com')).toBe('John Doe john com');
+    // a name immediately followed by an email keeps the leading name
+    expect(normalizeAuthors(undefined, 'Jane Roe contact jane@x.com')?.startsWith('Jane Roe')).toBe(
+      true,
+    );
+    // leading email still discards the whole string
+    expect(normalizeAuthors(undefined, 'jane@example.com')).toBeUndefined();
+    expect(normalizeAuthors(undefined, 'jane@example.com extra')).toBeUndefined();
+  });
+
   it('merges into existing authors and dedupes substrings', () => {
     expect(normalizeAuthors('Jane Doe', 'John Smith')).toBe('Jane Doe; John Smith');
     expect(normalizeAuthors('Jane Doe', 'Jane Doe')).toBe('Jane Doe');

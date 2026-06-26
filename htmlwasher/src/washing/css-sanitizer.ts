@@ -29,10 +29,12 @@
 
 const DANGEROUS_COMMENT = /\/\*[\s\S]*?\*\/|<!--|-->/g;
 
-// `url( … )` capture — quote-tolerant, whitespace-tolerant. The argument runs up
-// to the first quote or `)`; a trailing run of `)` is also consumed so a payload
-// with nested parens (e.g. `url(javascript:alert(1))`) leaves no dangling `)`.
-const URL_FUNC = /url\(\s*(['"]?)([^'")]*)\1\s*\)*/gi;
+// `url( … )` capture — quote-tolerant, whitespace-tolerant. Three precise
+// branches so a QUOTED argument is captured in full even when it contains nested
+// parens (e.g. `url("javascript:alert(1)")`): double-quoted, single-quoted, then
+// bare. For the bare branch a trailing run of `)` is also consumed so an unquoted
+// nested-paren payload (e.g. `url(javascript:alert(1))`) leaves no dangling `)`.
+const URL_FUNC = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"]*))\s*\)*/gi;
 
 // IE `expression( … )` — strip the whole call, including its (possibly
 // nested-paren) argument, so no executable token nor stray `)` survives.
@@ -96,8 +98,10 @@ export function sanitizeCss(css: string): string {
   // paren(s) — so it can no longer parse as a CSS function.
   out = out.replace(EXPRESSION_FUNC, '');
 
-  // Filter `url(...)` by scheme.
-  out = out.replace(URL_FUNC, (match, _quote: string, urlArg: string) => {
+  // Filter `url(...)` by scheme. Read whichever branch matched (double-quoted,
+  // single-quoted, or bare); a non-http(s) scheme replaces the WHOLE token.
+  out = out.replace(URL_FUNC, (match, dq?: string, sq?: string, bare?: string) => {
+    const urlArg = dq ?? sq ?? bare ?? '';
     return isSafeCssUrl(urlArg) ? match : "url('')";
   });
 

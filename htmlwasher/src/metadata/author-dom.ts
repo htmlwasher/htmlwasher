@@ -7,6 +7,7 @@
 
 import { type HDocument, type HElement, trim } from '../core/dom.js';
 import { normalizeAuthors } from './authors.js';
+import { iterText } from './text.js';
 
 // AUTHOR_DISCARD_XPATHS → CSS. Drops comment/sidebar/quote/figure/time blocks
 // before author probing so bylines inside them are not picked up.
@@ -72,7 +73,8 @@ export function extractAuthor(doc: HDocument): string | undefined {
 
   for (const selector of AUTHOR_SELECTORS) {
     for (const elem of clone.querySelectorAll(selector)) {
-      const content = trim(elem.textContent);
+      // canonical extract_metainfo: trim(" ".join(elem.itertext())) — space-join.
+      const content = trim(iterText(elem));
       if (content && content.length > 2 && content.length < 120) {
         return normalizeAuthors(undefined, content);
       }

@@ -70,9 +70,29 @@ exported). The security floor always holds: `<script>` and `on*` handlers are
 stripped even if the config lists them, and a config that allows inline `style`
 still runs the CSS-URL allow-list.
 
-Security is enforced at every washing level: `<script>`, `on*` event handlers,
-and `javascript:`/`data:` URLs are always stripped; the `styled` level adds a
-CSS-URL allow-list. `correct` is normalize-only (the caller's trust boundary).
+The security floor is enforced at **every** washing level — including `correct`:
+`<script>` (tag + text), every `on*` event handler, `javascript:`/`vbscript:`/
+untrusted `data:` URLs, and dangerous inline CSS (`url(javascript:)`,
+`expression()`, `@import`) are always stripped; the `styled` level (and any custom
+config that permits inline `style`) adds the CSS-URL allow-list on top. `correct`
+is the one **normalize-only** level for the tag _allow-list_ — it runs no preset,
+so it preserves all benign tags, attributes, and deprecated tags unchanged — but
+it still runs the mandatory security floor (`enforceSecurityFloor` +
+`sanitizeStyledHtml`), so it never leaks active content even though it never
+narrows benign markup.
+
+### Boundary validation and input cap
+
+`wash()` validates its inputs at the boundary and never processes untrusted input
+unchecked:
+
+- It throws a `TypeError` when `html` is not a string, when `options.boilerplate`
+  or `options.level` is provided but invalid, or when `options.config` is provided
+  but is not a valid `SanitizeConfig`.
+- It accepts `maxInputBytes?: number` (default 10 MB UTF-8, the exported
+  `DEFAULT_MAX_INPUT_BYTES`) and throws a `RangeError` when the input's UTF-8 byte
+  length exceeds it — a resource bound. Pass a larger value to opt into bigger
+  documents.
 
 ## CLI
 

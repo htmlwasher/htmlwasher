@@ -16,7 +16,10 @@ import { getProfile } from './profiles/index.js';
 import {
   type BoilerplateMode,
   DEFAULT_BOILERPLATE_MODE,
+  DEFAULT_MAX_INPUT_BYTES,
   DEFAULT_WASHING_LEVEL,
+  isBoilerplateMode,
+  isWashingLevel,
   type Message,
   type Metadata,
   type PageType,
@@ -102,13 +105,38 @@ function hasMetadata(meta: Metadata): boolean {
  * which takes precedence over `level`. `minify` (default `false`) emits minified
  * rather than prettier-formatted HTML. `url` is optional context (never fetched).
  *
- * @throws {TypeError} if `options.config` is provided but is not a valid SanitizeConfig.
+ * @throws {TypeError} if `html` is not a string, if `options.boilerplate` /
+ *   `options.level` is provided but invalid, or if `options.config` is provided
+ *   but is not a valid SanitizeConfig.
+ * @throws {RangeError} if the input HTML exceeds `options.maxInputBytes`
+ *   (default {@link DEFAULT_MAX_INPUT_BYTES}, 10 MB) UTF-8 bytes.
  */
 export async function wash(html: string, options: WashOptions = {}): Promise<WashResult> {
   // Validate the custom config at the boundary (same guard the CLI uses).
   if (options.config !== undefined) {
     const error = sanitizeConfigError(options.config);
     if (error !== null) throw new TypeError(`Invalid washing config: ${error}`);
+  }
+
+  // Validate the remaining boundary inputs (after the config guard, to keep the
+  // config-invalid message first, as before).
+  if (typeof html !== 'string') {
+    throw new TypeError(`wash() expects \`html\` to be a string, received ${typeof html}`);
+  }
+  if (options.boilerplate !== undefined && !isBoilerplateMode(options.boilerplate)) {
+    throw new TypeError(`Invalid boilerplate mode: ${String(options.boilerplate)}`);
+  }
+  if (options.level !== undefined && !isWashingLevel(options.level)) {
+    throw new TypeError(`Invalid washing level: ${String(options.level)}`);
+  }
+
+  // Bound resource use: reject oversized input at the boundary.
+  const maxInputBytes = options.maxInputBytes ?? DEFAULT_MAX_INPUT_BYTES;
+  const inputBytes = Buffer.byteLength(html, 'utf8');
+  if (inputBytes > maxInputBytes) {
+    throw new RangeError(
+      `Input HTML is ${inputBytes} bytes, exceeding the limit of ${maxInputBytes} bytes`,
+    );
   }
 
   const mode = options.boilerplate ?? DEFAULT_BOILERPLATE_MODE;

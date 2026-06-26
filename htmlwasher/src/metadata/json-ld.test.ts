@@ -66,6 +66,19 @@ describe('extractJsonLd', () => {
     expect(md.pageType).toBeUndefined();
   });
 
+  it('parses well-formed JSON-LD from the normalized text (markup stripped before parse)', () => {
+    // canonical extract_meta_json runs normalize_json (strip <...>; entities are
+    // only unescaped when a backslash is present) BEFORE json.loads on the
+    // success path too — so <b>…</b> markup in the title is gone. The &amp;
+    // entity survives here and is decoded later by clean_and_trim (see index.ts).
+    const md = run(
+      wrap(
+        '{"@context":"https://schema.org","@type":"Article","name":"Acme &amp; Co <b>News</b>"}',
+      ),
+    );
+    expect(md.title).toBe('Acme &amp; Co News');
+  });
+
   it('does not throw on malformed JSON and recovers the headline via regex', () => {
     const md = run(wrap('{ "@type": "Article", "headline": "Recovered", bad json'));
     expect(md.title).toBe('Recovered');

@@ -3,8 +3,11 @@
 // htmlprocessing-server. The `*-reader` presets are intentionally NOT ported —
 // htmlwasher's boilerplate-removal pillar replaces the Readability stage.
 //
-// `correct` is NOT a sanitize preset (it normalizes only), so it is absent from
-// this map; `getSanitizeConfig('correct')` returns `undefined`.
+// `correct` is NOT a sanitize preset (it applies no tag allow-list), so it is
+// absent from this map; `getSanitizeConfig('correct')` returns `undefined`. Note
+// `correct` is normalize-only for the allow-list ONLY — `washHtml` still runs the
+// mandatory security floor (`enforceSecurityFloor` + `sanitizeStyledHtml`) on the
+// no-config path, so `<script>`/`on*`/dangerous URLs/CSS are stripped at `correct` too.
 
 import type { WashingLevel } from '../../types.js';
 import { minimalSetup } from './minimal.js';

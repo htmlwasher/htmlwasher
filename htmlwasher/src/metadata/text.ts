@@ -3,6 +3,8 @@
 // line_processing, remove_control_characters) and trafilatura/json_metadata.py
 // (normalize_json) — Apache-2.0.
 
+import { type HElement, type HNode, TEXT_NODE } from '../core/dom.js';
+
 /** Strip HTML comments and tags from a raw string. Mirrors `utils.HTML_STRIP_TAGS`. */
 const HTML_STRIP_TAGS = /<!--[\s\S]*?-->|<[^>]*>/g;
 
@@ -88,6 +90,26 @@ export function lineProcessing(line: string): string | undefined {
   const s = trim(decoded.replace(/\s+/g, ' '));
   if (s.length === 0) return undefined;
   return s;
+}
+
+/**
+ * lxml `" ".join(elem.itertext())`: descendant text-node values in document
+ * order, joined with a single space. trafilatura's `extract_metainfo`
+ * (metadata.py) uses this instead of `text_content()` so bylines/titles split
+ * across adjacent inline elements with no separating whitespace (e.g.
+ * `<span>John</span><span>Doe</span>`) come out space-separated. Implemented
+ * locally in metadata/ so it does not perturb core/dom.ts.
+ */
+export function iterText(el: HElement): string {
+  const parts: string[] = [];
+  const walk = (n: HNode): void => {
+    for (const c of n.childNodes) {
+      if (c.nodeType === TEXT_NODE) parts.push(c.textContent ?? '');
+      else walk(c);
+    }
+  };
+  walk(el);
+  return parts.join(' ');
 }
 
 /** Dedupe while preserving first-seen order (Python `dict.fromkeys` idiom). */

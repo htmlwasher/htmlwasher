@@ -41,6 +41,15 @@ export type WashingLevel = (typeof WASHING_LEVELS)[number];
 export const DEFAULT_WASHING_LEVEL = 'standard' satisfies WashingLevel;
 
 /**
+ * Default upper bound on `wash()` input size, measured in UTF-8 bytes (10 MB).
+ * Inputs larger than {@link WashOptions.maxInputBytes} (defaulting to this) are
+ * rejected at the boundary with a `RangeError` rather than processed — a
+ * resource bound per the security guideline ("bound resource use; validate
+ * input at every boundary").
+ */
+export const DEFAULT_MAX_INPUT_BYTES = 10 * 1024 * 1024;
+
+/**
  * The 7 page types the classifier routes extraction through. Note `collection`
  * (not `category`) is the serialized form — the rs-trafilatura `Category` enum
  * variant serializes to the string `"collection"`.
@@ -107,6 +116,14 @@ export interface WashOptions {
   config?: SanitizeConfig;
   /** Minify the output instead of prettier-formatting it. Default `false`. */
   minify?: boolean;
+  /**
+   * Upper bound on the input HTML size, measured in UTF-8 bytes. Defaults to
+   * {@link DEFAULT_MAX_INPUT_BYTES} (10 MB). Inputs whose UTF-8 byte length
+   * exceeds this are rejected at the boundary with a `RangeError` rather than
+   * processed — a resource bound (validate input at every boundary). Set a
+   * larger value to opt into processing bigger documents.
+   */
+  maxInputBytes?: number;
   /**
    * Optional source URL — context only, for the classifier's URL heuristics and
    * metadata `url`/`hostname`. htmlwasher NEVER fetches it. This is not a

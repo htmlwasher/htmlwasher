@@ -20,6 +20,26 @@ describe('sanitizeCss', () => {
     expect(out).not.toMatch(/vbscript:/i);
   });
 
+  it('strips QUOTED url("javascript:…") fully (no surviving scheme literal)', () => {
+    // Regression: the quoted form whose arg contains a nested `)` previously
+    // matched only `url(`, leaving `"javascript:alert(1)")` behind as text.
+    const out = sanitizeCss('background:url("javascript:alert(1)")');
+    expect(out).not.toMatch(/javascript:/i);
+    expect(out).toBe("background:url('')");
+  });
+
+  it("strips single-quoted url('vbscript:…') fully", () => {
+    const out = sanitizeCss("background:url('vbscript:msgbox(1)')");
+    expect(out).not.toMatch(/vbscript:/i);
+    expect(out).toContain("url('')");
+  });
+
+  it('strips quoted url("data:…") by default', () => {
+    const out = sanitizeCss('background:url("data:image/svg+xml,x")');
+    expect(out).not.toContain('data:');
+    expect(out).toContain("url('')");
+  });
+
   it('removes expression(...) entirely with no stray token', () => {
     const out = sanitizeCss('width:expression(alert(1))');
     expect(out).not.toMatch(/expression/i);
@@ -79,6 +99,12 @@ describe('sanitizeStyledHtml', () => {
 
   it('sanitizes <style> element bodies', () => {
     const out = sanitizeStyledHtml('<style>.a{background:url(javascript:alert(1))}</style>');
+    expect(out).not.toMatch(/javascript:/i);
+    expect(out).toContain('<style>');
+  });
+
+  it('neutralizes a quoted url("javascript:…") in a <style> body end-to-end', () => {
+    const out = sanitizeStyledHtml('<style>.a{background:url("javascript:alert(1)")}</style>');
     expect(out).not.toMatch(/javascript:/i);
     expect(out).toContain('<style>');
   });

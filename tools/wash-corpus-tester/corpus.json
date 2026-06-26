@@ -26,6 +26,13 @@
       "url": "https://robomow.com/"
     },
     {
+      "file": "article/cs-9001.html",
+      "expectedPageType": "article",
+      "domain": "denni-zpravy.cz",
+      "url": "https://denni-zpravy.cz/clanek/prazska-tramvaj",
+      "_note": "Hand-authored Czech (cs) article — NOT from WCXB. Added to surface English-bias gaps in the classifier (brief §7 / context doc 04). CC0 / self-authored."
+    },
+    {
       "file": "forum/0551.html",
       "expectedPageType": "forum",
       "domain": "",

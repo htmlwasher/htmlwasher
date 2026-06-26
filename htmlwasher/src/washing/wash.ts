@@ -12,10 +12,13 @@
 //   FORMAT     — prettier by default; html-minifier-terser when `minify: true`
 //
 // Messages accumulate across stages. Formatting failure is non-fatal (warning +
-// unformatted output). `correct` is the caller's trust boundary: it ONLY normalizes
-// existing markup — it does not sanitize, transform, or execute anything. It cannot
-// INTRODUCE `<script>`/`on*`/`javascript:` (parse5 serialization adds no such
-// constructs), but it also does not REMOVE whatever the input already contained.
+// unformatted output). `correct` is normalize-only for the tag ALLOW-LIST — it
+// applies no preset, so arbitrary/benign tags and attributes (and deprecated tags)
+// are preserved unchanged. But the security floor is non-negotiable at EVERY level:
+// even `correct` (with no custom config) still runs `enforceSecurityFloor` +
+// `sanitizeStyledHtml`, which force-strip `<script>`, all `on*` handlers,
+// `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS, while
+// leaving every benign tag/attribute in place.
 
 import { minify as minifyHtml } from 'html-minifier-terser';
 import type { Message, WashingLevel } from '../types.js';
@@ -24,7 +27,7 @@ import { decodeBuffer } from './decode.js';
 import { isHtmlDocument, normalizeHtml } from './normalize.js';
 import { getSanitizeConfig } from './presets/index.js';
 import type { SanitizeConfig } from './presets/types.js';
-import { type Sanitizer, sanitizeHtmlBackend } from './sanitizer.js';
+import { enforceSecurityFloor, type Sanitizer, sanitizeHtmlBackend } from './sanitizer.js';
 
 /** Options for {@link washHtml} / {@link washBuffer}. */
 export interface WashOptions {
@@ -119,6 +122,14 @@ export async function washHtml(
     if (configAllowsStyle(config)) {
       currentHtml = sanitizeStyledHtml(currentHtml);
     }
+  } else {
+    // SECURITY FLOOR — `correct` with no custom config resolves no preset, so the
+    // sanitize stage above is skipped. The brief still requires the floor at EVERY
+    // level: force-strip `<script>`/`on*`/dangerous URL schemes (preserving all
+    // benign tags/attributes), then close the inline-CSS gap. `correct` thus stays
+    // normalize-only for benign markup while never leaking active content.
+    currentHtml = enforceSecurityFloor(currentHtml);
+    currentHtml = sanitizeStyledHtml(currentHtml);
   }
 
   // DOCTYPE — full documents only, post-sanitize, if not already present.
