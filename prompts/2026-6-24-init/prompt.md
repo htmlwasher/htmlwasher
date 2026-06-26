@@ -156,16 +156,24 @@ The TypeScript library is the **htmlwasher** package (npm name `htmlwasher`). Pl
     fixtures/                        # saved HTML + expected cleaned-HTML output (golden tests)
     package.json
     tsconfig.json
-    README.md                        # incl. licenses/attribution (see Section 8)
+    README.md                        # incl. licenses/attribution (see Section 8) + CLI usage
+    SPEC.md                          # public API + module behavior (keep in sync with code)
   training/                          # model training (Python, run offline, NOT shipped)
     download_wcxb.py                 # fetch dataset from HF/Zenodo
     extract_features.py              # 189 features (parity with TS extractor)
     train.py                         # XGBClassifier -> model.onnx + tfidf-vocab.json
     requirements.txt
     README.md
+    SPEC.md
   tools/
     wash-corpus-tester/              # OFFLINE E2E over saved HTML fixtures (Section 7) — no network
+  SPEC.md                            # root: system overview, architecture, stack, build
+  README.md                          # root: repo overview + quick start (library + CLI)
 ```
+
+Every package and the repo root carries a `SPEC.md`; keep each `SPEC.md` AND
+`README.md` in sync with the code in the same change that touches the public
+surface (the repo enforces this via its spec/test-maintenance rules).
 
 The public API is roughly (note: `wash()` is **async** — the washing formatter
 and the ONNX classifier load lazily):
@@ -186,9 +194,11 @@ The two knobs are orthogonal: any boilerplate mode combines with any washing lev
 
 **CLI (offline) — same surface, both bin and lib.** Ship a `htmlwasher` CLI
 (`bin: htmlwasher` → `dist/cli.js`, plus an `./cli` export) built on `commander`,
-modeled on contextractor's `packages/standalone` (`cli.ts` + `cli-program.ts`,
+modeled on **contextractor** (<https://www.contextractor.com/>; local
+`~/r/contextractor/packages/standalone` — `cli.ts` + `cli-program.ts`,
 `#!/usr/bin/env node` + an `isMainEntry` guard wrapping a testable `runWash(opts, io)`
-core) — but **offline only**: it NEVER fetches a URL. It reads an HTML **file
+core) — but **offline only**: it NEVER fetches a URL (contextractor crawls; htmlwasher
+does not). It reads an HTML **file
 argument** or **stdin** (`-`/omitted) and writes cleaned HTML to **stdout** (or
 `-o <file>`); diagnostics + the `[pageType confidence]` line go to **stderr**. The
 Unix-pipe convention (file arg for the common case, stdin for piping, stdout for
@@ -255,13 +265,16 @@ Work phase by phase. **Do not advance until the phase's gate passes.** Commit af
 
 ---
 
-## 6. Testing requirements (unit)
+## 6. Testing, review & quality gates
 
 - **Every `src/` module has a co-located unit test.** Use vitest. Cover happy paths, empty/malformed HTML, missing metadata, the boilerplate modes (incl. `none`), and every washing level (incl. `correct`).
 - **Golden tests** use saved fixtures in `fixtures/` (HTML in, expected cleaned HTML committed) so they're deterministic and offline.
-- **Washing tests** assert the per-level allow-list behavior and the security invariants (`<script>`/`on*`/`javascript:` always stripped).
-- **Feature-parity tests** compare TS vs Python feature vectors (Phase 4).
-- `pnpm test` must run the whole suite headless and pass in CI.
+- **Washing tests** assert the per-level allow-list behavior and the security invariants (`<script>`/`on*`/`javascript:` always stripped — at every level, incl. `styled` and `correct`).
+- **Feature-parity tests** compare TS vs Python feature vectors (Phase 4) — assert the full 189-vector matches and the ONNX argmax class agrees.
+- **CLI tests** drive a testable `runWash(opts, io)` core with in-memory streams + a fixture file: default HTML-to-stdout, `--minify`, `--json`, `-o <file>`, invalid-option exit codes, and missing-input handling.
+- `pnpm test` must run the whole suite headless and pass in CI; the training tests run via `uv run pytest` (+ `uvx ruff check`).
+- **Full-repo code review + autofix (quality gate before "done").** Run a complete review of the WHOLE repo — inspired by `/meta:code-review-autofix` (per-domain TS/Python/security checklists, ideally multi-agent with adversarial verification of each finding) — and **fix every confirmed finding, not just list them**. Then **rerun the entire suite** (`pnpm build && pnpm lint && pnpm test`, plus the training `pytest`/`ruff`) and autofix any failure; never silence with `any`/`@ts-ignore`. End-to-end validation (not just unit tests) is what catches integration bugs like a filter that's dead in the real pipeline (see §10).
+- **Docs stay in sync.** Any change to the public surface updates the relevant `SPEC.md` AND `README.md` (and `PORTING-NOTES.md`) in the same change.
 
 ---
 
@@ -301,7 +314,9 @@ Requirements:
 - [ ] Validation harness vs adbar's test corpus (cleaned-HTML scoring) with a short results writeup in `PORTING-NOTES.md`.
 - [ ] `training/` Python pipeline (download -> features -> train -> export ONNX), reproducible from `requirements.txt`.
 - [ ] `tools/wash-corpus-tester/` **offline** project that runs saved HTML fixtures across all 7 page types through htmlwasher and reports PASS/FAIL via `pnpm test:corpus`. No network.
-- [ ] READMEs with usage + full license attribution.
+- [ ] **READMEs and `SPEC.md`s** (root + each package) current, with usage (library + CLI) + full license attribution.
+- [ ] **Full-repo code review + autofix** completed (every confirmed finding fixed), with the whole suite green afterward (`pnpm build && pnpm lint && pnpm test` + training `pytest`/`ruff`).
+- [ ] Repo is **TypeScript + Python** (TS runtime/library/CLI + offline Python `training/`), NOT collapsed to pure TS — the two meet only at the ONNX artifacts + the feature-parity contract.
 
 Work incrementally, commit per phase, keep `PORTING-NOTES.md` current, and ask if the source-repo location or the host-repo structure is not what this brief assumes.
 
