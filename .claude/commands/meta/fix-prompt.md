@@ -56,6 +56,7 @@ Edit the prompt file applying all findings:
 
 - Fix typos, grammar, and broken URLs / paths / versions in place
 - Replace factually wrong claims (deprecated APIs, missing features, wrong identifiers) with correct ones, keeping the surrounding sentence
+- When an instruction asks to surface exact code identifiers (enums, types, functions), pair each named identifier with its concrete source-file path (in `@/` notation), not just the bare name
 - Resolve logical contradictions with the smallest possible edit
 - Integrate answers from QA step as natural prompt content — never append Q&A transcripts
 - Carry out any additional instructions from EXPAND, which take precedence over the default minimum-touch scope
