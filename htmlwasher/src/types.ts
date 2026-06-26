@@ -3,7 +3,13 @@
 // The two orthogonal knobs (boilerplate-removal mode + HTML washing level) are
 // plain string-union / `as const`-array types, NOT TypeScript `enum`s — mirroring
 // htmlprocessing-server's `PROCESSING_MODES = [...] as const` pattern (locked
-// decision #4 in the build brief).
+// decision #4 in the build brief). The washing level resolves to a preset
+// `SanitizeConfig`; callers may instead pass a fully-custom `SanitizeConfig`
+// (pure JSON data — see {@link WashOptions.config}).
+
+import type { SanitizeConfig } from './washing/presets/types.js';
+
+export type { SanitizeConfig } from './washing/presets/types.js';
 
 /**
  * Boilerplate-removal mode — gates the Trafilatura-derived main-content extraction.
@@ -80,17 +86,25 @@ export interface Metadata {
 }
 
 /**
- * Options for {@link wash}. These three knobs (plus the optional source-URL
- * context) are the entire user-facing surface — there are deliberately no
+ * Options for {@link wash}. These knobs (plus the optional source-URL context)
+ * are the entire user-facing surface — there are deliberately no
  * `includeComments` / `includeTables` / `includeImages` / `includeLinks`
- * toggles. The washing `level` is the single tag-inclusion control; comments
- * are decided by the classified page type.
+ * toggles. The washing `level` (or a fully-custom `config`) is the single
+ * tag-inclusion control; comments are decided by the classified page type.
  */
 export interface WashOptions {
   /** Boilerplate-removal mode. Default `'balanced'`. */
   boilerplate?: BoilerplateMode;
-  /** HTML washing level. Default `'standard'`. */
+  /** HTML washing level (named preset). Default `'standard'`. Ignored when `config` is set. */
   level?: WashingLevel;
+  /**
+   * Fully-custom washing config — a {@link SanitizeConfig} (pure JSON data). When
+   * set it drives the sanitize stage directly, taking precedence over the preset
+   * `level` would select. The security floor still applies (`<script>` and `on*`
+   * are always stripped; a config that allows inline `style` still gets the
+   * CSS-URL allow-list). Validated at the boundary — see {@link isSanitizeConfig}.
+   */
+  config?: SanitizeConfig;
   /** Minify the output instead of prettier-formatting it. Default `false`. */
   minify?: boolean;
   /**
@@ -125,4 +139,68 @@ export function isWashingLevel(value: unknown): value is WashingLevel {
 /** Runtime guard: is `value` a valid {@link PageType}? */
 export function isPageType(value: unknown): value is PageType {
   return typeof value === 'string' && (PAGE_TYPES as readonly string[]).includes(value);
+}
+
+/** The only keys a custom {@link SanitizeConfig} JSON document may carry. */
+const SANITIZE_CONFIG_KEYS = [
+  'allowedTags',
+  'allowedAttributes',
+  'allowedClasses',
+  'selfClosing',
+  'nonTextTags',
+  'transformTags',
+] as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isStringArrayRecord(value: unknown): boolean {
+  return isPlainObject(value) && Object.values(value).every(isStringArray);
+}
+
+function isStringRecord(value: unknown): boolean {
+  return isPlainObject(value) && Object.values(value).every((item) => typeof item === 'string');
+}
+
+/**
+ * Validate a value against the {@link SanitizeConfig} shape. Returns a clear,
+ * specific error message, or `null` when it is a valid config. Used by both
+ * surfaces (library `wash()` and the CLI `--config <file.json>`) so an invalid
+ * custom config is rejected at the boundary with the same message. Rejects
+ * unknown keys and wrong-typed fields; every field is optional, so `{}` is valid.
+ */
+export function sanitizeConfigError(value: unknown): string | null {
+  if (!isPlainObject(value)) return 'expected a JSON object';
+  for (const key of Object.keys(value)) {
+    if (!(SANITIZE_CONFIG_KEYS as readonly string[]).includes(key)) {
+      return `unknown field '${key}' (allowed: ${SANITIZE_CONFIG_KEYS.join(', ')})`;
+    }
+  }
+  if (value.allowedTags !== undefined && !isStringArray(value.allowedTags))
+    return "'allowedTags' must be an array of strings";
+  if (value.selfClosing !== undefined && !isStringArray(value.selfClosing))
+    return "'selfClosing' must be an array of strings";
+  if (value.nonTextTags !== undefined && !isStringArray(value.nonTextTags))
+    return "'nonTextTags' must be an array of strings";
+  if (value.allowedAttributes !== undefined && !isStringArrayRecord(value.allowedAttributes))
+    return "'allowedAttributes' must map tag names to arrays of strings";
+  if (value.allowedClasses !== undefined && !isStringArrayRecord(value.allowedClasses))
+    return "'allowedClasses' must map tag names to arrays of strings";
+  if (value.transformTags !== undefined && !isStringRecord(value.transformTags))
+    return "'transformTags' must map tag names to tag-name strings";
+  return null;
+}
+
+/**
+ * Runtime guard: is `value` a valid {@link SanitizeConfig}? Mirrors
+ * {@link isWashingLevel} / {@link isBoilerplateMode}. Use
+ * {@link sanitizeConfigError} when you need the specific reason for a rejection.
+ */
+export function isSanitizeConfig(value: unknown): value is SanitizeConfig {
+  return sanitizeConfigError(value) === null;
 }

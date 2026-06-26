@@ -55,6 +55,23 @@ describe('wash() orchestration', () => {
     expect(min.html.length).toBeLessThanOrEqual(pretty.html.length);
   });
 
+  it('a custom config drives the sanitize stage and wins over level', async () => {
+    const { html } = await wash('<div><p>Hi</p><span>x</span></div>', {
+      boilerplate: 'none',
+      level: 'permissive', // would keep <div>/<span>…
+      config: { allowedTags: ['p'] }, // …but the custom config keeps only <p>
+    });
+    expect(html).toContain('<p>Hi</p>');
+    expect(html).not.toContain('<div');
+    expect(html).not.toContain('<span');
+  });
+
+  it('throws a clear TypeError on an invalid custom config', async () => {
+    await expect(
+      wash('<p>Hi</p>', { boilerplate: 'none', config: { bogus: true } as never }),
+    ).rejects.toThrow(/Invalid washing config: unknown field 'bogus'/);
+  });
+
   it('handles empty input', async () => {
     const { html } = await wash('');
     expect(typeof html).toBe('string');

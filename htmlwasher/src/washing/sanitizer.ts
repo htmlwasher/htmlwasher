@@ -12,10 +12,17 @@
 //
 // `filterEventHandlers` is shared defense-in-depth: every attribute whose
 // lowercased name starts with `on` is stripped from the allow-list before
-// sanitizing, regardless of backend or preset.
+// sanitizing, regardless of backend or preset. Likewise `<script>` is force-
+// removed from `allowedTags` and kept in `nonTextTags`: the named presets never
+// list it, but a fully-custom config (WashOptions.config) could, and the
+// security floor — "<script>/on*/javascript: stripped at EVERY level" — must
+// hold for custom configs too.
 
 import sanitizeHtml from 'sanitize-html';
 import type { SanitizeConfig } from './presets/index.js';
+
+/** Tags never allowed in washed output, regardless of preset or custom config. */
+const ALWAYS_FORBIDDEN_TAGS = new Set(['script']);
 
 /** A pluggable HTML sanitizer. Synchronous string→string given a resolved config. */
 export interface Sanitizer {
@@ -41,7 +48,11 @@ function toSanitizeHtmlOptions(config: SanitizeConfig): sanitizeHtml.IOptions {
   const options: sanitizeHtml.IOptions = {};
 
   if (config.allowedTags !== undefined) {
-    options.allowedTags = config.allowedTags;
+    // Force-remove always-forbidden tags (<script>) so a custom config cannot
+    // allow them — defense-in-depth, like filterEventHandlers for on* below.
+    options.allowedTags = config.allowedTags.filter(
+      (tag) => !ALWAYS_FORBIDDEN_TAGS.has(tag.toLowerCase()),
+    );
   }
   if (config.allowedAttributes !== undefined) {
     // Filter out event handler attributes (on*) for security.
@@ -58,7 +69,12 @@ function toSanitizeHtmlOptions(config: SanitizeConfig): sanitizeHtml.IOptions {
     options.transformTags = { ...config.transformTags };
   }
   if (config.nonTextTags !== undefined) {
-    options.nonTextTags = config.nonTextTags;
+    // Always discard <script> content (never keep it as text), even if a custom
+    // config cleared nonTextTags. sanitize-html's default already includes it;
+    // this guarantees it when the config overrides the default.
+    options.nonTextTags = config.nonTextTags.includes('script')
+      ? config.nonTextTags
+      : [...config.nonTextTags, 'script'];
   }
 
   // The `styled` preset knowingly allows `<style>`; sanitize-html warns loudly

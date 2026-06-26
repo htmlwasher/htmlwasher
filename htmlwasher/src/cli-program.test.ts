@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,45 @@ describe('runWash', () => {
     const written = await readFile(out, 'utf8');
     expect(written).toContain('genuine article body');
     expect(io.stderr.text).toContain('Wrote ');
+  });
+
+  it('-c <file.json> applies a custom config and wins over --level', async () => {
+    const cfg = tmpPath('config.json');
+    await writeFile(cfg, JSON.stringify({ allowedTags: ['p'] }));
+    const io = makeIo('<div><p>Hi there words</p><span>x</span></div>');
+    const code = await runWash(
+      opts({ input: '-', boilerplate: 'none', level: 'permissive', config: cfg }),
+      io,
+    );
+    expect(code).toBe(0);
+    expect(io.stdout.text).toContain('<p>Hi there words</p>');
+    expect(io.stdout.text).not.toContain('<div');
+    expect(io.stdout.text).not.toContain('<span');
+  });
+
+  it('a missing config file exits 1 with a clear stderr message', async () => {
+    const io = makeIo(PAGE);
+    const code = await runWash(opts({ input: '-', config: '/no/such/config.json' }), io);
+    expect(code).toBe(1);
+    expect(io.stderr.text).toMatch(/cannot read config file/);
+  });
+
+  it('a non-JSON config file exits 1', async () => {
+    const cfg = tmpPath('bad.json');
+    await writeFile(cfg, 'not json {');
+    const io = makeIo(PAGE);
+    const code = await runWash(opts({ input: '-', config: cfg }), io);
+    expect(code).toBe(1);
+    expect(io.stderr.text).toMatch(/not valid JSON/);
+  });
+
+  it('an invalid-shape config exits 1 with the boundary message', async () => {
+    const cfg = tmpPath('shape.json');
+    await writeFile(cfg, JSON.stringify({ bogus: true }));
+    const io = makeIo(PAGE);
+    const code = await runWash(opts({ input: '-', config: cfg }), io);
+    expect(code).toBe(1);
+    expect(io.stderr.text).toMatch(/invalid washing config.*unknown field 'bogus'/);
   });
 
   it('--quiet suppresses the stderr diagnostics + page-type line', async () => {

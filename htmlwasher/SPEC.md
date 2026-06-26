@@ -38,9 +38,13 @@ detected `pageType` + `confidence` are returned. `mode: 'none'` bypasses
 extraction (and classification) and washes the whole document.
 
 The two knobs are orthogonal — any boilerplate mode combines with any washing
-level. These options (plus the optional `url` context) are the entire user-facing
-surface; there are deliberately no `includeComments`/`includeTables`/
-`includeImages`/`includeLinks` toggles.
+level. Instead of a named `level`, callers may pass a fully-custom `config` (a
+`SanitizeConfig` — pure JSON data); when set it drives the sanitize stage and
+takes precedence over `level`. These options (plus the optional `url` context)
+are the entire user-facing surface; there are deliberately no
+`includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
+security floor holds regardless of `config` (`<script>`/`on*` are always
+stripped; a config that allows inline `style` still gets the CSS-URL allow-list).
 
 ### CLI — _implemented (`src/cli.ts` + `src/cli-program.ts`)_
 
@@ -62,6 +66,7 @@ htmlwasher [input] [options]
 | -------------------------- | ---------------- | -------------------------------------------------------------------------------- |
 | `-b, --boilerplate <mode>` | `boilerplate`    | `precision\|balanced\|recall\|none`; default `balanced`. Validated.              |
 | `-l, --level <level>`      | `level`          | `minimal\|standard\|permissive\|styled\|correct`; default `standard`. Validated. |
+| `-c, --config <file.json>` | `config`         | custom `SanitizeConfig` JSON file; read + validated; precedence over `--level`.  |
 | `-m, --minify`             | `minify`         | minify the output instead of pretty-formatting.                                  |
 | `-u, --url <url>`          | `url`            | context only — **never fetched**.                                                |
 | `-o, --output <file>`      | —                | write the result to a file instead of stdout.                                    |
@@ -94,8 +99,15 @@ as the program entry point.
 - `PAGE_TYPES` (`as const`) + `PageType` = the 7 types
   (`article, forum, product, collection, listing, documentation, service` — note
   `collection`, not `category`).
-- `WashOptions` = `{ boilerplate?, level?, minify?, url? }`. `minify` defaults to
-  `false` (prettier-format); `url` is context-only and never fetched.
+- `WashOptions` = `{ boilerplate?, level?, config?, minify?, url? }`. `minify`
+  defaults to `false` (prettier-format); `url` is context-only and never fetched.
+  `config?: SanitizeConfig` is a fully-custom washing config that takes precedence
+  over `level`; `wash()` throws a `TypeError` if it is malformed.
+- `SanitizeConfig` = `{ allowedTags?, allowedAttributes?, allowedClasses?,
+selfClosing?, nonTextTags?, transformTags? }` — all JSON-serializable (plain data,
+  no functions). `isSanitizeConfig(value)` / `sanitizeConfigError(value)` are the
+  boundary guards (reject unknown/wrong-typed fields with a clear message); both
+  the library and the CLI validate with them.
 - `WashResult` = `{ html: string; messages: Message[]; metadata?: Metadata;
 pageType?: PageType; confidence?: number }` (`pageType`/`confidence` set when
   extraction runs, omitted for `boilerplate: 'none'`).
@@ -170,7 +182,7 @@ consumed (matching rs-trafilatura).
   `probabilities` `[1,7]`) + `tfidf-vocab.json` (vocab/idf/scaler/classLabels).
   Shipped in the npm tarball; loaded once at runtime. _implemented (Phase 4)_
 - `src/profiles/` — the 7 per-page-type extraction profiles + `getProfile`. _implemented (Phase 5)_
-- `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened? })`
+- `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened?, config? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
   (sanitize-html + level preset; skipped for `correct`) → re-normalize (if

@@ -21,6 +21,8 @@ import {
   DEFAULT_WASHING_LEVEL,
   isBoilerplateMode,
   isWashingLevel,
+  type SanitizeConfig,
+  sanitizeConfigError,
   type WashingLevel,
 } from './types.js';
 
@@ -64,6 +66,8 @@ export interface ResolvedCliOptions {
   input?: string;
   boilerplate: BoilerplateMode;
   level: WashingLevel;
+  /** Path to a custom washing-config `.json` file. Takes precedence over `level`. */
+  config?: string;
   minify: boolean;
   /** Context only — never fetched. */
   url?: string;
@@ -135,10 +139,40 @@ export async function runWash(opts: ResolvedCliOptions, io: CliIo): Promise<numb
     }
   }
 
+  // --- Resolve a custom washing config (--config <file.json>), if given ---
+  // Read + JSON.parse + validate at the boundary, exactly like the library;
+  // when supplied it takes precedence over --level.
+  let config: SanitizeConfig | undefined;
+  if (opts.config !== undefined) {
+    let raw: string;
+    try {
+      raw = await readFile(opts.config, 'utf8');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      io.stderr.write(`Error: cannot read config file '${opts.config}': ${message}\n`);
+      return 1;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      io.stderr.write(`Error: config file '${opts.config}' is not valid JSON: ${message}\n`);
+      return 1;
+    }
+    const configError = sanitizeConfigError(parsed);
+    if (configError !== null) {
+      io.stderr.write(`Error: invalid washing config '${opts.config}': ${configError}\n`);
+      return 1;
+    }
+    config = parsed as SanitizeConfig;
+  }
+
   // --- Run wash (offline; url is context only, never fetched) ---
   const result = await wash(html, {
     boilerplate: opts.boilerplate,
     level: opts.level,
+    config,
     minify: opts.minify,
     url: opts.url,
   });
@@ -215,6 +249,10 @@ export function buildProgram(): Command {
       parseLevel,
       DEFAULT_WASHING_LEVEL,
     )
+    .option(
+      '-c, --config <file.json>',
+      'custom washing config (JSON SanitizeConfig); takes precedence over --level',
+    )
     .option('-m, --minify', 'minify the output HTML instead of pretty-formatting it', false)
     .option('-u, --url <url>', 'source URL for classifier/metadata context only — NEVER fetched')
     .option('-o, --output <file>', 'write the result to a file instead of stdout')
@@ -225,6 +263,7 @@ export function buildProgram(): Command {
         input,
         boilerplate: opts.boilerplate,
         level: opts.level,
+        config: opts.config,
         minify: opts.minify,
         url: opts.url,
         output: opts.output,
@@ -250,6 +289,7 @@ export function buildProgram(): Command {
 interface CommanderOptions {
   boilerplate: BoilerplateMode;
   level: WashingLevel;
+  config?: string;
   minify: boolean;
   url?: string;
   output?: string;

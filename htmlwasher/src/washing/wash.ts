@@ -23,6 +23,7 @@ import { sanitizeStyledHtml } from './css-sanitizer.js';
 import { decodeBuffer } from './decode.js';
 import { isHtmlDocument, normalizeHtml } from './normalize.js';
 import { getSanitizeConfig } from './presets/index.js';
+import type { SanitizeConfig } from './presets/types.js';
 import { type Sanitizer, sanitizeHtmlBackend } from './sanitizer.js';
 
 /** Options for {@link washHtml} / {@link washBuffer}. */
@@ -35,6 +36,23 @@ export interface WashOptions {
    * washing falls back to the sanitize-html backend. Default `false`.
    */
   hardened?: boolean;
+  /**
+   * Fully-custom sanitize config. When set it drives the sanitize stage directly,
+   * taking precedence over the preset `level` would select — and it always runs
+   * the sanitize stage (so a custom config reaches the sanitizer even when
+   * `level` is `correct`, which alone is normalize-only).
+   */
+  config?: SanitizeConfig;
+}
+
+/**
+ * Does this config permit inline `style` (the `<style>` tag or a `style`
+ * attribute on any tag)? Such configs need the CSS-URL allow-list layered on
+ * top — sanitize-html does not filter `url()`/`expression()`/`@import` in CSS.
+ */
+function configAllowsStyle(config: SanitizeConfig): boolean {
+  if ((config.allowedTags ?? []).includes('style')) return true;
+  return Object.values(config.allowedAttributes ?? {}).some((attrs) => attrs.includes('style'));
 }
 
 /** The output of a washing run: cleaned HTML plus accumulated diagnostics. */
@@ -72,8 +90,9 @@ export async function washHtml(
     return { html: '', messages };
   }
 
-  // SANITIZE — every level EXCEPT `correct`. `correct` is normalize-only.
-  const config = getSanitizeConfig(level);
+  // SANITIZE — a custom `config` always sanitizes (and wins over `level`);
+  // otherwise resolve the preset, which is `undefined` for `correct` (normalize-only).
+  const config = options.config ?? getSanitizeConfig(level);
   if (config !== undefined) {
     const sanitizer = await resolveSanitizer(hardened, messages);
     try {
@@ -93,9 +112,11 @@ export async function washHtml(
       // Do not fail if re-normalization fails — keep the sanitized HTML.
     }
 
-    // CSS-URL gap closure for the `styled` level: sanitize-html does not filter
-    // `url()` / `expression()` / `@import` inside inline `style` or `<style>`.
-    if (level === 'styled') {
+    // CSS-URL gap closure for any config that permits inline `style` (the
+    // `styled` preset, or a custom config that allows the `<style>` tag / a
+    // `style` attribute): sanitize-html does not filter `url()` / `expression()`
+    // / `@import` inside inline `style` or `<style>`.
+    if (configAllowsStyle(config)) {
       currentHtml = sanitizeStyledHtml(currentHtml);
     }
   }

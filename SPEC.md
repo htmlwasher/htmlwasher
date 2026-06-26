@@ -132,13 +132,15 @@ page-type classifier (189-feature extractor + ONNX backends), the per-page-type
 profiles, and the HTML-washing levels. It exposes two surfaces over the same
 pipeline:
 
-- **Library** — the async `wash(html, { boilerplate, level, minify, url })`
-  (`minify: true` emits minified HTML instead of prettier-formatted) returning
-  `{ html, messages, metadata?, pageType?, confidence? }`.
+- **Library** — the async `wash(html, { boilerplate, level, config, minify, url })`
+  (`minify: true` emits minified HTML instead of prettier-formatted; `config` is a
+  fully-custom JSON `SanitizeConfig` that takes precedence over the named `level`)
+  returning `{ html, messages, metadata?, pageType?, confidence? }`.
 - **CLI** — `bin: htmlwasher` (`src/cli.ts` + `src/cli-program.ts`, commander):
   reads an HTML file argument or stdin and writes cleaned HTML to stdout (or
-  `-o <file>`), with `-b/--boilerplate`, `-l/--level`, `-m/--minify`, `-u/--url`,
-  `--json`, `-q/--quiet`. It is **offline** — it never fetches a URL.
+  `-o <file>`), with `-b/--boilerplate`, `-l/--level`, `-c/--config <file.json>`,
+  `-m/--minify`, `-u/--url`, `--json`, `-q/--quiet`. It is **offline** — it never
+  fetches a URL.
 
 The model artifacts (`model.onnx`, `tfidf-vocab.json`) are committed shipped
 artifacts — they are deliberately **not** gitignored. See `@/htmlwasher/SPEC.md`

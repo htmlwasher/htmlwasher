@@ -53,6 +53,53 @@ describe('washHtml — per-level tag allow-lists', () => {
   });
 });
 
+describe('washHtml — custom config (WashOptions.config)', () => {
+  it('uses the custom config and ignores the preset level', async () => {
+    // A custom allow-list of just <p>: even at `permissive` (which keeps <div>),
+    // the custom config wins and the <div> is unwrapped.
+    const { html } = await washHtml('<div><p>Hi</p><span>x</span></div>', 'permissive', {
+      config: { allowedTags: ['p'] },
+    });
+    expect(html).toContain('<p>Hi</p>');
+    expect(html).not.toContain('<div');
+    expect(html).not.toContain('<span');
+  });
+
+  it('a custom config sanitizes even when level is `correct` (normalize-only as a preset)', async () => {
+    const { html } = await washHtml('<p>keep</p><b>drop-tag</b>', 'correct', {
+      config: { allowedTags: ['p'] },
+    });
+    expect(html).toContain('<p>keep</p>');
+    expect(html).not.toContain('<b>');
+  });
+
+  it('enforces the security floor even if the custom config allows <script> / on*', async () => {
+    const { html } = await washHtml(
+      '<p onclick="x()">Hi</p><script>alert(1)</script><a href="javascript:alert(1)">l</a>',
+      'standard',
+      {
+        config: {
+          allowedTags: ['p', 'a', 'script'],
+          allowedAttributes: { p: ['onclick'], a: ['href'] },
+        },
+      },
+    );
+    expect(html.toLowerCase()).not.toContain('<script');
+    expect(html.toLowerCase()).not.toContain('alert(1)');
+    expect(html.toLowerCase()).not.toContain('onclick');
+    expect(html.toLowerCase()).not.toContain('javascript:');
+  });
+
+  it('runs the CSS-URL allow-list when a custom config permits inline style', async () => {
+    const { html } = await washHtml(
+      '<div style="background:url(javascript:alert(1))">Hi</div>',
+      'standard',
+      { config: { allowedTags: ['div'], allowedAttributes: { '*': ['style'] } } },
+    );
+    expect(html.toLowerCase()).not.toContain('javascript:');
+  });
+});
+
 describe('washHtml — security at EVERY level (incl. styled and correct)', () => {
   const levels = ['minimal', 'standard', 'permissive', 'styled'] as const;
 

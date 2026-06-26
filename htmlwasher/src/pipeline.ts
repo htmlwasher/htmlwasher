@@ -20,6 +20,7 @@ import {
   type Message,
   type Metadata,
   type PageType,
+  sanitizeConfigError,
   type WashOptions,
   type WashResult,
 } from './types.js';
@@ -97,10 +98,19 @@ function hasMetadata(meta: Metadata): boolean {
  *
  * Two orthogonal knobs: the boilerplate-removal `mode` (default `'balanced'`;
  * `'none'` washes the whole document) and the washing `level` (default
- * `'standard'`). `minify` (default `false`) emits minified rather than
- * prettier-formatted HTML. `url` is optional context (never fetched).
+ * `'standard'`) — or a fully-custom `config` (a {@link import('./types.js').SanitizeConfig}),
+ * which takes precedence over `level`. `minify` (default `false`) emits minified
+ * rather than prettier-formatted HTML. `url` is optional context (never fetched).
+ *
+ * @throws {TypeError} if `options.config` is provided but is not a valid SanitizeConfig.
  */
 export async function wash(html: string, options: WashOptions = {}): Promise<WashResult> {
+  // Validate the custom config at the boundary (same guard the CLI uses).
+  if (options.config !== undefined) {
+    const error = sanitizeConfigError(options.config);
+    if (error !== null) throw new TypeError(`Invalid washing config: ${error}`);
+  }
+
   const mode = options.boilerplate ?? DEFAULT_BOILERPLATE_MODE;
   const level = options.level ?? DEFAULT_WASHING_LEVEL;
   const minify = options.minify ?? false;
@@ -118,7 +128,7 @@ export async function wash(html: string, options: WashOptions = {}): Promise<Was
   }
 
   const boilerplate = await runBoilerplate(html, mode, options.url, messages);
-  const washed = await washHtml(boilerplate.html, level, { minify });
+  const washed = await washHtml(boilerplate.html, level, { minify, config: options.config });
   messages.push(...washed.messages);
 
   const result: WashResult = { html: washed.html, messages };

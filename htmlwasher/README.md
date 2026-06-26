@@ -46,6 +46,30 @@ level. They (plus `minify`) are the entire surface: there are deliberately no
 washing `level` is the single tag-inclusion control; `boilerplate: 'none'` skips
 extraction and washes the whole document.
 
+### Custom washing config
+
+Beyond the five named levels, you can pass a fully-custom `config` — a
+`SanitizeConfig` of plain JSON data (no JavaScript). When set it drives the
+sanitize stage and **takes precedence over `level`**:
+
+```ts
+import { wash, type SanitizeConfig } from 'htmlwasher';
+
+const config: SanitizeConfig = {
+  allowedTags: ['p', 'a', 'strong', 'em'],
+  allowedAttributes: { a: ['href'] },
+};
+const { html } = await wash(pageHtml, { boilerplate: 'balanced', config });
+```
+
+`SanitizeConfig` fields: `allowedTags`, `allowedAttributes`, `allowedClasses`,
+`selfClosing`, `nonTextTags`, `transformTags` — all JSON-serializable. The config
+is validated at the boundary (`wash()` throws a `TypeError` on an unknown or
+wrong-typed field; the guards `isSanitizeConfig` / `sanitizeConfigError` are
+exported). The security floor always holds: `<script>` and `on*` handlers are
+stripped even if the config lists them, and a config that allows inline `style`
+still runs the CSS-URL allow-list.
+
 Security is enforced at every washing level: `<script>`, `on*` event handlers,
 and `javascript:`/`data:` URLs are always stripped; the `styled` level adds a
 CSS-URL allow-list. `correct` is normalize-only (the caller's trust boundary).
@@ -73,16 +97,20 @@ htmlwasher page.html --json > out.json
 
 # Write cleaned HTML to a file instead of stdout (stays quiet on stdout)
 htmlwasher page.html -o clean.html
+
+# Use a fully-custom washing config (JSON file; takes precedence over --level)
+htmlwasher page.html -c my-washing-config.json
 ```
 
 It reads a single file argument, or stdin when the argument is omitted or `-`.
 Cleaned HTML (or `--json`) goes to **stdout**; diagnostics and a
 `[pageType confidence]` line go to **stderr** (silence them with `-q, --quiet`).
 Options: `-b, --boilerplate <precision|balanced|recall|none>`,
-`-l, --level <minimal|standard|permissive|styled|correct>`, `-m, --minify`,
-`-u, --url <url>` (never fetched), `-o, --output <file>`, `--json`, `-q, --quiet`.
-Invalid option values and a missing input file exit non-zero with a clear stderr
-message.
+`-l, --level <minimal|standard|permissive|styled|correct>`,
+`-c, --config <file.json>` (a custom `SanitizeConfig`; precedence over `--level`),
+`-m, --minify`, `-u, --url <url>` (never fetched), `-o, --output <file>`,
+`--json`, `-q, --quiet`. Invalid option values, an invalid/malformed config file,
+and a missing input file exit non-zero with a clear stderr message.
 
 ## Attribution
 

@@ -6,8 +6,10 @@ import {
   DEFAULT_WASHING_LEVEL,
   isBoilerplateMode,
   isPageType,
+  isSanitizeConfig,
   isWashingLevel,
   PAGE_TYPES,
+  sanitizeConfigError,
   WASHING_LEVELS,
 } from './types.js';
 
@@ -59,5 +61,43 @@ describe('runtime guards', () => {
     expect(isPageType('collection')).toBe(true);
     expect(isPageType('forum')).toBe(true);
     expect(isPageType('category')).toBe(false);
+  });
+});
+
+describe('isSanitizeConfig / sanitizeConfigError', () => {
+  it('accepts an empty config and a fully-populated one', () => {
+    expect(isSanitizeConfig({})).toBe(true);
+    expect(sanitizeConfigError({})).toBeNull();
+    const full = {
+      allowedTags: ['p', 'a'],
+      allowedAttributes: { a: ['href'] },
+      allowedClasses: { p: ['lead'] },
+      selfClosing: ['br'],
+      nonTextTags: ['script'],
+      transformTags: { b: 'strong' },
+    };
+    expect(isSanitizeConfig(full)).toBe(true);
+    expect(sanitizeConfigError(full)).toBeNull();
+  });
+
+  it('rejects non-objects with a clear message', () => {
+    expect(isSanitizeConfig(null)).toBe(false);
+    expect(isSanitizeConfig([])).toBe(false);
+    expect(isSanitizeConfig('x')).toBe(false);
+    expect(sanitizeConfigError(42)).toMatch(/expected a JSON object/);
+  });
+
+  it('rejects unknown fields by name', () => {
+    expect(sanitizeConfigError({ allowedTags: ['p'], bogus: 1 })).toMatch(/unknown field 'bogus'/);
+    expect(isSanitizeConfig({ allowedTags: ['p'], bogus: 1 })).toBe(false);
+  });
+
+  it('rejects wrong-typed fields', () => {
+    expect(sanitizeConfigError({ allowedTags: 'p' })).toMatch(/'allowedTags' must be an array/);
+    expect(sanitizeConfigError({ allowedTags: [1, 2] })).toMatch(/'allowedTags' must be an array/);
+    expect(sanitizeConfigError({ allowedAttributes: { a: 'href' } })).toMatch(
+      /'allowedAttributes' must map/,
+    );
+    expect(sanitizeConfigError({ transformTags: { b: 1 } })).toMatch(/'transformTags' must map/);
   });
 });
