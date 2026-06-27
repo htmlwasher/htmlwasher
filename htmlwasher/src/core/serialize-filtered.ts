@@ -9,6 +9,8 @@
 import {
   ALLOWED_ATTRIBUTES,
   ALWAYS_DROP_ATTRS,
+  ALWAYS_EXCLUDED_COMMENT_NAME_TOKENS,
+  ALWAYS_EXCLUDED_NAME_TOKENS,
   BOILERPLATE_TOKENS,
   COMMENT_TOKENS,
   ELEMENT_WITH_SIZE_ATTR,
@@ -137,14 +139,117 @@ function tokenMatch(haystack: string, token: string): boolean {
   return haystack.split(/[^a-z0-9]+/).includes(token);
 }
 
-/** Whether an element is boilerplate by its class/id (comments kept for forums). */
+/**
+ * BEM-style layout/component prefixes (rs LAYOUT_COMPONENT_PREFIXES). A token like
+ * `l-sidebar-fixed` / `c-social-buttons` is a layout-component namespace, not site
+ * furniture, and rs exempts it when its ONLY boilerplate hit is `sidebar`/`social`.
+ */
+const LAYOUT_COMPONENT_PREFIXES = ['l-', 'c-'];
+
+/** Position words that mark an ACTUAL sidebar element (rs SIDEBAR_POSITION_WORDS). */
+const SIDEBAR_POSITION_WORDS = new Set(['left', 'right', 'primary', 'secondary', 'main', 'widget']);
+
+function hasLayoutComponentPrefix(token: string): boolean {
+  return LAYOUT_COMPONENT_PREFIXES.some((p) => token.startsWith(p));
+}
+
+/**
+ * rs is_boilerplate's `sidebar`-position guard (extract.rs:3253-3265). A bare
+ * `sidebar` part is real furniture only when it is the sole part, the first part,
+ * or preceded by a position word; theme namespaces like `newspaper-x-sidebar` are
+ * NOT boilerplate.
+ */
+function sidebarTokenMatches(token: string): boolean {
+  const parts = token.split(/[-_]/);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] !== 'sidebar') continue;
+    if (parts.length === 1 || i === 0) return true;
+    if (i > 0 && SIDEBAR_POSITION_WORDS.has(parts[i - 1] ?? '')) return true;
+  }
+  return false;
+}
+
+/**
+ * Per-token boilerplate verdict with rs is_boilerplate's false-positive guards
+ * (extract.rs:3215-3312), adapted to the distilled BOILERPLATE_TOKENS list:
+ *  - `sidebar` uses position-aware matching (newspaper-x-sidebar is NOT furniture);
+ *  - `widget` is skipped when preceded by `elementor` (Elementor content widgets);
+ *  - `l-`/`c-` layout-component tokens are exempt when their ONLY hit is `sidebar`
+ *    or `social` (l-sidebar-fixed, c-social-buttons), but still match when another
+ *    boilerplate word remains (c-social-share keeps matching via `share`).
+ */
+function boilerplateTokenMatches(token: string): boolean {
+  const matched = BOILERPLATE_TOKENS.filter((t) => {
+    if (t === 'sidebar') return sidebarTokenMatches(token);
+    return tokenMatch(token, t);
+  });
+  if (matched.length === 0) return false;
+
+  // Elementor content widgets: skip a `widget` hit when preceded by `elementor`.
+  const parts = token.split(/[-_]/);
+  const widgetIsElementor = parts.some(
+    (p, i) => p === 'widget' && i > 0 && parts[i - 1] === 'elementor',
+  );
+  const effective = widgetIsElementor ? matched.filter((t) => t !== 'widget') : matched;
+  if (effective.length === 0) return false;
+
+  // Layout/component-prefixed tokens: exempt when the ONLY hit is `sidebar`/`social`.
+  if (hasLayoutComponentPrefix(token)) {
+    const onlySidebarOrSocial = effective.every((t) => t === 'sidebar' || t === 'social');
+    if (onlySidebarOrSocial) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Whether a class/id is UNCONDITIONALLY excluded (rs is_always_excluded_name,
+ * extract.rs:2934-2953) — independent of the boilerplate-token backoff. Substring
+ * match, case-insensitive. The comment-prefixed entries are scoped behind
+ * `!commentsAsContent` so the forum profile keeps comment threads.
+ */
+function isAlwaysExcludedClassId(ci: string, opts: CoreOptions): boolean {
+  if (ci === '') return false;
+  if (ALWAYS_EXCLUDED_NAME_TOKENS.some((t) => ci.includes(t))) return true;
+  if (!opts.commentsAsContent && ALWAYS_EXCLUDED_COMMENT_NAME_TOKENS.some((t) => ci.includes(t))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whether an element is UNCONDITIONALLY excluded by name or microdata, mirroring
+ * rs push_filtered_html_children's checks that run OUTSIDE the
+ * `filter_named_boilerplate` gate: the `is_always_excluded_name` class/id list AND
+ * the `itemtype` *=`breadcrumblist` drop (extract.rs:2727-2736, 2750-2755). This
+ * fires even in the §10 boilerplate-token backoff. MUST run before postCleaning,
+ * which strips id/class/itemtype.
+ */
+export function isAlwaysExcludedName(el: HElement, opts: CoreOptions): boolean {
+  const itemtype = el.getAttribute('itemtype');
+  if (itemtype?.toLowerCase().includes('breadcrumblist')) return true;
+  return isAlwaysExcludedClassId(classId(el).toLowerCase().trim(), opts);
+}
+
+/**
+ * Whether an element is boilerplate by its class/id (comments kept for forums).
+ *
+ * Note: in the production pipeline this serialize-time guard is a defense-in-depth
+ * redundancy — `renderClone` (extract.ts) runs the real name-based removal in a
+ * DOM pass BEFORE postCleaning, which strips id/class so `classId(el)` is already
+ * empty by the time emitElement calls this. The real removal is owned by
+ * `removeAlwaysExcludedNamed`/`removeBoilerplateNamed` in extract.ts; this stays
+ * to keep the serializer self-protecting for callers that skip postCleaning (and
+ * the unit tests that exercise it in isolation with class/id still present).
+ */
 export function isBoilerplateNamed(el: HElement, opts: CoreOptions): boolean {
+  if (isAlwaysExcludedName(el, opts)) return true;
   const ci = classId(el).toLowerCase().trim();
   if (ci === '') return false;
   if (COMMENT_TOKENS.some((t) => tokenMatch(ci, t))) {
     return !opts.commentsAsContent;
   }
-  return BOILERPLATE_TOKENS.some((t) => tokenMatch(ci, t));
+  return ci.split(/\s+/).some((token) => boilerplateTokenMatches(token));
 }
 
 /**

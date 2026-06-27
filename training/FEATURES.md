@@ -58,6 +58,22 @@ attribute-substring match (case-sensitive on the attribute value). Multiple comm
 separated selectors = union. Port these against the chosen TS/Python DOM lib with
 the SAME case sensitivity and substring semantics.
 
+### `<template>` exclusion (parity rule)
+
+Per the HTML5 spec, a `<template>` element's children live in a separate content
+document fragment, NOT in the normal DOM subtree. lexbor (the selectolax parser the
+Python extractor and the trained model use) honors this: `node.text(deep=True)`
+never includes template content, and CSS selectors never descend into it. The TS
+runtime uses linkedom, which instead keeps template children inline, so its
+`textContent` WOULD include them. To stay byte-identical, the TS classifier parser
+(`parseDocumentSpec` in `core/dom.ts`) removes every `<template>` subtree right
+after parsing. This affects only the text-derived numeric features (e.g. body-text
+length f[58] and the currency/price counts that read body text); element-count
+selectors are unaffected because neither lexbor nor linkedom counts `<template>`
+descendants for a `.some-class` selector. Any page shipping a `<template>` (common
+on JS-rendered e-commerce/collection pages) would otherwise diverge ~10 numeric
+slots; the `4853.html` parity fixture exercises exactly this case.
+
 ### Group f[0..14] — URL pattern signals (URL-DERIVED; need the source URL)
 
 If `url` is empty, `url_lower` is empty and `extract_domain_path("")` returns

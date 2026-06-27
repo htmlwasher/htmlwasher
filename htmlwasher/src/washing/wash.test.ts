@@ -101,7 +101,7 @@ describe('washHtml — custom config (WashOptions.config)', () => {
 });
 
 describe('washHtml — security at EVERY level (incl. styled and correct)', () => {
-  const levels = ['minimal', 'standard', 'permissive', 'styled'] as const;
+  const levels = ['minimal', 'standard', 'permissive', 'styled', 'correct'] as const;
 
   for (const level of levels) {
     it(`${level}: removes <script>`, async () => {
@@ -162,6 +162,32 @@ describe('washHtml — security at EVERY level (incl. styled and correct)', () =
     // standard would transform <strike> → <del>; correct must leave it as-is.
     expect(html).toContain('<strike>');
     expect(html).not.toContain('<del>');
+  });
+
+  it('correct: security floor strips <script>/on*/javascript: yet preserves benign markup', async () => {
+    const { html } = await washHtml(
+      '<custom-x data-y="1"><strike>keep</strike><p onclick="alert(1)">hi</p><script>alert(2)</script><a href="javascript:alert(3)">l</a><a href="https://ok.com">ok</a></custom-x>',
+      'correct',
+    );
+    // Floor removes the three active-content vectors...
+    expect(html.toLowerCase()).not.toContain('<script');
+    expect(html).not.toContain('alert(2)');
+    expect(html.toLowerCase()).not.toContain('onclick');
+    expect(html.toLowerCase()).not.toContain('javascript:');
+    // ...while preserving all benign tags/attributes (normalize-only intent).
+    expect(html).toContain('<custom-x');
+    expect(html).toContain('data-y="1"');
+    expect(html).toContain('<strike>');
+    expect(html).toContain('https://ok.com');
+  });
+
+  it('correct: security floor strips dangerous inline CSS (url(javascript:))', async () => {
+    const { html } = await washHtml(
+      '<div style="background:url(javascript:alert(1))">x</div>',
+      'correct',
+    );
+    expect(html.toLowerCase()).not.toContain('javascript:');
+    expect(html).toContain('<div'); // tag preserved, only the CSS URL neutralized
   });
 });
 

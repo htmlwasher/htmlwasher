@@ -44,20 +44,23 @@ and `~/r/contextractor`.
   (parse5 normalize → linkedom) for byte-exact body text.
 - Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
   `wash()` returns `pageType` + `confidence`. `none` skips classification.
-- Phase 8 (offline wash-corpus tester) — done. `tools/wash-corpus-tester/`: 27
-  WCXB fixtures (≥3 per type × 7), 108 runs (4 boilerplate×level combos each),
+- Phase 8 (offline wash-corpus tester) — done. `tools/wash-corpus-tester/`: 28
+  WCXB fixtures (≥3 per type × 7), 196 runs (7 boilerplate×level combos each),
   asserting security invariants + page-type plausibility, with a stdout table +
   `report.json`/`report.md`. Offline, deterministic, `pnpm test:corpus`.
 
 ### Phase 8 notes
 
-- **Accuracy caveat:** the 27 fixtures are WCXB **dev-split** pages the model
+- **Accuracy caveat:** the 28 fixtures are WCXB **dev-split** pages the model
   trained on, so the tester's 100% page-type accuracy is inflated. The unbiased
   number is the held-out **test-split accuracy 0.777** from training (Phase 4).
   The tester is an end-to-end smoke/regression check, not an accuracy benchmark.
-- Security holds at all four sanitizing levels (no script/on\*/javascript: survives).
-  `correct` is normalize-only (the documented trust boundary) so it passes markup
-  through — recorded as soft warnings, not failures.
+- The security floor holds at EVERY level, including `correct`: no
+  script/on\*/javascript: survives any level. `correct` is normalize-only for the
+  tag _allow-list_ — it applies no preset, so benign/deprecated tags and attributes
+  pass through unchanged (recorded as soft warnings, not failures) — but the
+  no-config path still runs `enforceSecurityFloor` + `sanitizeStyledHtml`, so
+  `<script>`/`on*`/dangerous-URL/dangerous-CSS are stripped even there.
 - **`tools/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
   is `wash-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
   (an unimplemented network-fetch stub) is left untouched — deleting it would churn
@@ -176,7 +179,10 @@ enum variant is `Category` but `as_str()` serializes it to the string `"collecti
 1.21.x–1.22.x carry two `TreeEnsemble` correctness bugs that hit small/shallow XGBoost
 trees (exactly this model): the `is_leaf`/root-branch-as-leaf bug (#24679→#25410) and the
 category-only-trees `same_node_` bug (#24636→#24654), both fixed in 1.23.0. The package
-already pins `^1.23.0`. Ship a golden test asserting ONNX argmax == trained-model argmax.
+pins both `onnxruntime-node` and `onnxruntime-web` to exactly `1.27.0` (in lockstep,
+no caret), satisfying the ≥ 1.23.0 floor; any future bump must move both packages
+together to preserve lockstep. Ship a golden test asserting ONNX argmax ==
+trained-model argmax.
 
 ## Source → target module map
 
@@ -192,8 +198,15 @@ re-serialize**.
   (`src/extract.rs:2700-2894`) + go-trafilatura `postCleaning` (`html-processing.go:401-448`)
   → `core/serialize-filtered.ts`. Walk children; **unwrap** non-whitelisted elements
   (recurse, emit no tag); **drop** the explicit skip set (`nav|aside|script|style|noscript|iframe|svg|ins`),
-  `is_always_excluded_name` (class/id substring list), and `is_boilerplate` nodes; escape
-  all text/attr values. Never `outerHTML` the kept node verbatim.
+  `is_always_excluded_name` (class/id substring list), `itemtype*=BreadcrumbList`
+  microdata, and `is_boilerplate` nodes; escape all text/attr values. Never
+  `outerHTML` the kept node verbatim. **`is_always_excluded_name` IS ported** as a
+  distinct UNCONDITIONAL check: `ALWAYS_EXCLUDED_NAME_TOKENS` in `core/constants.ts`,
+  matched by `isAlwaysExcludedName` (`core/serialize-filtered.ts`, which also drops
+  `itemtype*=BreadcrumbList` microdata, case-insensitively) and applied by `removeAlwaysExcludedNamed`
+  (`core/extract.ts`) in a pre-`postCleaning` DOM pass in BOTH `renderClone`
+  branches — independent of the §10 boilerplate-token backoff (which only gates the
+  recall-able `BOILERPLATE_TOKENS`).
 - **Block+inline tag whitelist** (generous, per brief §5 Phase 2): `p, div, section,
 article, main, h1-h6, blockquote, pre, code, strong, em, b, i, a, ul, ol, li, dl, dt, dd,
 table, thead, tbody, tfoot, tr, td, th, caption, colgroup, col, br`, plus images. The
@@ -205,7 +218,15 @@ rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre
   conditional keep set from rs: `href` on `<a>`, `class` on `<code>`, `colspan/rowspan` on
   `td/th`.
 - **Boilerplate predicates** — `is_always_excluded_name` + `is_boilerplate`
-  (`extract.rs:2934`, `3215`; regexes in `patterns.rs`) → `core/boilerplate-class.ts`.
+  (`extract.rs:2934`, `3215`; regexes in `patterns.rs`) are distilled into the
+  `ALWAYS_EXCLUDED_NAME_TOKENS` (unconditional) + `BOILERPLATE_TOKENS` (gated) lists
+  in `core/constants.ts` and matched by `isAlwaysExcludedName` /
+  `boilerplateTokenMatches` / `isBoilerplateNamed` in `core/serialize-filtered.ts`
+  (token / substring match). There is no `core/boilerplate-class.ts`. The
+  rs `is_boilerplate` false-positive guards are ported into `boilerplateTokenMatches`:
+  the elementor-widget skip, the position-aware `sidebar` guard
+  (`sidebarTokenMatches`), and the `l-`/`c-` layout-component exemption when the only
+  hit is `sidebar`/`social`.
 - **`COMMENTS_ARE_CONTENT`** thread-local (`extract.rs:28,149,446,3236`) → an explicit TS
   context param (not a global). Forum profile flips `is_boilerplate` to the
   `NO_COMMENTS` regex so `comment*`-classed nodes are kept.
@@ -222,9 +243,13 @@ rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre
 
 ### Metadata → `@/htmlwasher/src/metadata/` (optional sidecar)
 
-Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field precedence:
-**OpenGraph → JSON-LD (override) → name/itemprop/property meta → XPath/DOM heuristics**
-(DOM only fills still-empty fields). Modules to create:
+Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field MERGE (not a
+blanket override): meta/OpenGraph fill first; then JSON-LD fills EMPTY
+title/categories/pageType, APPENDS authors, and conditionally replaces sitename
+(`is_plausible_sitename`) — it never overrides an already-set title and never touches
+description; XPath/DOM heuristics then fill any remaining empties. The orchestrator
+ends with `clean_and_trim` (cap each string field to 10000 chars, then
+`unescape` + line-process). Modules to create:
 
 - `opengraph.ts` — `OG_PROPERTIES` map (`metadata.py:136`), `examine_meta` bootstrap.
 - `meta-tags.ts` — `METANAME_*` allow-lists, twitter/itemprop handling (`X = X or content`).
@@ -247,15 +272,26 @@ Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field preceden
   only overrides `Article`. Agreement rule: URL+ML agree → conf 1.0; HTML+ML agree → 0.95;
   else ML softmax.
 - `classifier/model/` — `model.onnx` + `tfidf-vocab.json` loaded via onnxruntime-node
-  (default) / onnxruntime-web (WASM) behind `interface PageTypeClassifier`. StandardScaler
+  (default) / onnxruntime-web (WASM) behind the `InferenceBackend` interface (the
+  swappable seam; the brief's `interface PageTypeClassifier` was deliberately renamed
+  to `InferenceBackend`, and `PageTypeClassifier` is the concrete cascade class that
+  holds an `InferenceBackend` — see `classifier/classifier.ts`). `OnnxWebClassifier`
+  loads the model via `readFileSync → Uint8Array` (not a filesystem-path string) so
+  the WASM backend resolves identically in Node and the browser. StandardScaler
   `(x-mean)/scale` (scale ≤ 0 → 0) baked into training; tree split is strict `<` → left;
-  missing feature → 0.0.
+  missing feature → 0.0. For TS↔Python (lexbor) feature parity, `parseDocumentSpec`
+  strips `<template>` subtrees before counting features.
 
 ### Per-type profiles → `@/htmlwasher/src/profiles/`
 
 `ExtractionProfile` (`page_type/mod.rs:98-345`) LIVE fields: `comments_are_content`,
 `content_selectors`, `preserve_tags`, `boilerplate_selectors`, `aggregate_sections`,
-`collect_repeated_items`. **DEAD fields** (declared, never read — grep-confirmed):
+`collect_repeated_items`. **Deferred / not yet ported** (LIVE in rs-trafilatura but
+not yet consumed by this TS port — a known Phase-5 gap, NOT parity):
+`aggregate_sections` (Step-7 multi-candidate merge, `extract.rs:231`) and
+`collect_repeated_items` (Step-7b repeated-item collection, `extract.rs:252`) — the
+TS profile carries the flags but the post-passes are not implemented yet.
+**DEAD fields** (declared, never read in rs either — grep-confirmed):
 `lenient_boilerplate`, `min_paragraph_density` — do not invent behavior; omit or wire
 deliberately. Copy the 7 profile selector/tag arrays verbatim. Confidence:
 `classification_confidence` (agreement) + `extraction_quality` heuristic (`extract.rs:880-985`;

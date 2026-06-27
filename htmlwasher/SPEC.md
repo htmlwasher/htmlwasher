@@ -1,10 +1,11 @@
 # htmlwasher — Specification
 
-Status: in progress. This document tracks the public API surface and module
-layout of the `htmlwasher` library as the phased port lands (build brief:
+Status: implemented (alpha). This document tracks the public API surface and module
+layout of the `htmlwasher` library (build brief:
 [`@/prompts/2026-6-24-init/prompt.md`](../prompts/2026-6-24-init/prompt.md);
-port map: [`@/PORTING-NOTES.md`](../PORTING-NOTES.md)). Sections marked _pending_
-are not implemented yet. Keep this spec in sync with the source.
+port map: [`@/PORTING-NOTES.md`](../PORTING-NOTES.md)). Every module below is
+implemented and covered by a green test suite; APIs may still change before a
+stable release. Keep this spec in sync with the source.
 
 ## Purpose
 
@@ -43,8 +44,22 @@ level. Instead of a named `level`, callers may pass a fully-custom `config` (a
 takes precedence over `level`. These options (plus the optional `url` context)
 are the entire user-facing surface; there are deliberately no
 `includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
-security floor holds regardless of `config` (`<script>`/`on*` are always
-stripped; a config that allows inline `style` still gets the CSS-URL allow-list).
+security floor is enforced at **every** washing level — including `correct` —
+and regardless of `config`: `<script>` (tag + text), every `on*` handler,
+`javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS are
+always stripped, and any config (or the `styled` level) that allows inline
+`style` additionally gets the CSS-URL allow-list. `correct` is normalize-only
+only for the tag _allow-list_ (it runs no preset, preserving all benign
+tags/attributes); it still runs the mandatory floor.
+
+#### Boundary validation and input cap
+
+`wash()` validates inputs at the boundary: it throws a `TypeError` when `html` is
+not a string, when `options.boilerplate`/`options.level` is provided-but-invalid,
+or when `options.config` is provided-but-invalid. It accepts
+`WashOptions.maxInputBytes?: number` (default `DEFAULT_MAX_INPUT_BYTES` = 10 MB
+UTF-8) and throws a `RangeError` when the input's UTF-8 byte length exceeds it — a
+resource bound (validate input at every boundary).
 
 ### CLI — _implemented (`src/cli.ts` + `src/cli-program.ts`)_
 
@@ -99,10 +114,13 @@ as the program entry point.
 - `PAGE_TYPES` (`as const`) + `PageType` = the 7 types
   (`article, forum, product, collection, listing, documentation, service` — note
   `collection`, not `category`).
-- `WashOptions` = `{ boilerplate?, level?, config?, minify?, url? }`. `minify`
-  defaults to `false` (prettier-format); `url` is context-only and never fetched.
-  `config?: SanitizeConfig` is a fully-custom washing config that takes precedence
-  over `level`; `wash()` throws a `TypeError` if it is malformed.
+- `WashOptions` = `{ boilerplate?, level?, config?, minify?, maxInputBytes?, url? }`.
+  `minify` defaults to `false` (prettier-format); `url` is context-only and never
+  fetched. `config?: SanitizeConfig` is a fully-custom washing config that takes
+  precedence over `level`. `maxInputBytes?` (default `DEFAULT_MAX_INPUT_BYTES` =
+  10 MB UTF-8) caps the input size. `wash()` throws a `TypeError` when `html` is
+  not a string or when `boilerplate`/`level`/`config` is provided-but-invalid, and
+  a `RangeError` when the input exceeds `maxInputBytes`.
 - `SanitizeConfig` = `{ allowedTags?, allowedAttributes?, allowedClasses?,
 selfClosing?, nonTextTags?, transformTags? }` — all JSON-serializable (plain data,
   no functions). `isSanitizeConfig(value)` / `sanitizeConfigError(value)` are the
@@ -123,11 +141,15 @@ TypeScript `enum`s (locked decision #4).
 
 `new PageTypeClassifier(backend?).classifyPage(html, url?)` →
 `Promise<{ pageType, confidence }>`; module-level `classifyPage(html, url?)` uses a
-cached default. ONNX inference runs behind the `InferenceBackend` interface
-(`run(features: number[]) => Promise<number[]>`): `OnnxNodeClassifier`
-(`onnxruntime-node`, default) and `OnnxWebClassifier` (`onnxruntime-web` WASM,
-lazily imported optionalDependency) are swappable. The classifier runs the 3-stage
-cascade with the agreement rule from `extract.rs`:
+cached default. `InferenceBackend` is the swappable seam (the interface, with
+`run(features: number[]) => Promise<number[]>`); `PageTypeClassifier` is the
+concrete cascade class that holds an `InferenceBackend`. The two backends —
+`OnnxNodeClassifier` (`onnxruntime-node`, default) and `OnnxWebClassifier`
+(`onnxruntime-web` WASM, lazily imported optionalDependency) — are interchangeable.
+`OnnxWebClassifier` loads the model via `readFileSync` into a `Uint8Array` (not a
+filesystem-path string) so the WASM backend resolves the model identically in Node
+and the browser. The classifier runs the 3-stage cascade with the agreement rule
+from `extract.rs`:
 
 - Stage-1 `classifyUrl(url)` — ordered URL heuristics (mod.rs constant lists).
 - Stage-2 `refineWithSignals` / `refineWithHtmlSignals` — refines ONLY `article`.
@@ -136,9 +158,11 @@ cascade with the agreement rule from `extract.rs`:
   else ML argmax + max softmax prob.
 
 Feature parity with the Python extractor is verified by `parity.test.ts` against
-`fixtures/classifier/parity.json` (numeric + TF-IDF within `1e-6`, ONNX argmax
-exact). To match lexbor's spec-compliant tree, the classifier parses HTML via
-`parseDocumentSpec` (parse5 normalize → linkedom).
+`fixtures/classifier/parity.json` (15 fixtures, numeric + TF-IDF within `1e-6`,
+ONNX argmax exact; includes a `<template>`-bearing fixture). To match lexbor's
+spec-compliant tree, the classifier parses HTML via `parseDocumentSpec` (parse5
+normalize → linkedom), which also strips `<template>` subtrees so the TS and
+Python (lexbor/selectolax) feature counts agree.
 
 ### Per-type extraction profiles — _implemented (Phase 5)_
 
@@ -147,9 +171,12 @@ from rs-trafilatura: content selectors (tried first), preserved tags, extra
 boilerplate selectors, `commentsAreContent`, and the aggregate/collect flags. The
 classifier's predicted type selects the profile, which feeds the core via
 `CoreOptions` (`contentSelectors`/`preserveTags`/`boilerplateSelectors`/
-`commentsAsContent`). `aggregateSections`/`collectRepeatedItems` post-passes and
-the dead `lenientBoilerplate`/`minParagraphDensity` fields are carried but not yet
-consumed (matching rs-trafilatura).
+`commentsAsContent`). `aggregateSections`/`collectRepeatedItems` map to LIVE
+post-passes in rs-trafilatura (the Step-7 multi-candidate merge at `extract.rs:231`
+and the Step-7b repeated-item collection at `extract.rs:252`) that this TS port
+does not yet implement — a known Phase-5 gap, NOT parity. `lenientBoilerplate`/
+`minParagraphDensity` are carried-but-dead in rs-trafilatura too (declared, never
+read).
 
 ## Module layout
 
@@ -166,9 +193,15 @@ consumed (matching rs-trafilatura).
   `extract` (orchestration). _implemented (Phase 2)_
 - `src/metadata/` — optional metadata sidecar. Entry:
   `extractMetadata(html, url?)` / `extractMetadataFromDocument(doc, url?)` →
-  `Metadata`. Field precedence OG → JSON-LD (override) → meta → DOM, ported from
-  adbar `metadata.py`/`json_metadata.py`/`xpaths.py`. `date.ts` is a reduced
-  htmldate equivalent. _implemented (Phase 3)_
+  `Metadata`. Per-field merge (NOT a blanket override), ported from adbar
+  `metadata.py`/`json_metadata.py`/`xpaths.py`: meta/OpenGraph fill first; then
+  JSON-LD fills EMPTY `title`/`categories`/`pageType`, APPENDS authors
+  (`normalizeAuthors`), and conditionally replaces `sitename`
+  (`isPlausibleSitename`) — it never overrides an already-set title and never
+  touches `description`; DOM/XPath then fills any remaining empties. The extractor
+  ends with a `cleanAndTrim()` pass over each string field (cap to 10000 chars,
+  then `unescape` + line-process). `date.ts` is a reduced htmldate equivalent.
+  _implemented (Phase 3)_
 - `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
   TF-IDF); byte-for-byte parity with `training/extract_features.py`. Entries:
   `extractNumericFeatures(html, url)` (89), `titleMetaText(html)` + `computeTfidf`
@@ -185,10 +218,15 @@ consumed (matching rs-trafilatura).
 - `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened?, config? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
-  (sanitize-html + level preset; skipped for `correct`) → re-normalize (if
-  transformTags) → DOCTYPE → format. Security at every level (script/on\*/
-  javascript:/data: stripped; styled adds a CSS-URL allow-list). Optional
-  DOMPurify/jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
+  (sanitize-html + level preset) → re-normalize (if transformTags) → DOCTYPE →
+  format. The named-preset sanitize stage is skipped for `correct` (no
+  allow-list), but the **security floor runs at every level including `correct`**:
+  the no-config path runs `enforceSecurityFloor` + `sanitizeStyledHtml`, which
+  force-strip `<script>` (tag + text), every `on*` handler, `javascript:`/
+  `vbscript:`/untrusted `data:` URLs, and dangerous inline CSS, while leaving every
+  benign tag/attribute in place; the `styled` level (or any config that permits
+  inline `style`) adds the CSS-URL allow-list. Optional DOMPurify/jsdom hardened
+  backend behind the `Sanitizer` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → wash(level),
   exposing the public `wash()`. _implemented_
 - `src/cli-program.ts` — the offline CLI core: `buildProgram()` (commander),
@@ -196,7 +234,9 @@ consumed (matching rs-trafilatura).
   `isMainEntry`. Wraps `wash()`; never fetches. _implemented_
 - `src/cli.ts` — `#!/usr/bin/env node` entry (`bin: htmlwasher`, export
   `htmlwasher/cli`); self-runs `runCli` only when it is the program entry point. _implemented_
-- `test/`, `fixtures/` — golden-fixture + unit tests; HTML fixtures. _pending_
+- `test/`, `fixtures/` — golden-fixture + unit tests under `src/` and `test/`
+  (incl. `test/validation/`); HTML fixtures under `fixtures/{classifier,validation}/`.
+  _implemented_
 
 ## Dependencies
 

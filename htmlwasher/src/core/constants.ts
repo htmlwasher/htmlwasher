@@ -424,6 +424,41 @@ export const SERIALIZE_SKIP_TAGS = new Set([
 ]);
 
 /**
+ * UNCONDITIONALLY-excluded class/id substrings — a faithful 1:1 port of
+ * rs-trafilatura `is_always_excluded_name` (extract.rs:2934-2953). Matched by
+ * substring (case-insensitive `contains`), NOT gated by the boilerplate-token
+ * backoff: rs runs this check OUTSIDE the `if filter_named_boilerplate` block, so
+ * these site-furniture nodes (CNN/WordPress video/meta/read-more widgets) are
+ * dropped even on the recall/allow-boilerplate path. The two comment-prefixed
+ * entries (`comment-container`, `comments-link`) are scoped behind
+ * `!commentsAsContent` so the forum profile can still keep comment threads.
+ */
+export const ALWAYS_EXCLUDED_NAME_TOKENS = [
+  'av-structured-data',
+  'post-meta-infos',
+  'blog-categories',
+  'blog-author',
+  'wp-caption',
+  'wp-caption-text',
+  'video__end-slate',
+  'zn-large-media',
+  'featured-video-collection',
+  'el__featured-video',
+  'messenger-content',
+  'read-more-link',
+  'zn-body__read-more',
+  'js-body-read-more',
+  'pg-headline',
+];
+
+/**
+ * Comment-prefixed always-excluded substrings (rs `is_always_excluded_name`),
+ * split out so they can be scoped behind `!commentsAsContent` — the forum
+ * profile keeps comment threads, so these must not fire when comments are content.
+ */
+export const ALWAYS_EXCLUDED_COMMENT_NAME_TOKENS = ['comment-container', 'comments-link'];
+
+/**
  * Boilerplate class/id tokens. An element whose `class`/`id` contains one of
  * these (token- or substring-wise) is dropped by the re-serializer — unless it
  * is a `comment*` token and comments are being treated as content (forum profile).

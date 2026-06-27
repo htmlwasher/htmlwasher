@@ -27,9 +27,23 @@ export interface ExtractionProfile {
   minParagraphDensity: number;
   /** Page-type-specific boilerplate selectors removed during cleaning. */
   boilerplateSelectors: readonly string[];
-  /** Aggregate content across multiple sections (service/long-form fallback). */
+  /**
+   * Aggregate content across multiple sections (service/long-form fallback).
+   * NOTE: LIVE in rs-trafilatura (src/extract.rs:231 runs try_multi_candidate_merge
+   * when profile.aggregate_sections) but not yet consumed by the TS pipeline — the
+   * post-pass is deferred. See PORTING-NOTES.
+   * TODO: port rs-trafilatura try_multi_candidate_merge (extract.rs:644 under-extraction
+   * gate) and thread this flag through CoreOptions so the service/product profile diverges.
+   */
   aggregateSections: boolean;
-  /** Collect repeated sibling items (listing/index pages). */
+  /**
+   * Collect repeated sibling items (listing/index pages).
+   * NOTE: LIVE in rs-trafilatura (src/extract.rs:252 runs try_collect_repeated_items
+   * when profile.collect_repeated_items) but not yet consumed by the TS pipeline — the
+   * post-pass is deferred. See PORTING-NOTES.
+   * TODO: port rs-trafilatura try_collect_repeated_items (extract.rs:524 min-15-words
+   * sibling collection) and thread this flag through CoreOptions so the listing profile diverges.
+   */
   collectRepeatedItems: boolean;
 }
 

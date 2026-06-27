@@ -95,3 +95,63 @@ export const sanitizeHtmlBackend: Sanitizer = {
     return sanitizeHtml(html, toSanitizeHtmlOptions(config));
   },
 };
+
+/**
+ * The mandatory security floor for the `correct` washing level (and any
+ * normalize-only path with no sanitize preset/config). The brief makes security
+ * "non-negotiable at EVERY level (including `correct`)": always strip `<script>`,
+ * every `on*` event-handler attribute, and `javascript:`/`vbscript:`/untrusted
+ * `data:` URLs. This config preserves ALL benign tags and attributes (no tag
+ * allow-list, no `transformTags` renames) so arbitrary tags (`<custom-x>`),
+ * `data-*` attributes, and deprecated tags (`<strike>`) pass through unchanged —
+ * keeping `correct` faithful to its normalize-only intent for benign markup —
+ * while force-removing only the three active-content vectors:
+ *   - `<script>` is dropped (element + text) via `exclusiveFilter` + `nonTextTags`;
+ *   - every `on*` attribute is stripped via the wildcard `transformTags['*']`;
+ *   - URL-bearing attributes are scheme-filtered to http/https/ftp/mailto/tel,
+ *     which rejects `javascript:`/`vbscript:`/`data:`/`file:`.
+ * CSS-borne vectors inside inline `style`/`<style>` are NOT closed here — the
+ * caller layers `sanitizeStyledHtml` on top (sanitize-html does not inspect CSS).
+ */
+const SECURITY_FLOOR_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: false,
+  allowedAttributes: false,
+  allowVulnerableTags: true,
+  allowedSchemes: ['http', 'https', 'ftp', 'mailto', 'tel'],
+  allowedSchemesAppliedToAttributes: [
+    'href',
+    'src',
+    'cite',
+    'srcset',
+    'action',
+    'formaction',
+    'poster',
+    'background',
+    'xlink:href',
+    'longdesc',
+    'usemap',
+  ],
+  exclusiveFilter: (frame) => ALWAYS_FORBIDDEN_TAGS.has(frame.tag),
+  nonTextTags: ['script'],
+  transformTags: {
+    '*': (tagName, attribs) => {
+      const cleaned: Record<string, string> = {};
+      for (const [name, value] of Object.entries(attribs)) {
+        if (name.toLowerCase().startsWith('on')) continue;
+        cleaned[name] = value;
+      }
+      return { tagName, attribs: cleaned };
+    },
+  },
+};
+
+/**
+ * Apply the mandatory {@link SECURITY_FLOOR_OPTIONS} security floor: strip
+ * `<script>`, all `on*` handlers, and dangerous URL schemes while preserving every
+ * benign tag/attribute. Exported for testing. Used by `washHtml` on the `correct`
+ * (no-config) path so the floor holds at EVERY washing level. CSS in inline
+ * `style`/`<style>` must still be cleaned separately (`sanitizeStyledHtml`).
+ */
+export function enforceSecurityFloor(html: string): string {
+  return sanitizeHtml(html, SECURITY_FLOOR_OPTIONS);
+}

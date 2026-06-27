@@ -342,9 +342,11 @@ function extractJsonParseError(elem: string, metadata: Metadata): void {
 
 /**
  * Parse and extract metadata from every JSON-LD script in the document, mutating
- * `metadata` in place (JSON-LD OVERRIDES OpenGraph/meta per trafilatura). Faithful
- * port of `extract_meta_json`. Malformed blocks fall back to the regex path; a
- * single bad block never throws.
+ * `metadata` in place. Per-field merge (NOT a blanket override): fills empty
+ * title/categories/pageType, APPENDS authors (normalizeAuthors), and
+ * conditionally replaces sitename (isPlausibleSitename); never touches
+ * description. Faithful port of `extract_meta_json`. Malformed blocks fall back
+ * to the regex path; a single bad block never throws.
  */
 export function extractJsonLd(doc: HDocument, metadata: Metadata): void {
   const scripts = doc.querySelectorAll(
@@ -354,9 +356,12 @@ export function extractJsonLd(doc: HDocument, metadata: Metadata): void {
     const raw = elem.textContent;
     if (!raw) continue;
     const minified = raw.replace(JSON_MINIFY, (_m, str?: string) => str ?? '');
+    // canonical extract_meta_json (metadata.py:174-179) parses the NORMALIZED
+    // text on BOTH the success and parse-error paths, so HTML entities/markup in
+    // well-formed JSON-LD string values are stripped before json.loads runs.
     const elementText = normalizeJson(minified);
     try {
-      const schema = JSON.parse(minified) as JsonValue;
+      const schema = JSON.parse(elementText) as JsonValue;
       extractJson(schema, metadata);
     } catch {
       extractJsonParseError(elementText, metadata);

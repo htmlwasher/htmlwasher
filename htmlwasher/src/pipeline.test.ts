@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { wash } from './pipeline.js';
+import { DEFAULT_MAX_INPUT_BYTES } from './types.js';
 
 const PAGE = `<!doctype html><html><head><title>Real Title — Site</title>
 <meta property="og:site_name" content="Site"><meta name="author" content="Jane Doe">
@@ -70,6 +71,68 @@ describe('wash() orchestration', () => {
     await expect(
       wash('<p>Hi</p>', { boilerplate: 'none', config: { bogus: true } as never }),
     ).rejects.toThrow(/Invalid washing config: unknown field 'bogus'/);
+  });
+
+  it('throws a TypeError when html is not a string', async () => {
+    await expect(wash(42 as never)).rejects.toThrow(TypeError);
+    await expect(wash(null as never)).rejects.toThrow(/expects `html` to be a string/);
+  });
+
+  it('throws a TypeError on an invalid boilerplate mode', async () => {
+    await expect(wash('<p>Hi</p>', { boilerplate: 'aggressive' as never })).rejects.toThrow(
+      /Invalid boilerplate mode: aggressive/,
+    );
+  });
+
+  it('throws a TypeError on an invalid washing level', async () => {
+    await expect(wash('<p>Hi</p>', { level: 'minimal-reader' as never })).rejects.toThrow(
+      /Invalid washing level: minimal-reader/,
+    );
+  });
+
+  it('rejects input just over maxInputBytes with a RangeError', async () => {
+    const html = 'a'.repeat(11);
+    await expect(wash(html, { boilerplate: 'none', maxInputBytes: 10 })).rejects.toThrow(
+      RangeError,
+    );
+    await expect(wash(html, { boilerplate: 'none', maxInputBytes: 10 })).rejects.toThrow(
+      /exceeding the limit of 10 bytes/,
+    );
+  });
+
+  it('accepts input exactly at maxInputBytes (just under the cap passes)', async () => {
+    const html = 'a'.repeat(10);
+    const { html: out } = await wash(html, { boilerplate: 'none', maxInputBytes: 10 });
+    expect(typeof out).toBe('string');
+  });
+
+  it('measures the cap in UTF-8 bytes, not characters', async () => {
+    // '€' is 3 UTF-8 bytes; two of them = 6 bytes > a 5-byte cap.
+    await expect(wash('€€', { boilerplate: 'none', maxInputBytes: 5 })).rejects.toThrow(RangeError);
+  });
+
+  it('default cap is DEFAULT_MAX_INPUT_BYTES: 10 MB + 1 byte is rejected at the boundary', async () => {
+    // The size gate runs before any parsing/washing, so this rejects on the byte
+    // count alone — no need to push a real 10 MB document through prettier (the
+    // under-cap path is covered by every other small-doc test in this suite).
+    const overLimit = `${'a'.repeat(DEFAULT_MAX_INPUT_BYTES)}a`;
+    await expect(wash(overLimit, { boilerplate: 'none' })).rejects.toThrow(RangeError);
+    await expect(wash(overLimit, { boilerplate: 'none' })).rejects.toThrow(
+      /exceeding the limit of/,
+    );
+  });
+
+  it('security floor holds through the public API on the none+correct path', async () => {
+    // The floor (script/on*/javascript: removal) must hold even on none+correct,
+    // which otherwise skips sanitization (normalize-only).
+    const { html } = await wash(
+      '<p onclick="x()">hi</p><script>alert(1)</script><a href="javascript:alert(2)">l</a>',
+      { boilerplate: 'none', level: 'correct' },
+    );
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/onclick/i);
+    expect(html).not.toMatch(/javascript:/i);
+    expect(html).toContain('hi');
   });
 
   it('handles empty input', async () => {

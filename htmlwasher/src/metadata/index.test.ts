@@ -108,6 +108,35 @@ describe('extractMetadata — precedence', () => {
   });
 });
 
+describe('extractMetadata — clean_and_trim final pass', () => {
+  it('decodes HTML entities in a JSON-LD headline (Café &amp; Co → Café & Co)', () => {
+    const html = `<!doctype html><html><head>
+      <script type="application/ld+json">{"@context":"https://schema.org","@type":"NewsArticle","headline":"Café &amp; Co"}</script>
+    </head><body></body></html>`;
+    const md = extractMetadata(html);
+    expect(md.title).toBe('Café & Co');
+  });
+
+  it('truncates an over-10000-char field to 10000 chars ending in an ellipsis', () => {
+    const long = 'x'.repeat(20000);
+    const html = `<!doctype html><html><head>
+      <meta property="og:title" content="${long}">
+    </head><body></body></html>`;
+    const md = extractMetadata(html);
+    expect(md.title?.length).toBe(10000);
+    expect(md.title?.endsWith('…')).toBe(true);
+  });
+
+  it('keeps author/sitename entity decoding intact (regression guard)', () => {
+    const html = `<!doctype html><html><head>
+      <script type="application/ld+json">{"@context":"https://schema.org","@type":"NewsArticle","headline":"x","author":{"@type":"Person","name":"Jane O&#39;Doe"},"publisher":{"@type":"Organization","name":"Acme &amp; Co"}}</script>
+    </head><body></body></html>`;
+    const md = extractMetadata(html);
+    expect(md.author).toBe("Jane O'Doe");
+    expect(md.sitename).toBe('Acme & Co');
+  });
+});
+
 describe('extractMetadata — meta tags', () => {
   it('reads name=author / name=description / name=keywords', () => {
     const html = `<!doctype html><html><head>

@@ -1,12 +1,12 @@
 # SPEC — @htmlwasher/live-crawl-tester
 
-Status: pending / not implemented. This document describes the intended behavior of the live-crawl tester. The current `src/index.ts` is a placeholder.
+Status: out-of-brief, optional, NOT implemented. This document describes the intended behavior of a hypothetical live-crawl tester; the current `src/index.ts` is a placeholder that only logs a notice. The build brief does **not** ask for a network fetcher in this repo — the delivered offline E2E tester is [`tools/wash-corpus-tester`](../wash-corpus-tester) (the brief's Phase 8 / Section 7 deliverable). This package is kept only as an optional future scaffold.
 
 ## Purpose
 
-End-to-end validation of [`htmlwasher`](../../htmlwasher) against real websites. The tester fetches live URLs across all 7 page types, runs extraction plus the page-type classifier over the fetched HTML, and reports PASS/FAIL per URL with a per-page-type summary.
+If ever implemented, this package would provide end-to-end validation of [`htmlwasher`](../../htmlwasher) against real websites: fetching live URLs across all 7 page types, running extraction plus the page-type classifier over the fetched HTML, and reporting PASS/FAIL per URL with a per-page-type summary.
 
-It is a separate workspace package and is **not** run by the offline `pnpm test` suite, because it performs network requests.
+It is a separate workspace package and is **not** run by the offline `pnpm test` suite, because it would perform network requests.
 
 ## Page types
 
@@ -56,4 +56,4 @@ Aim for variety in sources. Consider including multilingual / Czech / EU sources
 
 ## Reference
 
-Full specification: [@/prompts/2026-6-24-init/prompt.md](../../prompts/2026-6-24-init/prompt.md) Section 7.
+This is an out-of-brief optional scaffold. The brief's Section 7 / Phase 8 E2E deliverable is the OFFLINE [`tools/wash-corpus-tester`](../wash-corpus-tester) — see [@/prompts/2026-6-24-init/prompt.md](../../prompts/2026-6-24-init/prompt.md) Section 7 and Phase 8, which mandate an offline fixture harness and forbid a network fetcher in this repo.

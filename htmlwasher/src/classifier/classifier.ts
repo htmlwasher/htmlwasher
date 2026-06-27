@@ -13,6 +13,7 @@
 // - refined != article   AND ml == refined       → (refined, 0.95)
 // - else                                          → (ml, ml_max_prob)
 
+import { readFileSync } from 'node:fs';
 import { parseDocumentSpec } from '../core/dom.js';
 import type { PageType } from '../types.js';
 import { isPageType } from '../types.js';
@@ -116,8 +117,14 @@ export class OnnxWebClassifier implements InferenceBackend {
 
   private async session(): Promise<import('onnxruntime-web').InferenceSession> {
     if (this.sessionPromise === undefined) {
+      // `onnxruntime-web`'s `create(string)` overload treats the string as a URI
+      // and fetch()es it — an absolute filesystem path does NOT resolve in the
+      // browser/WASM runtime. Read the model into a Uint8Array and use the buffer
+      // overload (inference-session.d.ts:523), which loads identically across the
+      // Node-host WASM path and the browser.
+      const model = new Uint8Array(readFileSync(this.modelPath));
       this.sessionPromise = import('onnxruntime-web').then((ort) =>
-        ort.InferenceSession.create(this.modelPath),
+        ort.InferenceSession.create(model),
       );
     }
     return this.sessionPromise;

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Acme Widget — Buy Online</title>
+    <meta name="description" content="Premium Acme Widget product page." />
+    <meta property="og:type" content="product" />
+  </head>
+  <body>
+    <header><nav><a href="/">Home</a> <a href="/shop">Shop</a></nav></header>
+    <main>
+      <article class="product">
+        <h1>Acme Widget</h1>
+        <div class="price">Price: $49.99</div>
+        <button class="add-to-cart">Add to cart</button>
+        <p>The Acme Widget is a sturdy, reliable widget for everyday use.</p>
+      </article>
+      <!--
+        A client-side template the browser would clone at runtime. lexbor parks
+        its contents in a separate fragment, so the Python extractor never reads
+        the $$$ / product-card text below. The TS classifier parser must match.
+      -->
+      <template id="card-template">
+        <div class="product-card">
+          <span class="card-title">Template Widget</span>
+          <span class="card-price">$$$ 999.00 € 888.00 £ 777.00</span>
+          <button class="card-buy">Buy now now now</button>
+        </div>
+      </template>
+    </main>
+    <footer><p>© Acme Inc.</p></footer>
+  </body>
+</html>

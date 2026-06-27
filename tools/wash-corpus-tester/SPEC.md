@@ -25,8 +25,11 @@ local files only. It is the offline counterpart to `tools/live-crawl-tester`.
 }
 ```
 
-27 fixtures, ≥3 per page type across all 7 page types
-(`article | forum | product | collection | listing | documentation | service`).
+28 fixtures, ≥3 per page type across all 7 page types
+(`article | forum | product | collection | listing | documentation | service`). Includes one
+hand-authored Czech (`cs`) article fixture (`article/cs-9001.html`, NOT from WCXB) so the offline
+harness exercises the classifier on non-English input and surfaces English-bias regressions
+(brief §7 / context doc 04).
 
 ### `fixtures/<type>/<id>.html` (committed)
 
@@ -34,12 +37,17 @@ Saved real pages from the WCXB dataset. Read-only inputs.
 
 ## Combo matrix
 
-Every fixture is washed through four `boilerplate` x `level` combos:
+Every fixture is washed through these `boilerplate` x `level` combos:
 
 - `balanced` x `standard` — default path; the page-type **reference** combo
 - `balanced` x `minimal`
 - `none` x `correct` — no extraction; normalize-only washing
+- `none` x `minimal` — same full-document input as `none` x `correct`, sanitizing; the baseline
+  for the `correct` superset assertion (so both sides share the same boilerplate input)
 - `recall` x `permissive`
+- `balanced` x `styled` — exercises the `styled` sanitizing level (the only level that keeps inline
+  `style`/`class` and the `<style>` tag), where a CSS-URL allow-list regression would surface
+- `precision` x `minimal` — exercises the `precision` boilerplate mode end-to-end
 
 ## Assertions
 
@@ -53,8 +61,11 @@ Every fixture is washed through four `boilerplate` x `level` combos:
 - **Non-empty output** — cleaned HTML is non-empty, unless the input lacks substantial body text
   (< `SUBSTANTIAL_BODY_TEXT` = 200 chars of tag-stripped text — a JS-shell / near-empty page), in
   which case empty extraction output is legitimate.
-- **`correct` superset of `minimal`** — `correct` (normalize-only) preserves at least as many
-  distinct tag names as `minimal` on the same fixture.
+- **`correct` superset of `minimal` (same input)** — the normalize-only `none` x `correct` combo
+  preserves at least as many distinct tag names as the sanitizing `none` x `minimal` combo. Both run
+  `boilerplate: 'none'` (the whole document, no extraction) and differ only by washing level, so the
+  check truly validates that normalize-only `correct` does not drop tags the sanitizing `minimal`
+  level keeps — a same-input guarantee, not a cross-mode (full-doc vs extracted-subset) comparison.
 
 ### Soft (recorded, non-fatal per fixture)
 
@@ -67,7 +78,7 @@ Every fixture is washed through four `boilerplate` x `level` combos:
 
 - `runCorpus(): Promise<CorpusReport>` — load `corpus.json` (resolved relative to the package dir),
   read every fixture, run the combo matrix, and produce the report. Fully offline + deterministic.
-- `COMBOS` — the four `{ boilerplate, level }` combos (`as const`).
+- `COMBOS` — the `{ boilerplate, level }` combos (`as const`).
 - `PAGE_TYPE_ACCURACY_FLOOR` (`0.4`) and `SUBSTANTIAL_BODY_TEXT` (`200`) — the run thresholds.
 - Types: `CorpusReport`, `FixtureResult`, `ComboResult`, `AssertionFailure`.
 

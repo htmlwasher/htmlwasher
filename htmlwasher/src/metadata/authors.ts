@@ -4,7 +4,12 @@
 
 import { stripHtmlTags, trim, unescapeHtml } from './text.js';
 
-const AUTHOR_EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
+// Anchored at the start of the string to mirror Python `re.match` semantics
+// (json_metadata.normalize_authors uses AUTHOR_EMAIL.match(...), which only
+// matches at position 0). A mid-string email therefore does NOT discard the
+// whole author string. `^\b` (not `^\s*`) matches re.match: \b at position 0
+// only succeeds when the first char is a word char.
+const AUTHOR_EMAIL = /^\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
 // Split on / ; , | & or a standalone "and"/"und" (word-bounded), case-insensitive.
 const AUTHOR_SPLIT = /\/|;|,|\||&|(?:^|\W)[ua]nd(?:$|\W)/i;
 const AUTHOR_TWITTER = /@[\w]+/g;

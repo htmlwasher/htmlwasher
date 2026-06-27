@@ -116,10 +116,24 @@ export function parseDocument(html: string): HDocument {
  *
  * Use this (not {@link parseDocument}) wherever byte-identical DOM-text/structure
  * parity with the Python feature extractor matters (the classifier).
+ *
+ * `<template>` subtrees are removed after parsing. lexbor (used by the Python
+ * selectolax extractor the model is trained against) stores a `<template>`
+ * element's children in a separate content-document fragment per the HTML5 spec,
+ * so `node.text(deep=True)` and CSS selectors never descend into template
+ * content. linkedom instead keeps template children inline, so its `textContent`
+ * would include them — diverging ~10 text-derived numeric features on any page
+ * with a `<template>`. Removing the subtrees here restores byte-identical parity;
+ * it is safe because no classifier selector counts `<template>` or its descendants
+ * (both linkedom `querySelectorAll` and lexbor `css` already return 0 for selectors
+ * targeting template content), so only text-derived features change.
  */
 export function parseDocumentSpec(html: string): HDocument {
   const normalized = parse5Serialize(parse5Parse(html ?? ''));
   const { document } = parseHTML(normalized);
+  for (const t of Array.from(document.querySelectorAll('template'))) {
+    t.remove();
+  }
   return document as unknown as HDocument;
 }
 

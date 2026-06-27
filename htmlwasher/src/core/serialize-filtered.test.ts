@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { parseDocument } from './dom.js';
 import { DEFAULT_CORE_OPTIONS } from './options.js';
-import { isBoilerplateNamed, postCleaning, renderFilteredHTML } from './serialize-filtered.js';
+import {
+  isAlwaysExcludedName,
+  isBoilerplateNamed,
+  postCleaning,
+  renderFilteredHTML,
+} from './serialize-filtered.js';
 
 const opts = DEFAULT_CORE_OPTIONS;
 
@@ -68,6 +73,11 @@ describe('renderFilteredHTML — whitelist re-serializer', () => {
 });
 
 describe('isBoilerplateNamed', () => {
+  function named(classOrId: string): boolean {
+    const doc = parseDocument(`<div class="${classOrId}"></div>`);
+    return isBoilerplateNamed(doc.querySelector('div')!, opts);
+  }
+
   it('flags navigation/sidebar tokens', () => {
     const doc = parseDocument('<div class="main-sidebar"></div>');
     expect(isBoilerplateNamed(doc.querySelector('div')!, opts)).toBe(true);
@@ -76,6 +86,87 @@ describe('isBoilerplateNamed', () => {
   it('does not flag content classes', () => {
     const doc = parseDocument('<div class="article-content"></div>');
     expect(isBoilerplateNamed(doc.querySelector('div')!, opts)).toBe(false);
+  });
+
+  // FIX (core-serializer-2): rs is_boilerplate false-positive guards. These tokens
+  // must NOT be treated as boilerplate (Elementor content widgets, theme-namespace
+  // sidebars, layout/component-prefixed social/sidebar tokens).
+  it('does not flag rs false-positive tokens', () => {
+    expect(named('elementor-widget-text-editor')).toBe(false);
+    expect(named('elementor-widget-container')).toBe(false);
+    expect(named('newspaper-x-sidebar')).toBe(false);
+    expect(named('l-sidebar-fixed')).toBe(false);
+    expect(named('c-social-buttons')).toBe(false);
+  });
+
+  // ...but genuine furniture still matches.
+  it('still flags genuine sidebar/social/share tokens', () => {
+    expect(named('sidebar')).toBe(true);
+    expect(named('left-sidebar')).toBe(true);
+    expect(named('c-social-share')).toBe(true); // `share` still matches
+    expect(named('share-buttons')).toBe(true);
+    expect(named('widget')).toBe(true); // bare widget (not elementor-prefixed)
+  });
+});
+
+describe('isAlwaysExcludedName (unconditional)', () => {
+  function el(html: string) {
+    const doc = parseDocument(html);
+    return doc.querySelector('[data-t]')!;
+  }
+
+  // FIX (core-serializer-0): rs is_always_excluded_name substrings — dropped
+  // unconditionally (independent of the boilerplate-token backoff).
+  it('flags always-excluded class/id substrings', () => {
+    expect(isAlwaysExcludedName(el('<div data-t class="el__featured-video"></div>'), opts)).toBe(
+      true,
+    );
+    expect(isAlwaysExcludedName(el('<div data-t class="pg-headline"></div>'), opts)).toBe(true);
+    expect(isAlwaysExcludedName(el('<div data-t id="av-structured-data"></div>'), opts)).toBe(true);
+  });
+
+  // FIX (core-serializer-1): itemtype*=breadcrumblist is dropped unconditionally.
+  it('flags BreadcrumbList microdata via itemtype', () => {
+    expect(
+      isAlwaysExcludedName(
+        el('<ol data-t itemscope itemtype="https://schema.org/BreadcrumbList"></ol>'),
+        opts,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not flag ordinary content', () => {
+    expect(isAlwaysExcludedName(el('<div data-t class="article-content"></div>'), opts)).toBe(
+      false,
+    );
+    expect(
+      isAlwaysExcludedName(el('<ol data-t itemtype="https://schema.org/ItemList"></ol>'), opts),
+    ).toBe(false);
+  });
+
+  it('keeps comment-container nodes when commentsAsContent is true', () => {
+    const node = el('<div data-t class="comment-container"></div>');
+    expect(isAlwaysExcludedName(node, opts)).toBe(true);
+    expect(isAlwaysExcludedName(node, { ...opts, commentsAsContent: true })).toBe(false);
+  });
+});
+
+describe('renderFilteredHTML — unconditional drops', () => {
+  it('drops a BreadcrumbList <ol> with no breadcrumb class/id', () => {
+    const out = render(
+      '<div><p>body text</p><ol itemscope itemtype="https://schema.org/BreadcrumbList"><li>Home</li><li>Section</li></ol></div>',
+    );
+    expect(out).toContain('body text');
+    expect(out).not.toContain('Home');
+    expect(out).not.toContain('Section');
+  });
+
+  it('drops an el__featured-video furniture node', () => {
+    const out = render(
+      '<div><p>real body</p><div class="el__featured-video"><p>video furniture</p></div></div>',
+    );
+    expect(out).toContain('real body');
+    expect(out).not.toContain('video furniture');
   });
 });
 
