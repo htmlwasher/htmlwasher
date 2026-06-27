@@ -101,8 +101,10 @@ classifier feature hot-path.
 
 Licensed under the [Apache License, Version 2.0](@/LICENSE).
 
-This library is a port of Trafilatura and references several upstream projects.
-See [`@/NOTICE`](@/NOTICE) for the full attribution, including the required
-credit for Adrien Barbaresi (Trafilatura), markusmobius (go-trafilatura),
-Murrough Foley (rs-trafilatura, web-page-classifier, and the WCXB dataset under
-CC-BY-4.0), nchapman (trafilatura-rs), and Mozilla (Readability).
+This library is a port of Trafilatura. See [`@/NOTICE`](@/NOTICE) for the full
+attribution. **Required** credits (their code or the trained model ships in the
+package): Adrien Barbaresi (Trafilatura), Markus Mobius (go-trafilatura), and
+Murrough Foley (rs-trafilatura, and the WCXB dataset under CC-BY-4.0, used
+unmodified — DOI 10.5281/zenodo.19316874). **Courtesy** credits (consulted as
+references; no code shipped): Murrough Foley (web-page-classifier), Nathaniel
+Chapman (trafilatura-rs), and Arc90/Mozilla (Readability).

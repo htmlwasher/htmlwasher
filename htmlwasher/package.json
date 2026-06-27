@@ -22,7 +22,9 @@
   },
   "files": [
     "dist",
-    "src/classifier/model"
+    "src/classifier/model",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

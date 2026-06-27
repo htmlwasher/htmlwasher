@@ -134,22 +134,26 @@ and a missing input file exit non-zero with a clear stderr message.
 
 ## Attribution
 
-htmlwasher is a TypeScript port of Trafilatura and references several upstream
-projects. The full attribution lives in the root [`@/NOTICE`](../NOTICE) file,
-including the required credit for:
+htmlwasher is a TypeScript port of Trafilatura. Full attribution is in the bundled
+[`NOTICE`](./NOTICE) file.
 
-- Adrien Barbaresi — Trafilatura (the canonical original)
-- markusmobius — go-trafilatura
-- Murrough Foley — rs-trafilatura, web-page-classifier, and the WCXB dataset
-  (Web Content Extraction Benchmark) under CC-BY-4.0 (attribution required)
-- nchapman — trafilatura-rs
-- Mozilla — Readability
-- the `sanitize-html` authors and the other permissive npm dependencies that
-  power the washing and DOM/inference layers
+Required credits (their code or the trained model ships in this package):
 
-The `model.onnx` shipped with this library is trained fresh from the public WCXB
-dataset; it is not vendored from any upstream model binary.
+- Adrien Barbaresi — Trafilatura (the canonical original) — Apache-2.0
+- Markus Mobius — go-trafilatura — Apache-2.0
+- Murrough Foley — rs-trafilatura — MIT OR Apache-2.0 (used under Apache-2.0)
+- Murrough Foley — WCXB dataset (Web Content Extraction Benchmark) — CC-BY-4.0,
+  used unmodified (DOI 10.5281/zenodo.19316874). The shipped `model.onnx` +
+  `tfidf-vocab.json` are trained fresh from it, not vendored from any upstream
+  model binary.
+
+Courtesy credits (consulted as references; no code shipped): Murrough Foley
+(web-page-classifier), Nathaniel Chapman (trafilatura-rs), and Arc90/Mozilla
+(Readability). The washing and DOM/inference layers use permissive npm
+dependencies (MIT / ISC — `sanitize-html`, `parse5`, `linkedom`, and others),
+each shipping its own license under `node_modules`.
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](../LICENSE).
+Licensed under the [Apache License, Version 2.0](./LICENSE). See [`NOTICE`](./NOTICE)
+for the required third-party attributions.
