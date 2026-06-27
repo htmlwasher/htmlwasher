@@ -44,7 +44,7 @@ and `~/r/contextractor`.
   (parse5 normalize → linkedom) for byte-exact body text.
 - Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
   `wash()` returns `pageType` + `confidence`. `none` skips classification.
-- Phase 8 (offline wash-corpus tester) — done. `tools/wash-corpus-tester/`: 28
+- Phase 8 (offline wash-corpus tester) — done. `tools/htmlwasher/wash-corpus-tester/`: 28
   WCXB fixtures (≥3 per type × 7), 196 runs (7 boilerplate×level combos each),
   asserting security invariants + page-type plausibility, with a stdout table +
   `report.json`/`report.md`. Offline, deterministic, `pnpm test:corpus`.
@@ -61,7 +61,7 @@ and `~/r/contextractor`.
   pass through unchanged (recorded as soft warnings, not failures) — but the
   no-config path still runs `enforceSecurityFloor` + `sanitizeStyledHtml`, so
   `<script>`/`on*`/dangerous-URL/dangerous-CSS are stripped even there.
-- **`tools/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
+- **`tools/htmlwasher/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
   is `wash-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
   (an unimplemented network-fetch stub) is left untouched — deleting it would churn
   ~15 incidental references across the `.claude/` config for no functional gain,
@@ -368,10 +368,10 @@ options are the **entire** user surface — no `includeComments/Tables/Images/Li
 
 ## tools/ tester: brief vs scaffold drift (Phase 8)
 
-The brief (§4, §7, §8) specifies an **offline** `tools/wash-corpus-tester/` (saved HTML
+The brief (§4, §7, §8) specifies an **offline** `tools/htmlwasher/wash-corpus-tester/` (saved HTML
 fixtures in → cleaned HTML out, **no network**, ≥3 fixtures per page type × 7 types). The
-current scaffold instead has `tools/live-crawl-tester/` (a polite network fetcher per
+current scaffold instead has `tools/htmlwasher/live-crawl-tester/` (a polite network fetcher per
 CLAUDE.md). The brief and the §8 non-goals are explicit that htmlwasher never touches the
-network. **Decision: build `tools/wash-corpus-tester/` per the brief** and reconcile the
+network. **Decision: build `tools/htmlwasher/wash-corpus-tester/` per the brief** and reconcile the
 scaffold at Phase 8 (repoint the workspace, retire or repurpose the live-crawl-tester, and
 update CLAUDE.md / SPEC.md accordingly).

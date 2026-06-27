@@ -4,7 +4,7 @@
 
 The phased port (Phases 0–8 of the build brief at
 `@/prompts/2026-6-24-init/prompt.md`) is **implemented**. The component directories
-(`@/htmlwasher/`, `@/tools/wash-corpus-tester/`, `@/training/`) exist with their
+(`@/htmlwasher/`, `@/tools/htmlwasher/wash-corpus-tester/`, `@/training/`) exist with their
 source, tests, and shipped artifacts (`model.onnx`, `tfidf-vocab.json`), and the
 full offline test suite is green. `htmlwasher` is published as an **alpha** npm
 package — APIs may still change before a stable release.
@@ -12,7 +12,7 @@ package — APIs may still change before a stable release.
 Each component's SPEC.md describes its current implemented contract; see
 `@/PORTING-NOTES.md` for the port map and known gaps, and
 `@/.claude/rules/spec-maintenance.md` for the ongoing spec-maintenance rule.
-(`@/tools/live-crawl-tester/` is an out-of-brief, unimplemented scaffold — see its
+(`@/tools/htmlwasher/live-crawl-tester/` is an out-of-brief, unimplemented scaffold — see its
 component note below.)
 
 ## Overview
@@ -169,16 +169,16 @@ library ships:
 Training runs on CPU (no GPU required) at this scale. See
 `@/training/SPEC.md` for the pipeline detail.
 
-### Component — tools/live-crawl-tester (scaffold stub)
+### Component — tools/htmlwasher/live-crawl-tester (scaffold stub)
 
 A **separate** TypeScript workspace package reserved for a future live-site E2E
 harness (a thin polite fetcher — `robots.txt`, descriptive User-Agent, rate
 limit, disk cache — never a browser-automation crawler). It is currently an
 **unimplemented stub** and is NOT part of the htmlwasher pipeline; htmlwasher
 itself never fetches. The actual offline end-to-end tester is
-`tools/wash-corpus-tester` (below). See `@/tools/live-crawl-tester/SPEC.md`.
+`tools/htmlwasher/wash-corpus-tester` (below). See `@/tools/htmlwasher/live-crawl-tester/SPEC.md`.
 
-### Component — tools/wash-corpus-tester (offline corpus E2E)
+### Component — tools/htmlwasher/wash-corpus-tester (offline corpus E2E)
 
 A **separate** TypeScript workspace package — the **offline** counterpart to the
 live-crawl tester. It depends on the local `htmlwasher` package, reads saved WCXB
@@ -190,7 +190,7 @@ survives any sanitizing level), structural invariants (non-empty output;
 floor). It is **entirely offline + deterministic** — it reads only local files,
 never the network — so it **is** part of the offline `pnpm test`. It emits
 `report.json` + `report.md` (git-ignored). See
-`@/tools/wash-corpus-tester/SPEC.md` for the full assertion matrix.
+`@/tools/htmlwasher/wash-corpus-tester/SPEC.md` for the full assertion matrix.
 
 ## Stack
 
@@ -229,7 +229,7 @@ pnpm format             # Biome format + Markdown fix
 ```
 
 The offline `pnpm test` never hits the network; it includes the offline
-`@/tools/wash-corpus-tester/` E2E run. The out-of-brief `@/tools/live-crawl-tester/`
+`@/tools/htmlwasher/wash-corpus-tester/` E2E run. The out-of-brief `@/tools/htmlwasher/live-crawl-tester/`
 scaffold is unimplemented and (if ever implemented) would hit the network, so it is
 excluded from `pnpm test`. The Python training pipeline is run offline under
 `@/training/` via uv and is independent of the Node toolchain.
@@ -273,8 +273,8 @@ The shipped `model.onnx` is trained fresh from the public WCXB dataset — it is
 ## Per-component SPEC files
 
 - `@/htmlwasher/SPEC.md` — the library's public API and module behavior.
-- `@/tools/live-crawl-tester/SPEC.md` — the live-crawl E2E harness.
-- `@/tools/wash-corpus-tester/SPEC.md` — the offline corpus E2E tester.
+- `@/tools/htmlwasher/live-crawl-tester/SPEC.md` — the live-crawl E2E harness.
+- `@/tools/htmlwasher/wash-corpus-tester/SPEC.md` — the offline corpus E2E tester.
 - `@/training/SPEC.md` — the offline Python training pipeline.
 
 ## Build phases
@@ -299,9 +299,9 @@ phase, tracked in `@/prompts/2026-6-24-init/prompt.md`:
   (`minimal`/`standard`/`permissive`/`styled`/`correct`).
 - **Phase 7 — Validation against the reference corpus:** run the full pipeline over
   adbar's eval corpus; document gaps in `PORTING-NOTES.md`.
-- **Phase 8 — Offline wash-corpus tester:** build `@/tools/wash-corpus-tester/`
+- **Phase 8 — Offline wash-corpus tester:** build `@/tools/htmlwasher/wash-corpus-tester/`
   (the delivered offline E2E tester).
 
-`@/tools/live-crawl-tester/` is not a brief phase — it is an out-of-brief,
+`@/tools/htmlwasher/live-crawl-tester/` is not a brief phase — it is an out-of-brief,
 unimplemented scaffold (see the per-component SPEC list above), not the delivered
 E2E tester.

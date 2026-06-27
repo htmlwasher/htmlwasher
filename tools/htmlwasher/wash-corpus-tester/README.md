@@ -1,10 +1,10 @@
 # @htmlwasher/wash-corpus-tester
 
-Offline, deterministic end-to-end corpus tester for [`htmlwasher`](../../htmlwasher). It proves the
+Offline, deterministic end-to-end corpus tester for [`htmlwasher`](../../../htmlwasher). It proves the
 library works end-to-end over a small set of saved real-world HTML fixtures — **entirely offline**
 (no network, no fetching, local files only).
 
-For the live, network-hitting equivalent see [`tools/live-crawl-tester`](../live-crawl-tester).
+For the live, network-hitting equivalent see [`tools/htmlwasher/live-crawl-tester`](../live-crawl-tester).
 
 ## What it does
 
@@ -46,10 +46,10 @@ Soft assertions (recorded, never fail a single fixture):
 
 ```bash
 pnpm install                                          # from the repo root (links htmlwasher)
-pnpm -C tools/wash-corpus-tester run test:corpus      # vitest (non-zero exit on hard failure)
-pnpm -C tools/wash-corpus-tester run corpus           # CLI: prints the table + writes the reports
-pnpm -C tools/wash-corpus-tester run typecheck        # tsc --noEmit
-pnpm -C tools/wash-corpus-tester run lint             # biome check
+pnpm -C tools/htmlwasher/wash-corpus-tester run test:corpus      # vitest (non-zero exit on hard failure)
+pnpm -C tools/htmlwasher/wash-corpus-tester run corpus           # CLI: prints the table + writes the reports
+pnpm -C tools/htmlwasher/wash-corpus-tester run typecheck        # tsc --noEmit
+pnpm -C tools/htmlwasher/wash-corpus-tester run lint             # biome check
 ```
 
 `pnpm test` (the offline turbo suite) runs this package's `test` script, which is

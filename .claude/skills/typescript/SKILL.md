@@ -5,7 +5,7 @@ description: TypeScript development guidelines for this workspace. Use when writ
 
 # TypeScript Guidelines
 
-Standards for the TypeScript that ships the product: the `htmlwasher` extraction library and the `tools/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
+Standards for the TypeScript that ships the product: the `htmlwasher` extraction library and the `tools/htmlwasher/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
 
 ## Type system
 

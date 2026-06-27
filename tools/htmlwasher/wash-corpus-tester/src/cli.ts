@@ -4,7 +4,7 @@
 // report.json + report.md into the package dir, and exits non-zero if any HARD
 // assertion failed or page-type accuracy dropped below the floor.
 //
-// Usage: `pnpm -C tools/wash-corpus-tester run corpus` (tsx src/cli.ts).
+// Usage: `pnpm -C tools/htmlwasher/wash-corpus-tester run corpus` (tsx src/cli.ts).
 
 import { runCorpus } from './corpus-runner.js';
 import { printReport, writeReports } from './report.js';

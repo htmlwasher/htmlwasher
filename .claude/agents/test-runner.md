@@ -36,7 +36,7 @@ pnpm test                          # vitest across the workspace (offline)
 uv run pytest training             # Python training tests (offline; network-gated tests skipped)
 ```
 
-Do **not** run the live-crawl tester (`pnpm run test:live` in `tools/live-crawl-tester/`) — it hits the network and is not part of the offline check suite.
+Do **not** run the live-crawl tester (`pnpm run test:live` in `tools/htmlwasher/live-crawl-tester/`) — it hits the network and is not part of the offline check suite.
 
 ## Reporting
 

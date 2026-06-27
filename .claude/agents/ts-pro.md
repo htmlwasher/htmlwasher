@@ -40,7 +40,7 @@ htmlwasher is a faithful **TypeScript port of Trafilatura** with page-type-aware
   - `src/classifier/` — `PageTypeClassifier` interface + ONNX backends; `features/` is the 181-feature extractor (hot path uses `htmlparser2`); `model/` ships `model.onnx` + `tfidf-vocab.json`
   - `src/profiles/` — per-page-type extraction profiles + confidence scoring
   - `test/` and `fixtures/` — co-located unit tests and golden HTML fixtures
-- `tools/live-crawl-tester/` — a separate workspace package: a polite live-site E2E fetcher (robots.txt, rate limit, disk cache) that runs extraction + classification over real URLs. **Not** Crawlee/Playwright.
+- `tools/htmlwasher/live-crawl-tester/` — a separate workspace package: a polite live-site E2E fetcher (robots.txt, rate limit, disk cache) that runs extraction + classification over real URLs. **Not** Crawlee/Playwright.
 
 `training/` is an offline Python project (not a pnpm workspace package, not shipped at runtime) — it is the python-pro agent's domain, not yours.
 

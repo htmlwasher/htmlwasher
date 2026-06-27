@@ -42,8 +42,8 @@ while IFS= read -r f; do
     */htmlwasher/src/*)
       required_specs+=$'\n'"htmlwasher/SPEC.md"
       [[ "$f" == */index.ts ]] && api_surface_changed=true ;;
-    */tools/live-crawl-tester/src/*)
-      required_specs+=$'\n'"tools/live-crawl-tester/SPEC.md" ;;
+    */tools/htmlwasher/live-crawl-tester/src/*)
+      required_specs+=$'\n'"tools/htmlwasher/live-crawl-tester/SPEC.md" ;;
     */training/*.py)
       required_specs+=$'\n'"training/SPEC.md" ;;
   esac

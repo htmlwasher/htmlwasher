@@ -2,7 +2,7 @@
 
 Offline end-to-end corpus tester for `htmlwasher` (Phase 8 of the build). It proves the library
 works end-to-end over saved real-world HTML fixtures, **entirely offline** — no network, no fetching,
-local files only. It is the offline counterpart to `tools/live-crawl-tester`.
+local files only. It is the offline counterpart to `tools/htmlwasher/live-crawl-tester`.
 
 ## Scope
 

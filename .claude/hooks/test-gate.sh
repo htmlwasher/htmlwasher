@@ -31,7 +31,7 @@ fi
 # TypeScript source files in the TS package roots (not test files, not declaration files).
 ts_source=$(printf '%s\n' "$edited" | \
   grep -E '/src/.+\.ts$' | \
-  grep -E '/(htmlwasher|tools/live-crawl-tester)/src/' | \
+  grep -E '/(htmlwasher|tools/htmlwasher/live-crawl-tester)/src/' | \
   grep -v '\.test\.ts$' | \
   grep -v '\.d\.ts$' || true)
 
@@ -40,7 +40,7 @@ ts_tests=$(printf '%s\n' "$edited" | grep '\.test\.ts$' || true)
 
 # Check 1: source changed without test updates.
 if [[ -n "$ts_source" && -z "$ts_tests" ]]; then
-  files=$(printf '%s\n' "$ts_source" | sed -E 's|.*/(htmlwasher\|tools/live-crawl-tester)/|\1/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
+  files=$(printf '%s\n' "$ts_source" | sed -E 's|.*/(htmlwasher\|tools/htmlwasher/live-crawl-tester)/|\1/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
   msg="Source changed without test updates ($files). Add or update the corresponding *.test.ts file in the same response. See .claude/rules/test-maintenance.md."
   printf '{"decision":"block","reason":"%s"}' "$msg"
   exit 0

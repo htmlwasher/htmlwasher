@@ -12,7 +12,7 @@
       "entry": "src/index.ts",
       "project": "src/**"
     },
-    "tools/live-crawl-tester": {
+    "tools/htmlwasher/live-crawl-tester": {
       "entry": "src/index.ts",
       "project": "src/**"
     }

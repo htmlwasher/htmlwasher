@@ -8,7 +8,7 @@ Review all TypeScript source files in this repo for type safety violations and a
 
 ## Scope
 
-Review `.ts` files under `htmlwasher/` and `tools/live-crawl-tester/`. Exclude `node_modules/`, `dist/`, `sources/`, and `*.test.ts` files from manual review (tests are reviewed by the test commands).
+Review `.ts` files under `htmlwasher/` and `tools/htmlwasher/live-crawl-tester/`. Exclude `node_modules/`, `dist/`, `sources/`, and `*.test.ts` files from manual review (tests are reviewed by the test commands).
 
 ## Step BIOME: Auto-fix Biome Issues
 
