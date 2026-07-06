@@ -41,6 +41,9 @@ the report). No arguments = run the full cached corpus.
   refresh the host prebuild: `cd @/packages/htmlwasher/native && CARGO_HOME=$HOME/.cargo napi build --platform --release --features napi`,
   then copy the fresh `htmlwasher-native.<host-target>.node` into `npm/<host-target>/` (the committed prebuild).
 - In the tester, build the rs-trafilatura runner once: `pnpm build:rust` (compiles rs-trafilatura on first run).
+- After ANY htmlwasher rebuild (TS output or prebuild), run `pnpm install` in the tester before `pnpm bench`:
+  pnpm COPIES `file:` dependencies into its store at install time (it does not symlink them), so without a
+  re-install the benchmark runs the stale copy.
 
 ## Step RUN
 

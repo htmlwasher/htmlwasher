@@ -31,6 +31,9 @@ closes the gap to the Trafilatura reference. `--max-iters N` caps the improve lo
 - Run the token benchmark exactly as `/bench:run` (its WIRE → BUILD → RUN → ANALYZE steps). Record the
   baseline: overall F1/P/R per engine, the per-type F1 (htmlwasher vs Trafilatura AND vs rs-trafilatura),
   and the worst pages.
+- Snapshot the baseline artifacts before they are overwritten: copy the tester's `reports/results.json`
+  (and the per-page F1 list) aside — REBENCH regenerates `reports/`, and the BEFORE/AFTER tables plus the
+  per-page zero-regression check need the mechanical baseline, not a reconstruction.
 
 ## Step ROOT-CAUSE
 
