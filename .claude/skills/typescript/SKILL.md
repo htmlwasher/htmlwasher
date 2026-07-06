@@ -13,7 +13,7 @@ Root `tsconfig.json` is `"strict": true` with `noUncheckedIndexedAccess`, `noImp
 
 ## Bundling: keep emitted ESM un-bundled
 
-Packages build with plain `tsc -p tsconfig.json` (`module: NodeNext`, `type: module`), emitting un-bundled ESM. **Keep it that way.** The ONNX runtime loaders (`onnxruntime-node`, `onnxruntime-web`) and other native-asset deps resolve their files via `__dirname`, so they break under esbuild / ncc / SEA single-file bundling. Ship model assets (`model.onnx`, `tfidf-vocab.json`) alongside the emitted output, not inlined.
+Packages build with plain `tsc -p tsconfig.json` (`module: NodeNext`, `type: module`), emitting un-bundled ESM. **Keep it that way.** The `@htmlwasher/native` napi loader (`index.js`) resolves its prebuilt `.node` binary at runtime via `require`/`__dirname`, so it breaks under esbuild / ncc / SEA single-file bundling. The model artifacts (`model.xgb.json`, `tfidf-vocab.json`) are baked INTO the Rust crate via `include_str!`, so they ship inside the `.node` — nothing to co-locate on the TS side.
 
 ## Lint & format — Biome only
 

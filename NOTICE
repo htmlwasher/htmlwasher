@@ -8,12 +8,16 @@ LICENSE file in the root of this repository).
 Attribution for upstream and reference projects
 ================================================================================
 
-htmlwasher is a TypeScript port of Trafilatura. The projects below fall into two
-kinds: those htmlwasher is DERIVED FROM (their code is ported or copied and ships
-in this package — attribution required by their licenses), and those CONSULTED as
-design/idiom references (no code shipped — credited as a courtesy). Each entry
-states which. The text of the Apache License, Version 2.0 referenced below is
-reproduced in this repository's LICENSE file.
+htmlwasher is a hybrid Rust + TypeScript content-extraction library derived from
+Trafilatura. Its boilerplate-removal + page-type-classification core is a Rust
+crate (packages/htmlwasher/native/) — a simplified fork of rs-trafilatura's live
+extraction path — reached from Node via napi-rs; the public API, HTML-washing
+levels, metadata sidecar, and CLI stay TypeScript. The projects below fall into
+two kinds: those htmlwasher is DERIVED FROM (their code is ported or copied and
+ships in this package — attribution required by their licenses), and those
+CONSULTED as design/idiom references (no code shipped — credited as a courtesy).
+Each entry states which. The text of the Apache License, Version 2.0 referenced
+below is reproduced in this repository's LICENSE file.
 
 --------------------------------------------------------------------------------
 Trafilatura (the canonical original) — Apache-2.0
@@ -23,11 +27,12 @@ Source:  https://github.com/adbar/trafilatura
 Docs:    https://trafilatura.readthedocs.io/
 
 DERIVED FROM (attribution required). The canonical original. htmlwasher's metadata
-subsystem (src/metadata/*) is a direct port of its Python (metadata.py,
-json_metadata.py, utils.py, xpaths.py) — the AUTHOR_* and METANAME_* tables are
-copied verbatim and the transforms transcribed — and htmlwasher follows its overall
-extraction semantics, option behavior, and test corpus. (Trafilatura was GPLv3+
-before v1.8.0, then relicensed to Apache-2.0; htmlwasher ports the Apache-2.0 codebase.)
+subsystem (packages/htmlwasher/src/metadata/*) is a direct TypeScript port of its
+Python (metadata.py, json_metadata.py, utils.py, xpaths.py) — the AUTHOR_* and
+METANAME_* tables are copied verbatim and the transforms transcribed — and the
+Rust extraction core follows its overall extraction semantics, option behavior, and
+test corpus. (Trafilatura was GPLv3+ before v1.8.0, then relicensed to Apache-2.0;
+htmlwasher ports the Apache-2.0 codebase.)
 
 Citation:
   Barbaresi, A. (2021). "Trafilatura: A Web Scraping Library and Command-Line
@@ -42,11 +47,12 @@ go-trafilatura — Apache-2.0
 Author:  markusmobius (Markus Mobius)
 Source:  https://github.com/markusmobius/go-trafilatura
 
-DERIVED FROM (attribution required). A faithful Go port of the Python original; the
-core extraction algorithm is ported from it — the tag catalogs and attribute
-whitelist (settings.go) are copied verbatim into src/core/constants.ts, and
-docCleaning, the link-density heuristics, postCleaning, and the content-selector
-rules are transcribed line-for-line (html-processing.go, internal/selector/content.go).
+DERIVED FROM (attribution required). A faithful Go port of the Python original; its
+extraction algorithm reaches the shipped Rust crate (packages/htmlwasher/native/)
+through the port lineage — the tag catalogs and attribute whitelist (settings.go)
+are ported into native/src/tags.rs and the doc-cleaning, link-density heuristics,
+and content-selector rules (html-processing.go, internal/selector/content.go) are
+transcribed into native/src/{html_processing,link_density,selector/*}.rs.
 
 --------------------------------------------------------------------------------
 rs-trafilatura and web-page-classifier — MIT OR Apache-2.0 (used under Apache-2.0)
@@ -55,15 +61,22 @@ Author:  Murrough Foley
 Sources: https://github.com/Murrough-Foley/rs-trafilatura
          https://github.com/Murrough-Foley/web-page-classifier
 
-rs-trafilatura — DERIVED FROM (attribution required). htmlwasher's page-type-aware
-layer is derived from it: the URL-pattern tables (page_type/mod.rs), the 7 per-type
-extraction profiles and selector tables, the HTML-signal refinement, the
-is_boilerplate guards, and the 89 numeric classifier features are copied/transcribed
-into src/classifier/*, src/profiles/*, and src/core/*.
+rs-trafilatura — DERIVED FROM at the CODE LEVEL (attribution required). The shipped
+Rust extraction crate packages/htmlwasher/native/ is a simplified fork of
+rs-trafilatura's LIVE extraction path: the extraction orchestration and content-node
+cascade (extract.rs), the fallback/baseline rescues (extractor/fallback.rs), the
+content selectors (selector/*), doc-cleaning (html_processing.rs), link density
+(link_density.rs), the DOM helpers (dom.rs), the 3-stage page-type cascade + URL
+heuristics + HTML-signal refinement + the 7 per-type extraction profiles + confidence
+rules + the 89 numeric classifier features (page_type/*) are ported/transcribed from
+it. Per Apache-2.0 §4, changes were made: the crate is a simplified fork (spider,
+CLIs, Markdown output, ONNX, and the embedded model removed; a preserve-markup
+serializer, a pure-Rust XGBoost-JSON GBDT evaluator, and napi-rs v3 bindings added).
 
 web-page-classifier — CONSULTED (courtesy). Referenced for the page-type feature set
-and XGBoost classifier design; htmlwasher's classifier is independently implemented
-and its model is trained fresh from WCXB, so no web-page-classifier code ships.
+and the pure-Rust tree-evaluator pattern; htmlwasher's classifier is independently
+implemented and its model is trained fresh from WCXB, so no web-page-classifier code
+(and none of its embedded model binary) ships.
 
 Both are dual-licensed MIT OR Apache-2.0; used here under the Apache License, Version 2.0.
 
@@ -80,9 +93,10 @@ The WCXB dataset is used UNMODIFIED and ONLY to train the page-type classifier
 model offline, in the training/ project. Its CC-BY-4.0 license REQUIRES attribution,
 which this notice provides.
 
-The model.onnx and tfidf-vocab.json shipped with this library are trained fresh from
-this public dataset (an adaptation; the dataset itself is not altered). They are NOT
-vendored or copied from rs-trafilatura's embedded model binary.
+The model.xgb.json (XGBoost native JSON dump) and tfidf-vocab.json shipped with this
+library (packages/htmlwasher/native/artifacts/) are trained fresh from this public
+dataset (an adaptation; the dataset itself is not altered). They are NOT vendored or
+copied from rs-trafilatura's / web-page-classifier's embedded model binary.
 
 --------------------------------------------------------------------------------
 trafilatura-rs — Apache-2.0
@@ -105,29 +119,38 @@ reference for the scoring-fallback design and DOM traversal; no code is derived
 from it and none ships.
 
 --------------------------------------------------------------------------------
-Bundled npm dependencies — permissive (MIT / ISC)
+Bundled dependencies — permissive (MIT / ISC / Apache-2.0 / BSD)
 --------------------------------------------------------------------------------
-htmlwasher's HTML-washing pillar and DOM/inference layers are built on the
-following open-source libraries, used under their respective permissive licenses.
+htmlwasher's HTML-washing pillar (TypeScript) and its extraction core (the Rust
+crate + its napi binding) are built on the following open-source libraries, used
+under their respective permissive licenses.
 
-Runtime (always installed):
+TypeScript runtime (always installed):
+  @htmlwasher/native    — the in-repo napi-rs binding around the Rust extraction
+                          core (private workspace package; ships the prebuilt
+                          native addon). Apache-2.0 (this repo).
   sanitize-html         — the default HTML sanitizer (the washing levels). MIT.
   parse5                — WHATWG-compliant HTML normalization. MIT.
-  linkedom              — the primary DOM. ISC.
-  htmlparser2           — fast HTML parsing. MIT.
+  linkedom              — the DOM for metadata + washing. ISC.
   prettier              — HTML pretty-printing. MIT.
   html-minifier-terser  — HTML minification (bundles terser, BSD-2-Clause). MIT.
   chardet, iconv-lite   — byte→string decoding. MIT.
   commander             — CLI argument parsing. MIT.
-  onnxruntime-node      — default ONNX inference for the page-type classifier. MIT.
 
-Optional (installed only if the consumer opts into the hardened or web backend):
+Optional TypeScript (installed only if the consumer opts into the hardened backend):
   dompurify             — opt-in "hardened" sanitizer backend.
                           MPL-2.0 OR Apache-2.0 (used under Apache-2.0).
   jsdom                 — DOM for the hardened backend. MIT.
-  onnxruntime-web       — WASM/web ONNX inference backend. MIT.
 
-These are dependencies, not vendored source; their full license texts ship in
-their respective npm packages under node_modules, so a plain `npm install` of
-htmlwasher already carries each notice. If you instead redistribute a bundled or
-vendored build that inlines these, reproduce their MIT/ISC/BSD/Apache notices.
+Rust crate dependencies (compiled into the native addon; classifier inference is a
+pure-Rust GBDT evaluator over the XGBoost JSON dump — no ONNX/onnxruntime):
+  napi, napi-derive     — Node-API bindings. MIT.
+  dom_query             — html5ever-based DOM. MIT.
+  tendril               — zero-copy strings. MIT OR Apache-2.0.
+  regex, serde, serde_json, thiserror, url — MIT OR Apache-2.0.
+  html-escape           — output escaping. MIT.
+
+These are dependencies, not vendored source; their full license texts ship in their
+respective npm/crates packages, so a plain install already carries each notice. If
+you instead redistribute a bundled or vendored build that inlines these, reproduce
+their MIT/ISC/BSD/Apache notices.

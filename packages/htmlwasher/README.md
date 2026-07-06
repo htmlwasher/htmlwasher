@@ -5,9 +5,9 @@ converts to Markdown, XML, or plain text, and never touches the network. It
 combines two composable pillars:
 
 - **Boilerplate removal** — a [Trafilatura](https://github.com/adbar/trafilatura)-derived,
-  page-type-aware main-content extractor. An ONNX page-type classifier (7 types)
-  routes extraction through a per-type profile; the kept content is re-serialized
-  through a tag/attribute whitelist (never verbatim `outerHTML`).
+  page-type-aware main-content extractor. A pure-Rust GBDT page-type classifier
+  (7 types) routes extraction through a per-type profile; the kept content is
+  re-serialized through a tag/attribute whitelist (never verbatim `outerHTML`).
 - **HTML washing** — a [`sanitize-html`](https://www.npmjs.com/package/sanitize-html)-based
   sanitize → normalize → format stage, exposed as five washing levels.
 
@@ -17,10 +17,11 @@ automation framework.
 ## Status
 
 Alpha — implemented. The extraction core, metadata extractor, page-type
-classifier (trained ONNX model shipped), per-type profiles, and the five washing
-levels are all in place, exposed via a single `wash()` API. The classifier scores
-~0.78 accuracy on the held-out WCXB test split; extraction scores F1 ≈ 0.79 on the
-adbar evaluation corpus. APIs may still change before a stable release.
+classifier (a pure-Rust GBDT shipped as `model.xgb.json`), per-type profiles,
+and the five washing levels are all in place, exposed via a single `wash()`
+API. The classifier scores ~0.78 accuracy on the held-out WCXB test split;
+extraction scores F1 ≈ 0.79 on the adbar evaluation corpus. APIs may still
+change before a stable release.
 
 ## Usage
 
@@ -143,15 +144,17 @@ Required credits (their code or the trained model ships in this package):
 - Markus Mobius — go-trafilatura — Apache-2.0
 - Murrough Foley — rs-trafilatura — MIT OR Apache-2.0 (used under Apache-2.0)
 - Murrough Foley — WCXB dataset (Web Content Extraction Benchmark) — CC-BY-4.0,
-  used unmodified (DOI 10.5281/zenodo.19316874). The shipped `model.onnx` +
+  used unmodified (DOI 10.5281/zenodo.19316874). The shipped `model.xgb.json` +
   `tfidf-vocab.json` are trained fresh from it, not vendored from any upstream
   model binary.
 
 Courtesy credits (consulted as references; no code shipped): Murrough Foley
 (web-page-classifier), Nathaniel Chapman (trafilatura-rs), and Arc90/Mozilla
-(Readability). The washing and DOM/inference layers use permissive npm
+(Readability). The washing and DOM layers (TypeScript) use permissive npm
 dependencies (MIT / ISC — `sanitize-html`, `parse5`, `linkedom`, and others),
-each shipping its own license under `node_modules`.
+each shipping its own license under `node_modules`; the extraction and
+inference layers are the `@htmlwasher/native` Rust crate, shipped as a
+prebuilt `.node` binary rather than an npm dependency tree.
 
 ## License
 

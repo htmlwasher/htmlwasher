@@ -254,8 +254,32 @@ MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts
     SELECTION gap, not a fallback gap, so it is NOT fixed here); the Discourse `data-preloaded` +
     Product-description rescues (not cheap — a second parse + bespoke JSON shape; skipped). The
     `aggregate_sections`/`collect_repeated_items` passes remain deferred.
-- Phases POLISH — pending. Gate each
-  before advancing; commit per phase; keep `pnpm test` green.
+- **Phase POLISH — done.** Licensing, docs, and a full-repo multi-agent adversarial review.
+  - **Security (CRITICAL, review-caught).** The unconditional floor was allow-all-tags but only dropped
+    `<script>`/`on*`/schemes, so `<iframe srcdoc="<script>…">` (srcdoc is inline HTML — not a URL, not
+    `on*`) executed as a nested-document XSS, and `<meta http-equiv="refresh">` auto-navigated. Since v2's
+    floor is the SOLE sanitizer, this was real stored XSS. Fixed `enforceSecurityFloor` to drop
+    `<script>/<iframe>/<object>/<embed>/<applet>/<base>` + `<meta http-equiv>` + `srcdoc` (doc-08's full
+    floor list, previously under-implemented); +9 regression tests at every level (flagship suite 218 → 233).
+  - **Review outcome:** rust-core NONE (only cosmetic nits); ts-washing the 2 XSS defects above; python 3
+    (vocab-length guard, pyright `dict|list` annotations, stale FEATURES.md) — all fixed. The adversarial
+    multi-agent review earned its keep (a phased build's blind spots surface under a fresh skeptical read).
+  - **Licensing (`@/NOTICE`, root + package):** rewritten for the code-level rs-trafilatura Rust derivation
+    (Apache-2.0 §4 changes stated); go-trafilatura re-pointed to `native/`; ONNX/`model.onnx` out,
+    `@htmlwasher/native` + `model.xgb.json` + the Rust crate deps in; WCXB CC-BY-4.0 kept. Crate license
+    Apache-2.0 (workspace-inherited); SPDX headers present. `html-cleaning` license moot (not wired).
+  - **Docs:** `CLAUDE.md` rewritten (hybrid Rust+TS, XGBoost-JSON, Rust-analyzer first-class, cargo
+    commands, structure) + a **real v2 rewrite of root `@/SPEC.md`** (hybrid architecture, napi boundary,
+    doc-09 split, contextractor layout, operating modes). READMEs + `.claude/agents/{ts-pro,python-pro}.md`
+    swept of ONNX/181-feature/`src/classifier`/onnxruntime/htmlparser2-hot-path staleness.
+  - **Dead code:** `htmlparser2` removed (never imported even pre-INTEGRATE). Remaining knip unused-exports
+    are pre-existing public-surface types — left intentionally.
+  - **Brief updated** in place with the v2 build learnings (html-cleaning/dom_query pin, napi-build v2 +
+    unsafe deny + ts_type unions + default-off feature, float32 splits, the workspace:\* consumability gap,
+    the full security-floor vector set, classifier-mis-route → baseline rescue).
+  - **Final gate (all three stacks green):** `pnpm build && lint && test` (flagship 233, native smoke 4/4,
+    corpus PASS, adbar P=0.814/R=0.848/F1=0.831); `cargo test --workspace` + `clippy --all-targets -D
+warnings` + `fmt --check`; `uv run pytest` (17) + `uvx ruff` clean. **Deliverables checklist fully checked.**
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -37,7 +38,7 @@ N_TFIDF = 100
 N_CLASSES = 7
 
 
-def _load(path: Path) -> dict | list:
+def _load(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -64,6 +65,22 @@ def test_classifier_parity_fixture_shape() -> None:
         assert 0 <= fx["argmax"] < N_CLASSES, fx["file"]
         assert fx["page_type"] == CLASS_LABELS[fx["argmax"]], fx["file"]
         assert abs(sum(fx["probs"]) - 1.0) < 1e-5, fx["file"]
+
+
+def test_vocab_has_exactly_n_tfidf_terms() -> None:
+    """The Rust loader (native/src/page_type/model.rs::build_model) HARD-REJECTS a
+    ``tfidf-vocab.json`` whose ``vocabulary`` length != N_TFIDF, disabling the
+    classifier at load time. ``train.py`` guards against shipping a short vocab
+    (e.g. from a retrain on a small/low-diversity corpus); this test locks the
+    invariant on the committed artifact itself."""
+    # Arrange
+    if not VOCAB_PATH.exists():
+        pytest.skip("tfidf-vocab.json not generated (run train.py)")
+    vocab = _load(VOCAB_PATH)
+
+    # Assert
+    assert len(vocab["vocabulary"]) == N_TFIDF
+    assert len(vocab["idf"]) == N_TFIDF
 
 
 def test_model_xgb_json_roundtrip() -> None:

@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import xgboost as xgb
@@ -59,12 +60,25 @@ N_TFIDF = 100
 N_CLASSES = len(CLASS_LABELS)
 
 
-def _load_json(path: Path) -> dict | list:
+def _load_json_object(path: Path) -> dict[str, Any]:
+    """Load a JSON file expected to contain a top-level object."""
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise TypeError(f"{path} must contain a JSON object, got {type(data).__name__}")
+    return data
 
 
-def _tfidf_vector(text: str, vocab: dict) -> list[float]:
+def _load_json_array(path: Path) -> list[dict[str, Any]]:
+    """Load a JSON file expected to contain a top-level array of objects."""
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, list):
+        raise TypeError(f"{path} must contain a JSON array, got {type(data).__name__}")
+    return data
+
+
+def _tfidf_vector(text: str, vocab: dict[str, Any]) -> list[float]:
     """Reproduce sklearn's ``TfidfVectorizer.transform`` for one document.
 
     Steps: lowercase -> tokenize with the locked token_pattern -> raw term
@@ -89,7 +103,7 @@ def _tfidf_vector(text: str, vocab: dict) -> list[float]:
     return [float(v) for v in weighted]
 
 
-def _scaled_numeric(numeric: list[float], vocab: dict) -> list[float]:
+def _scaled_numeric(numeric: list[float], vocab: dict[str, Any]) -> list[float]:
     """Apply the baked StandardScaler stats (``scale<=0 -> 0.0``)."""
     mean = vocab["numericMean"]
     scale = vocab["numericScale"]
@@ -98,12 +112,12 @@ def _scaled_numeric(numeric: list[float], vocab: dict) -> list[float]:
 
 def _fixture_url_types() -> dict[str, tuple[str, str]]:
     """Map ``file -> (url, page_type)`` from the committed v1 parity manifest."""
-    manifest = _load_json(V1_MANIFEST)
+    manifest = _load_json_array(V1_MANIFEST)
     return {r["file"]: (r["url"], r["pageType"]) for r in manifest}
 
 
 def main() -> None:
-    vocab = _load_json(VOCAB_PATH)
+    vocab = _load_json_object(VOCAB_PATH)
     url_types = _fixture_url_types()
 
     booster = xgb.Booster()

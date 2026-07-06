@@ -1,7 +1,9 @@
 # Root Rust workspace for htmlwasher's native extraction core.
-# Mirrors ~/r/contextractor's workspace, tightened per the v2 brief:
-# unsafe_code = "forbid" (contextractor uses "warn"), Apache-2.0 (matches the repo).
-# Cargo.lock IS committed (the pnpm-lock gitignore convention does NOT extend to Cargo).
+# Mirrors ~/r/contextractor's workspace, tightened per the v2 brief: unsafe_code
+# denied for our code (see the [workspace.lints.rust] rationale below — napi-derive
+# codegen needs `unsafe` behind a local #[allow], which `forbid` would reject), and
+# Apache-2.0 (matches the repo). Cargo.lock IS committed (the pnpm-lock gitignore
+# convention does NOT extend to Cargo).
 [workspace]
 resolver = "2"
 members = ["packages/htmlwasher/native"]

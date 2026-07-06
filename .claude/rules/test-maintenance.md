@@ -17,7 +17,7 @@ No test update needed when:
 - Only types or type signatures change with no logic change (TypeScript-only refactors)
 - A private helper is extracted and callers already have tests that exercise the code path
 - Changes are limited to comments, formatting, or documentation files
-- Generated artifacts are produced by a build/export script (`*.d.ts`, the trained `model.onnx` / `tfidf-vocab.json` exported from `training/`)
+- Generated artifacts are produced by a build/export script (`*.d.ts`, the trained `model.xgb.json` / `tfidf-vocab.json` exported from `training/`)
 
 ## Test locations
 

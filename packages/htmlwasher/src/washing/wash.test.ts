@@ -161,6 +161,42 @@ describe('washHtml — security at EVERY level (incl. styled and correct)', () =
       const { html } = await washHtml('<a href="data:text/html,evil">x</a>', level);
       expect(html.toLowerCase()).not.toContain('data:text/html');
     });
+
+    // Regression (POLISH review): the floor is allow-all-tags, so these embedding /
+    // navigation vectors slipped through before — `srcdoc` is inline HTML (not a URL,
+    // not an on* handler), so scheme filtering never neutralized `<iframe srcdoc>`.
+    it(`${level}: drops <iframe srcdoc> (nested-document XSS)`, async () => {
+      const { html } = await washHtml(
+        '<iframe srcdoc="<script>alert(1)</script>">x</iframe>',
+        level,
+      );
+      const lower = html.toLowerCase();
+      expect(lower).not.toContain('<iframe');
+      expect(lower).not.toContain('srcdoc');
+      expect(lower).not.toContain('alert(1)');
+    });
+
+    it(`${level}: neutralizes <meta http-equiv="refresh"> auto-navigation`, async () => {
+      const { html } = await washHtml(
+        '<meta http-equiv="refresh" content="0;url=https://evil.example">',
+        level,
+      );
+      // The vector is `http-equiv="refresh"`; stripping `http-equiv` disarms it (a bare
+      // `<meta content="…">` with no http-equiv/name is inert). `correct` drops the whole
+      // meta; the presets strip `http-equiv` and keep the harmless residue.
+      expect(html.toLowerCase()).not.toContain('http-equiv');
+    });
+
+    it(`${level}: drops <object>/<embed>/<base>`, async () => {
+      const { html } = await washHtml(
+        '<object data="x.swf"></object><embed src="y"><base href="https://evil/">',
+        level,
+      );
+      const lower = html.toLowerCase();
+      expect(lower).not.toContain('<object');
+      expect(lower).not.toContain('<embed');
+      expect(lower).not.toContain('<base');
+    });
   }
 
   it('styled: strips url(javascript:) from an inline style', async () => {
