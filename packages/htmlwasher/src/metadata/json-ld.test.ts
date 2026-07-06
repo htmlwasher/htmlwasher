@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
-import { parseDocument } from '../core/dom.js';
 import type { Metadata } from '../types.js';
+import { parseDocument } from './dom.js';
 import { extractJsonLd } from './json-ld.js';
 
 function run(html: string): Metadata {

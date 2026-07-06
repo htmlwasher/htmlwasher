@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // Orchestrates the two pillars into the public wash() API:
-//   metadata (sidecar) + classify → profile → boilerplate(mode) → wash(level).
+//   metadata (sidecar) + boilerplate(mode) → wash(level).
 //
-// For any boilerplate mode other than `none`, the page is classified (3-stage
-// cascade) and extraction is routed through the matching per-type profile
-// (content selectors, preserved tags, boilerplate selectors, comments-as-content).
-// `none` bypasses extraction (and classification) and washes the whole document.
-// wash() is async: the classifier (ONNX) and the washing formatter load lazily.
+// For any boilerplate mode other than `none`, the @htmlwasher/native Rust core
+// classifies the page (3-stage cascade) and routes extraction through the
+// matching per-type profile internally, returning the preserve-markup content
+// HTML (UNSANITIZED — the washing stage owns sanitization) plus the page type +
+// confidence. `none` bypasses the FFI call entirely (no extraction, no
+// classification) and washes the whole document. wash() is async: the Rust
+// extraction runs on the libuv threadpool and the washing formatter loads lazily.
 
-import { classifyPage } from './classifier/index.js';
-import { extractContentHTML } from './core/extract.js';
-import type { CoreOptions, ExtractFocus } from './core/options.js';
+import { extract } from '@htmlwasher/native';
 import { extractMetadata } from './metadata/index.js';
-import { getProfile } from './profiles/index.js';
 import {
   type BoilerplateMode,
   DEFAULT_BOILERPLATE_MODE,
@@ -29,7 +28,14 @@ import {
 } from './types.js';
 import { washHtml } from './washing/wash.js';
 
-const MODE_TO_FOCUS: Record<Exclude<BoilerplateMode, 'none'>, ExtractFocus> = {
+/**
+ * Map a boilerplate-removal `mode` (never `none`) to the Rust core's extraction
+ * focus. `none` is handled before this table (it skips extraction entirely).
+ */
+const MODE_TO_FOCUS: Record<
+  Exclude<BoilerplateMode, 'none'>,
+  'precision' | 'balanced' | 'recall'
+> = {
   precision: 'precision',
   balanced: 'balanced',
   recall: 'recall',
@@ -42,10 +48,13 @@ interface BoilerplateOutcome {
 }
 
 /**
- * Run the boilerplate-removal stage: classify the page, select its extraction
- * profile, and extract the main content. Returns the content HTML to wash plus
- * the classification. Falls back to the default (article) profile if the
- * classifier is unavailable.
+ * Run the boilerplate-removal stage via the @htmlwasher/native Rust core: it
+ * classifies the page and routes extraction through the matching per-type
+ * profile internally, returning the preserve-markup content HTML plus the
+ * detected page type + confidence. The public `wash()` never passes a `pageType`
+ * override (the classifier always auto-runs). The returned `contentHtml` is
+ * UNSANITIZED — the caller MUST flow it through `washHtml`. When extraction
+ * yields no content, keep the whole document and warn.
  */
 async function runBoilerplate(
   html: string,
@@ -55,40 +64,15 @@ async function runBoilerplate(
 ): Promise<BoilerplateOutcome> {
   if (mode === 'none') return { html }; // wash the whole document (no extraction)
 
-  const focus = MODE_TO_FOCUS[mode];
-  let coreOptions: Partial<CoreOptions> = { focus, originalUrl: url };
-  let pageType: PageType | undefined;
-  let confidence: number | undefined;
-
-  try {
-    const classified = await classifyPage(html, url);
-    pageType = classified.pageType;
-    confidence = classified.confidence;
-    const profile = getProfile(pageType);
-    coreOptions = {
-      focus,
-      originalUrl: url,
-      contentSelectors: profile.contentSelectors,
-      preserveTags: profile.preserveTags,
-      boilerplateSelectors: profile.boilerplateSelectors,
-      commentsAsContent: profile.commentsAreContent,
-    };
-  } catch (error) {
-    messages.push({
-      type: 'warning',
-      text: `page-type classification unavailable; using the default profile: ${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
-
-  const result = extractContentHTML(html, coreOptions);
-  if (result.html === '') {
+  const r = await extract(html, { focus: MODE_TO_FOCUS[mode], url });
+  if (r.contentHtml === '') {
     messages.push({
       type: 'warning',
       text: 'boilerplate removal produced no content; washing the whole document',
     });
-    return { html, pageType, confidence };
+    return { html, pageType: r.pageType, confidence: r.confidence };
   }
-  return { html: result.html, pageType, confidence };
+  return { html: r.contentHtml, pageType: r.pageType, confidence: r.confidence };
 }
 
 function hasMetadata(meta: Metadata): boolean {

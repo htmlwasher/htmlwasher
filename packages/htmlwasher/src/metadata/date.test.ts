@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
-import { parseDocument } from '../core/dom.js';
 import { extractDate } from './date.js';
+import { parseDocument } from './dom.js';
 
 const dateOf = (html: string, url?: string): string | undefined =>
   extractDate(parseDocument(html), url);

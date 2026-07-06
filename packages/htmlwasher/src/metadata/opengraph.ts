@@ -2,8 +2,8 @@
 // OpenGraph extraction ported from trafilatura/metadata.py (extract_opengraph,
 // OG_PROPERTIES, OG_AUTHOR) — Apache-2.0.
 
-import type { HDocument } from '../core/dom.js';
 import { normalizeAuthors } from './authors.js';
+import type { HDocument } from './dom.js';
 import { isValidUrl } from './url.js';
 
 /** Fields the OpenGraph pass can populate (mirrors the bootstrap dict). */

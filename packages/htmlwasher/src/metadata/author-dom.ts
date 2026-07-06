@@ -5,8 +5,8 @@
 // CSS-selector subset; regex class/id predicates are approximated with
 // `[attr*=… i]` substring selectors plus the explicit token cases.
 
-import { type HDocument, type HElement, trim } from '../core/dom.js';
 import { normalizeAuthors } from './authors.js';
+import { type HDocument, type HElement, trim } from './dom.js';
 import { iterText } from './text.js';
 
 // AUTHOR_DISCARD_XPATHS → CSS. Drops comment/sidebar/quote/figure/time blocks

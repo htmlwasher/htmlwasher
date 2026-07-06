@@ -3,9 +3,9 @@
 // process_parent, extract_json_parse_error, the schema sets, and is_plausible_sitename)
 // plus the orchestrator's extract_meta_json (metadata.py) — Apache-2.0.
 
-import type { HDocument } from '../core/dom.js';
 import type { Metadata, PageType } from '../types.js';
 import { normalizeAuthors } from './authors.js';
+import type { HDocument } from './dom.js';
 import { normalizeJson } from './text.js';
 
 const JSON_ARTICLE_SCHEMA = new Set([

@@ -37,6 +37,22 @@ leans on the upstream and reference implementations cloned into `~/r/htmlwasher-
 
 ## Architecture
 
+> **v2 (hybrid Rust + TypeScript) — supersedes the all-TypeScript description below.**
+> The extraction core, the page-type classifier, and the per-type profiles now
+> live in the **`@htmlwasher/native` Rust crate** (a napi-rs binding at
+> `@/packages/htmlwasher/native/`), NOT in TypeScript, and the classifier is a
+> **pure-Rust GBDT — there is no ONNX runtime**. The TypeScript `htmlwasher`
+> package keeps the public `wash()` surface, the metadata sidecar, and the
+> HTML-washing levels, and calls the crate over the napi boundary
+> `extract(html, { pageType?, focus?, url? }) → Promise<{ contentHtml, pageType,
+confidence?, textLength, fallbackUsed, warnings }>`. The crate emits
+> **preserve-markup** (script-free but otherwise UNSANITIZED) HTML; the TS washing
+> stage owns ALL sanitization (doc-09 split). The sections below still describe the
+> retired v1 all-TypeScript layout — a full v2 rewrite of this root spec is the
+> POLISH phase's job. Ground truth for v2 is [`@/PORTING-NOTES.md`](PORTING-NOTES.md)
+> (`## v2`), [`@/packages/htmlwasher/SPEC.md`](packages/htmlwasher/SPEC.md), and
+> [`@/packages/htmlwasher/native/SPEC.md`](packages/htmlwasher/native/SPEC.md).
+
 The pipeline is a linear cascade: parse HTML once into a DOM, extract the main
 content, extract metadata, classify the page type, then apply a per-page-type
 profile and produce a confidence score.

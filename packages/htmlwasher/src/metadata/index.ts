@@ -10,12 +10,12 @@
 // — it does NOT override an already-set title and never touches description.
 // DOM/XPath then fills any remaining empties.
 
-import { type HDocument, parseDocument } from '../core/dom.js';
 import type { Metadata } from '../types.js';
 import { extractAuthor } from './author-dom.js';
 import { checkAuthors } from './authors.js';
 import { extractCatsTags } from './catstags.js';
 import { extractDate } from './date.js';
+import { type HDocument, parseDocument } from './dom.js';
 import { extractJsonLd } from './json-ld.js';
 import { extractLicense } from './license.js';
 import { examineMeta } from './meta-tags.js';

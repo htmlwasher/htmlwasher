@@ -3,7 +3,7 @@
 // examine_title_element, extract_metainfo, HTMLTITLE_REGEX) and TITLE_XPATHS
 // from trafilatura/xpaths.py — Apache-2.0.
 
-import { type HDocument, trim } from '../core/dom.js';
+import { type HDocument, trim } from './dom.js';
 import { selectMetaInfo } from './xpath-css.js';
 
 // HTMLTITLE_REGEX: split "Article — Site" style titles into the two parts.

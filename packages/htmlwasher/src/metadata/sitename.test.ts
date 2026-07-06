@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDocument } from '../core/dom.js';
+import { parseDocument } from './dom.js';
 import { extractSitename, normalizeSitename } from './sitename.js';
 
 describe('extractSitename', () => {

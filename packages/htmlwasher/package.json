@@ -22,7 +22,6 @@
   },
   "files": [
     "dist",
-    "src/classifier/model",
     "LICENSE",
     "NOTICE"
   ],
@@ -34,21 +33,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@htmlwasher/native": "workspace:*",
     "chardet": "^2.1.0",
     "commander": "^14.0.0",
     "html-minifier-terser": "^7.2.0",
     "htmlparser2": "^10.0.0",
     "iconv-lite": "^0.6.3",
     "linkedom": "^0.18.12",
-    "onnxruntime-node": "1.27.0",
     "parse5": "^8.0.0",
     "prettier": "^3.8.4",
     "sanitize-html": "^2.17.2"
   },
   "optionalDependencies": {
     "dompurify": "^3.2.4",
-    "jsdom": "^25.0.1",
-    "onnxruntime-web": "1.27.0"
+    "jsdom": "^25.0.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

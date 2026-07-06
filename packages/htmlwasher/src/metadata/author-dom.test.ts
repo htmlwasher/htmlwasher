@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
-import { parseDocument } from '../core/dom.js';
 import { extractAuthor } from './author-dom.js';
+import { parseDocument } from './dom.js';
 
 const authorOf = (html: string): string | undefined => extractAuthor(parseDocument(html));
 

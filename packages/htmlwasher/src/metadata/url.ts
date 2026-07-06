@@ -3,7 +3,7 @@
 // META_URL) plus the courlan validate_url/normalize_url/get_base_url/extract_domain
 // helpers it relies on — reduced to a faithful, dependency-free subset (Apache-2.0).
 
-import type { HDocument } from '../core/dom.js';
+import type { HDocument } from './dom.js';
 
 /** META_URL: capture the host (minus a leading www./wNN.) from a URL. */
 const META_URL = /^https?:\/\/(?:www\.|w[0-9]+\.)?([^/]+)/;

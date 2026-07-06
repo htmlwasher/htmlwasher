@@ -2,7 +2,7 @@
 // Sitename extraction ported from trafilatura/metadata.py (extract_sitename and
 // the sitename normalization block of extract_metadata) — Apache-2.0.
 
-import type { HDocument } from '../core/dom.js';
+import type { HDocument } from './dom.js';
 import { examineTitleElement } from './title.js';
 import { extractDomain } from './url.js';
 

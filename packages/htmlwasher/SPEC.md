@@ -15,11 +15,16 @@ network. It has two orthogonal, composable pillars:
 
 - **Boilerplate removal** — a Trafilatura-derived, page-type-aware main-content
   extractor (article/main detection, fallback cascade, comment + table handling)
-  that keeps the result as an HTML subtree, re-serialized through a tag/attribute
-  whitelist. An ONNX page-type classifier (7 types) routes extraction through a
-  per-type profile. Gated by a boilerplate-removal mode.
+  that keeps the result as an HTML subtree. It now lives in the **`@htmlwasher/native`
+  Rust crate** (napi binding), which classifies the page (a pure-Rust GBDT
+  page-type classifier — 7 types, **no ONNX**) and routes extraction through the
+  matching per-type profile internally, then emits **preserve-markup** HTML: the
+  kept nodes' original tags + all attributes, script-free but otherwise
+  UNSANITIZED (bucket-C output sanitization is deleted from the crate per doc 09).
+  Gated by a boilerplate-removal mode.
 - **HTML washing** — a sanitize-html-based sanitize + normalize + format stage,
-  exposed as five washing levels.
+  exposed as five washing levels. It owns ALL sanitization: the Rust core's
+  unsanitized `contentHtml` MUST flow through `washHtml` (it always does).
 
 ## Public API surface
 
@@ -32,11 +37,28 @@ loaded lazily):
 wash(html: string, options?: WashOptions): Promise<WashResult>
 ```
 
-Stages: metadata sidecar (from the original document) → classify → select profile
-→ boilerplate(mode) → wash(level). For any mode other than `none`, the page is
-classified and extraction is routed through the matching per-type profile; the
-detected `pageType` + `confidence` are returned. `mode: 'none'` bypasses
-extraction (and classification) and washes the whole document.
+Stages: metadata sidecar (from the original document) → boilerplate(mode) →
+wash(level). For any mode other than `none`, `pipeline.ts` calls the
+`@htmlwasher/native` Rust core's async `extract(html, { focus, url })`, which
+classifies the page and routes extraction through the matching per-type profile
+**internally** and returns the preserve-markup content HTML plus the detected
+`pageType` + `confidence` (both surfaced on the result). The public `wash()` never
+passes a `pageType` override — the classifier always auto-runs. When extraction
+yields empty content, `wash()` keeps the whole document and warns. `mode: 'none'`
+bypasses the FFI call entirely (no extraction, no classification) and washes the
+whole document.
+
+### Markup-preservation semantics (doc 09)
+
+Because the Rust core is preserve-markup, `class`/inline `style`/`data-*`/`id`
+survive extraction (v1's TS core stripped them before washing) — so at washing
+levels that permit those attributes they now flow all the way through: `styled`
+keeps `class` + inline `style`; `correct` (normalize-only) keeps everything the
+security floor allows, incl. `data-*`. The lower presets (`minimal`/`standard`/
+`permissive`) still drop `class`/`style` per their allow-lists. **Fallback-path
+limitation:** when a structured/baseline fallback wins, the crate synthesizes
+markup (e.g. bare `<p>`), so markup preservation is best-effort by construction —
+"original markup" always means "modulo doc-cleaning".
 
 The two knobs are orthogonal — any boilerplate mode combines with any washing
 level. Instead of a named `level`, callers may pass a fully-custom `config` (a
@@ -141,46 +163,22 @@ description?, sitename?, date?, categories?, tags?, image?, pageType?, license? 
 Both enumerations are plain string-union / `as const`-array types, **not**
 TypeScript `enum`s (locked decision #4).
 
-### PageTypeClassifier — _implemented (Phase 4)_
+### Page-type classifier + per-type profiles — _in the `@htmlwasher/native` Rust crate_
 
-`new PageTypeClassifier(backend?).classifyPage(html, url?)` →
-`Promise<{ pageType, confidence }>`; module-level `classifyPage(html, url?)` uses a
-cached default. `InferenceBackend` is the swappable seam (the interface, with
-`run(features: number[]) => Promise<number[]>`); `PageTypeClassifier` is the
-concrete cascade class that holds an `InferenceBackend`. The two backends —
-`OnnxNodeClassifier` (`onnxruntime-node`, default) and `OnnxWebClassifier`
-(`onnxruntime-web` WASM, lazily imported optionalDependency) — are interchangeable.
-`OnnxWebClassifier` loads the model via `readFileSync` into a `Uint8Array` (not a
-filesystem-path string) so the WASM backend resolves the model identically in Node
-and the browser. The classifier runs the 3-stage cascade with the agreement rule
-from `extract.rs`:
-
-- Stage-1 `classifyUrl(url)` — ordered URL heuristics (mod.rs constant lists).
-- Stage-2 `refineWithSignals` / `refineWithHtmlSignals` — refines ONLY `article`.
-- Stage-3 ML — `buildFeatureVector` (189) → ONNX → argmax via `classLabels`.
-- Selection: URL+ML agree on non-article → conf `1.0`; refined+ML agree → `0.95`;
-  else ML argmax + max softmax prob.
-
-Feature parity with the Python extractor is verified by `parity.test.ts` against
-`fixtures/classifier/parity.json` (15 fixtures, numeric + TF-IDF within `1e-6`,
-ONNX argmax exact; includes a `<template>`-bearing fixture). To match lexbor's
-spec-compliant tree, the classifier parses HTML via `parseDocumentSpec` (parse5
-normalize → linkedom), which also strips `<template>` subtrees so the TS and
-Python (lexbor/selectolax) feature counts agree.
-
-### Per-type extraction profiles — _implemented (Phase 5)_
-
-Each page type maps to a profile (`src/profiles/`, `getProfile(pageType)`) ported
-from rs-trafilatura: content selectors (tried first), preserved tags, extra
-boilerplate selectors, `commentsAreContent`, and the aggregate/collect flags. The
-classifier's predicted type selects the profile, which feeds the core via
-`CoreOptions` (`contentSelectors`/`preserveTags`/`boilerplateSelectors`/
-`commentsAsContent`). `aggregateSections`/`collectRepeatedItems` map to LIVE
-post-passes in rs-trafilatura (the Step-7 multi-candidate merge at `extract.rs:231`
-and the Step-7b repeated-item collection at `extract.rs:252`) that this TS port
-does not yet implement — a known Phase-5 gap, NOT parity. `lenientBoilerplate`/
-`minParagraphDensity` are carried-but-dead in rs-trafilatura too (declared, never
-read).
+The 3-stage classifier cascade and the 7 per-type extraction profiles no longer
+have a TypeScript implementation — they moved into the `@htmlwasher/native` Rust
+core (a **pure-Rust GBDT** over the XGBoost native JSON dump, **no ONNX runtime**).
+`pipeline.ts` calls the crate's `extract(html, { focus, url })`; the crate runs the
+cascade (Stage-1 URL heuristics → Stage-2 HTML-signal refinement of `article` →
+Stage-3 GBDT ML), selects the matching profile, extracts, and returns
+`{ contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings }`. The
+classifier is byte-identical to v1's model (same XGBoost weights + `tfidf-vocab.json`,
+retrained deterministically); cross-language feature/argmax parity is proven by
+cargo `tests/classifier_parity.rs`. See
+[`native/SPEC.md`](native/SPEC.md) for the crate surface and
+[`@/PORTING-NOTES.md`](../../PORTING-NOTES.md) (`## v2`) for the classifier ground
+truth. `wash()` never passes a `pageType` override, so `confidence` is always
+present when extraction runs.
 
 ## Module layout
 
@@ -188,13 +186,11 @@ read).
   (the `wash()` pipeline is wired at the orchestration step). _implemented (re-exports)_
 - `src/types.ts` — the public type surface (option unions, `WashOptions`,
   `WashResult`, `Metadata`, `PageType`, guards). _implemented_
-- `src/core/` — Trafilatura extraction algorithm + whitelist re-serializer (emits
-  the kept content as an HTML subtree). Entry: `extractContentHTML(html, opts?)` →
-  `{ html, textLength, fallbackUsed }`. Modules: `dom` (linkedom helpers),
-  `constants` (go-trafilatura tag catalogs + content selectors), `clean`
-  (docCleaning + link-density), `main-content` (selector/semantic/scoring
-  cascade), `serialize-filtered` (postCleaning + whitelist re-serializer),
-  `extract` (orchestration). _implemented (Phase 2)_
+- The extraction algorithm, page-type classifier, and per-type profiles live in
+  the `@htmlwasher/native` Rust crate — there is no longer a `src/core/`,
+  `src/classifier/`, or `src/profiles/` in this package. See
+  [`native/SPEC.md`](native/SPEC.md). `pipeline.ts` consumes the crate via its
+  async `extract()`.
 - `src/metadata/` — optional metadata sidecar. Entry:
   `extractMetadata(html, url?)` / `extractMetadataFromDocument(doc, url?)` →
   `Metadata`. Per-field merge (NOT a blanket override), ported from adbar
@@ -205,20 +201,9 @@ read).
   touches `description`; DOM/XPath then fills any remaining empties. The extractor
   ends with a `cleanAndTrim()` pass over each string field (cap to 10000 chars,
   then `unescape` + line-process). `date.ts` is a reduced htmldate equivalent.
-  _implemented (Phase 3)_
-- `src/classifier/features/` — the 189-feature extractor (89 numeric + 100
-  TF-IDF); byte-for-byte parity with `training/extract_features.py`. Entries:
-  `extractNumericFeatures(html, url)` (89), `titleMetaText(html)` + `computeTfidf`
-  (100), `buildFeatureVector(html, url)` (189 = scaled numeric ++ tfidf). `dom-query`
-  (selectolax-parity helpers: UTF-8 byte lengths, non-deduped comma-union matching).
-  _implemented (Phase 4)_
-- `src/classifier/` — `classifier` (`PageTypeClassifier`, backends, cascade),
-  `url-heuristics` (`classifyUrl`), `html-signals` (Stage-2 refinement),
-  `url-constants` (mod.rs lists), `model-paths` (artifact resolver). _implemented (Phase 4)_
-- `src/classifier/model/` — shipped `model.onnx` (float `[1,189]` → `label` int64 +
-  `probabilities` `[1,7]`) + `tfidf-vocab.json` (vocab/idf/scaler/classLabels).
-  Shipped in the npm tarball; loaded once at runtime. _implemented (Phase 4)_
-- `src/profiles/` — the 7 per-page-type extraction profiles + `getProfile`. _implemented (Phase 5)_
+  `dom.ts` is the metadata-scoped linkedom wrapper (`parseDocument`, `trim`,
+  `TEXT_NODE`, and the node/element/document interfaces) — relocated from the former
+  `core/dom.ts` at Phase INTEGRATE, trimmed to the metadata-used subset. _implemented (Phase 3)_
 - `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened?, config? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
@@ -240,20 +225,27 @@ read).
   `isMainEntry`. Wraps `wash()`; never fetches. _implemented_
 - `src/cli.ts` — `#!/usr/bin/env node` entry (`bin: htmlwasher`, export
   `htmlwasher/cli`); self-runs `runCli` only when it is the program entry point. _implemented_
-- `test/`, `fixtures/` — golden-fixture + unit tests under `src/` and `test/`
-  (incl. `test/validation/`); HTML fixtures under `fixtures/{classifier,validation}/`.
-  _implemented_
+- `src/native-types.test.ts` — a compile-time guard that the frozen public
+  `PageType` union stays byte-identical to `@htmlwasher/native`'s
+  `ExtractResult['pageType']` (both are the 7 wire strings). _implemented_
+- `test/`, `fixtures/` — unit tests under `src/` and `test/` (incl.
+  `test/validation/` — the adbar eval regression oracle over the full `wash()`
+  pipeline); HTML fixtures under `fixtures/{classifier,validation}/`. _implemented_
 
 ## Dependencies
 
-- DOM parsing: `linkedom` (primary) + `parse5` (WHATWG normalization), with
-  `htmlparser2` in the classifier feature hot-path.
+- Extraction + classification: `@htmlwasher/native` (`workspace:*`) — the Rust
+  core (napi binding). It is the only extraction/classifier dependency; there is
+  no ONNX runtime in this package anymore.
+- DOM parsing (metadata + washing): `linkedom` (primary) + `parse5` (WHATWG
+  normalization). `htmlparser2` is retained as a declared metadata/washing helper
+  dependency (knip flags it as not directly imported — it was already unused at the
+  pre-INTEGRATE HEAD, not a regression from the classifier removal).
 - HTML washing: `sanitize-html` (default sanitizer), `prettier` (format),
   `html-minifier-terser` (minify), `chardet` + `iconv-lite` (decode non-UTF-8
-  buffers). _added in Phase 6._
-- ONNX inference: `onnxruntime-node` (default) + `onnxruntime-web` (WASM,
-  optional) behind one interface; pinned to exactly 1.27.0.
+  buffers); optional `dompurify`/`jsdom` hardened backend. _added in Phase 6._
 
-The classifier model is trained offline in the separate `@/training/` Python
-project (see [`@/training/SPEC.md`](../training/SPEC.md)) and exported as
-`model.onnx` + `tfidf-vocab.json`. No Python loads at runtime.
+The classifier model + `tfidf-vocab.json` are trained offline in the separate
+`@/training/` Python project (see [`@/training/SPEC.md`](../../training/SPEC.md))
+and baked into the `@htmlwasher/native` crate as `include_str!`-ed artifacts. No
+Python or ONNX loads at runtime.

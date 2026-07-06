@@ -3,9 +3,9 @@
 // METANAME_* / PROPERTY_AUTHOR / METANAME_IMAGE / TWITTER_ATTRS sets, normalize_tags)
 // — Apache-2.0. The OpenGraph bootstrap lives in opengraph.ts.
 
-import type { HDocument } from '../core/dom.js';
 import type { Metadata } from '../types.js';
 import { normalizeAuthors } from './authors.js';
+import type { HDocument } from './dom.js';
 import { extractOpenGraph } from './opengraph.js';
 import { stripHtmlTags, trim, unescapeHtml } from './text.js';
 import { isValidUrl } from './url.js';

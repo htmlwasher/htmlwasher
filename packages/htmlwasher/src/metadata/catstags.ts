@@ -5,7 +5,7 @@
 // `starts-with`/`re:test` class predicates are approximated with attribute
 // substring/prefix selectors. The href filter regex is kept verbatim.
 
-import type { HDocument } from '../core/dom.js';
+import type { HDocument } from './dom.js';
 import { dedupeOrdered, lineProcessing } from './text.js';
 
 type MetaType = 'category' | 'tag';

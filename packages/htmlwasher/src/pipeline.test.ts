@@ -176,6 +176,31 @@ describe('wash() orchestration', () => {
     expect(lower).not.toContain('javascript:');
   });
 
+  // doc-09 headline payoff: the Rust core emits preserve-markup HTML (class /
+  // inline style survive extraction), so at the `styled` washing level — which
+  // allows class + inline style — they now flow all the way through wash(). This
+  // was IMPOSSIBLE in v1, whose TS core stripped class/style/id before washing.
+  it('styled × balanced: class + inline style survive extraction through wash()', async () => {
+    const STYLED_MAIN = `<!doctype html><html><head><title>Styled — Site</title></head><body>
+      <nav><a href="/">Home</a></nav>
+      <main><article class="article-content" style="color:navy">
+        <h1 class="headline">Styled Headline</h1>
+        <p class="lead" style="font-weight:bold">This is the genuine article body with enough words to be selected as the main content node of this page for sure.</p>
+        <p style="margin:0">A second real paragraph, long enough to keep the article selected as the main content of the page here.</p>
+      </article></main>
+      <footer class="site-footer">© 2026</footer>
+    </body></html>`;
+    const { html } = await wash(STYLED_MAIN, { boilerplate: 'balanced', level: 'styled' });
+    // The markup the v1 core would have stripped before washing now survives.
+    expect(html).toContain('class="article-content"');
+    expect(html).toContain('class="lead"');
+    expect(html).toMatch(/style="color: ?navy"/);
+    expect(html).toMatch(/style="font-weight: ?bold"/);
+    // Extraction still ran (boilerplate dropped, not just a whole-document wash).
+    expect(html).not.toContain('© 2026');
+    expect(html).not.toContain('Home');
+  });
+
   it('handles empty input', async () => {
     const { html } = await wash('');
     expect(typeof html).toBe('string');

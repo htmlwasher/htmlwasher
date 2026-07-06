@@ -3,7 +3,7 @@
 // line_processing, remove_control_characters) and trafilatura/json_metadata.py
 // (normalize_json) — Apache-2.0.
 
-import { type HElement, type HNode, TEXT_NODE } from '../core/dom.js';
+import { type HElement, type HNode, TEXT_NODE } from './dom.js';
 
 /** Strip HTML comments and tags from a raw string. Mirrors `utils.HTML_STRIP_TAGS`. */
 const HTML_STRIP_TAGS = /<!--[\s\S]*?-->|<[^>]*>/g;

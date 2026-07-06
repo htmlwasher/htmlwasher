@@ -5,7 +5,7 @@
 // priority order, or undefined. It is intentionally small — not a faithful port
 // of htmldate's full extraction.
 
-import type { HDocument } from '../core/dom.js';
+import type { HDocument } from './dom.js';
 
 // A YYYY-MM-DD prefix of any ISO-8601 datetime, validated loosely.
 const ISO_DATE = /(\d{4})-(\d{2})-(\d{2})/;

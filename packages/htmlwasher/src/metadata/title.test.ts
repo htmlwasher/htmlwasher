@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDocument } from '../core/dom.js';
+import { parseDocument } from './dom.js';
 import { examineTitleElement, extractTitle } from './title.js';
 
 const titleOf = (html: string): string | undefined => extractTitle(parseDocument(html));

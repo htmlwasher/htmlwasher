@@ -2,7 +2,7 @@
 // License extraction ported from trafilatura/metadata.py (extract_license,
 // parse_license_element, LICENSE_REGEX, TEXT_LICENSE_REGEX) — Apache-2.0.
 
-import { type HDocument, type HElement, trim } from '../core/dom.js';
+import { type HDocument, type HElement, trim } from './dom.js';
 
 // Creative Commons license codes embedded in an href (e.g. /by-nc-sa/4.0).
 const LICENSE_REGEX = /\/(by-nc-nd|by-nc-sa|by-nc|by-nd|by-sa|by|zero)\/([1-9]\.[0-9])/;

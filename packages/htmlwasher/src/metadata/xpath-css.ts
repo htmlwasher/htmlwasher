@@ -7,7 +7,7 @@
 // `[attr*=… i]` substring selectors plus the explicit token cases trafilatura
 // enumerates. See each consumer module for the exact XPath it stands in for.
 
-import { type HDocument, trim } from '../core/dom.js';
+import { type HDocument, trim } from './dom.js';
 import { iterText } from './text.js';
 
 /**

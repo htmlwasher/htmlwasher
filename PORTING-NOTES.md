@@ -152,7 +152,50 @@ and `~/r/contextractor`.
   - **biome/knip ignores** for the generated loader (`native/*.js|cjs|mjs|d.ts`) + `ignoreWorkspaces`
     for the binary prebuild packages. (knip's repo-wide exit-1 is PRE-EXISTING flagship unused exports,
     not from BIND — INTEGRATE consumes/removes them.)
-- Phases INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
+- **Phase INTEGRATE — done.** The flagship TS package `packages/htmlwasher/` is rewired onto the
+  Rust core; the obsolete TS `core/`/`classifier/`/`profiles/` are deleted; the public `wash()`
+  surface + regression oracle stay byte-compatible and green. Changes:
+  - **`pipeline.ts` → `@htmlwasher/native`.** `runBoilerplate` now: `mode==='none'` → `{ html }`
+    (unchanged, washes the whole doc); else `const r = await extract(html, { focus:
+MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts internally). The
+    old `classifyPage`/`getProfile`/`extractContentHTML`/`CoreOptions` logic + the classifier
+    try/catch are GONE. Empty `r.contentHtml` keeps the warn-and-wash-whole-document fallback;
+    else the unsanitized `r.contentHtml` flows through `washHtml` (unchanged boundary contract).
+    `wash()` passes NO `pageType` override (classifier always auto-runs); `maxInputBytes` still
+    enforced before the FFI call. Zero public-API change. `@htmlwasher/native` added as a
+    `workspace:*` dependency.
+  - **`core/dom.ts` → `metadata/dom.ts` (trimmed).** It was a self-contained linkedom wrapper; only
+    the metadata-used subset (`parseDocument`, `trim`, `TEXT_NODE`, `HNode`/`HElement`/`HDocument`)
+    is kept, dropping the extraction/classifier-only exports (`parseDocumentSpec`, `looksLikeDocument`,
+    `isElement`, `tagOf`, `unwrap`, `classId`, `textLength`, …) so knip stays clean. All 20
+    `metadata/**` imports repointed `../core/dom.js` → `./dom.js`. `parseDocument`/`trim` stay
+    covered transitively by the 20 metadata test files (no dedicated `metadata/dom.test.ts` needed).
+  - **Deletions:** `src/core/`, `src/classifier/`, `src/profiles/` (source + `*.test.ts`), and
+    `test/adbar-corpus.test.ts` (→ cargo `tests/adbar_corpus.rs`). `package.json`: dropped
+    `onnxruntime-node` (deps), `onnxruntime-web` (optionalDeps), and the `src/classifier/model`
+    `files` entry; kept `dompurify`/`jsdom`, `linkedom`/`parse5`/`htmlparser2`, `chardet`/`iconv-lite`,
+    etc. Root `package.json`: `onnxruntime-node` removed from `pnpm.onlyBuiltDependencies`.
+  - **Types + tests.** `types.ts` unchanged (frozen public surface). New `src/native-types.test.ts`:
+    a compile-time `Expect<Equal<PageType, ExtractResult['pageType']>>` + `expectTypeOf` both-ways
+    assertion (7 wire strings). New `pipeline.test.ts` case: `styled × balanced` proves `class` +
+    inline `style` SURVIVE extraction through `wash()` (the doc-09 payoff, impossible in v1). The
+    pre-existing Phase-FLOOR `HOSTILE_MAIN` extraction-path floor tests now exercise the REAL Rust
+    path and still pass (the washing floor sanitizes the Rust core's unsanitized output).
+  - **Goldens re-baselined: NONE.** There are no snapshot/golden files in the flagship package, and
+    no surviving test asserted the v1 stripped-markup behavior on the extraction path (those
+    assertions lived in the now-deleted `core/*` tests), so the doc-09 markup-preservation diff
+    (styled/correct × extraction keeping class/inline-style/data-\*) and the preset-level attribute
+    diffs surfaced zero test failures to re-baseline. The new `styled × balanced` test locks in the
+    payoff instead.
+  - **Deleted-`*.test.ts` → cargo mapping** recorded below the "v1 test → cargo test mapping seed"
+    table.
+  - **Gate GREEN:** `pnpm build && lint && test` all pass; flagship suite 218 tests (was 377 — the
+    ~159 core/classifier/profiles unit tests now live in cargo). **adbar eval:
+    P=0.814 / R=0.844 / F1=0.828** over 100 pages (a lift over v1's 0.79/0.81/0.80 — the
+    preserve-markup Rust core, not a regression; floors pages>50/P>0.6/R>0.65/F1>0.65 all cleared).
+    Offline wash-corpus-tester: 28 fixtures, security-at-all-levels 0, verdict PASS. `npx knip`
+    cleaner (the onnxruntime/classifier dead exports it flagged are gone).
+- Phases VALIDATE → RETEST → POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
@@ -420,6 +463,34 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
 | `classifier/features/tfidf.test.ts`   | 4   | inline tfidf                                    | PORT (sklearn smooth_idf L2)                                                                                                                                                                  |
 | `core/serialize-filtered.test.ts`     | 22  | split                                           | **PORT ≈17** (skip-layer/escaping/empty-node → DOM-pass tests) / **RETIRE ≈5** (emit-whitelist + attribute-policy = bucket C; port only vs the retained whitelist parity mode)                |
 
+### INTEGRATE final disposition — the 16 deleted v1 `*.test.ts` → cargo
+
+Recorded at Phase INTEGRATE when the TS `core/`/`classifier/`/`profiles/` were deleted. All cargo
+targets are under `packages/htmlwasher/native/` (integration = `tests/*.rs`; internal = inline
+`#[cfg(test)] mod tests`). Verified the named cargo modules exist.
+
+| deleted v1 `*.test.ts`                | disposition                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `core/extract.test.ts`                | → cargo `tests/extract.rs` (backoff/unconditional-drop guards ported; no-leakage RE-BASELINED)   |
+| `core/clean.test.ts`                  | → cargo `tests/clean.rs` + inline `html_processing.rs`/`link_density.rs`                         |
+| `core/dom.test.ts`                    | → cargo `tests/dom.rs` (spec-parse parity); `parseDocument`/`trim` now covered by metadata tests |
+| `core/main-content.test.ts`           | → cargo `tests/main_content.rs`                                                                  |
+| `core/profile.test.ts`                | → cargo `tests/profile.rs`                                                                       |
+| `core/serialize-filtered.test.ts`     | → cargo `tests/serialize.rs` (~17 ported); ~5 emit-whitelist/attr-policy RETIRED per doc 09      |
+| `profiles/index.test.ts`              | → cargo inline `page_type` profiles + `tests/profile.rs`                                         |
+| `classifier/classifier.test.ts`       | → cargo `tests/classifier_cascade.rs`; ONNX-backend/WASM-parity cases RETIRED per doc 09         |
+| `classifier/url-heuristics.test.ts`   | → cargo inline `page_type/url.rs`                                                                |
+| `classifier/html-signals.test.ts`     | → cargo inline `page_type/signals.rs`                                                            |
+| `classifier/parity.test.ts`           | → cargo `tests/classifier_parity.rs` (retargeted ONNX→GBDT, argmax 15/15)                        |
+| `classifier/features/index.test.ts`   | → cargo inline vocab loader (`page_type/tfidf.rs` + `model.rs` LazyLock validation)              |
+| `classifier/features/numeric.test.ts` | → cargo inline `page_type/features.rs`                                                           |
+| `classifier/features/text.test.ts`    | → cargo inline `page_type/features.rs` (TF-IDF input assembly)                                   |
+| `classifier/features/tfidf.test.ts`   | → cargo inline `page_type/tfidf.rs`                                                              |
+| `test/adbar-corpus.test.ts`           | → cargo `tests/adbar_corpus.rs`                                                                  |
+
+The TS-side regression oracle now lives in `packages/htmlwasher/test/validation/corpus-validation.test.ts`
+(adbar eval P/R/F1) and the offline wash-corpus-tester — both exercise the full `wash()` over the Rust core.
+
 ## v2 open questions (resolve at the named phase)
 
 - **CRATE — `html-cleaning` crate license — RESOLVED (moot).** 0.3.0 is MIT OR Apache-2.0 but pins
@@ -454,6 +525,14 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
   `wasm32-wasip1-threads` needs `WASI_SDK_PATH` — neither is on this host, so their `npm/<target>/`
   dirs + `package.json` + a README note exist but the binaries are CI's job (NOT faked). `build:wasm`
   script is wired for CI.
+- **POLISH — dead-code / knip cleanup.** After INTEGRATE, `npx knip` still exits 1 on pre-existing dead
+  code now fully exposed. Chief item: **`htmlparser2` is a dead flagship dependency** — `git grep` confirms
+  it was never imported in `src` even pre-INTEGRATE (the stale SPEC "classifier hot-path" claim was wrong;
+  the classifier used the linkedom-based `dom-query`), so DROP it. Plus pre-existing unused exports
+  (`extractMetadataFromDocument`, `OpenGraphResult`, `TitleParts`, `DecodeBufferResult`, `NormalizeHtmlResult`,
+  `WashOptions`/`WashOutput`; wash-corpus-tester `renderTable`/`renderMarkdown`/`SUBSTANTIAL_BODY_TEXT`/`ComboResult`),
+  the live-crawl-tester stub deps, and the root `vitest` devDep. Resolve at POLISH's full-repo review + a
+  clean `npx knip` pass (remove or `knip.ignore`).
 
 ---
 
