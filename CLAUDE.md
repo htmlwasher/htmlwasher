@@ -50,7 +50,7 @@ Biome owns JS/TS/JSON lint+format; Prettier + markdownlint-cli2 own Markdown; cs
 - **Node 22+**, **pnpm 10+** — the library and the offline `packages/wash-corpus-tester/`
 - **Python 3.12+ with [uv](https://docs.astral.sh/uv/)** — only for the offline `training/` pipeline
 - **git** — to clone the six read-only reference repos into `~/r/htmlwasher-sources/`
-- **No Rust toolchain is required to build htmlwasher.** Rust appears only as read-only reference under `~/r/htmlwasher-sources/` (never built here); `rust-analyzer` is enabled solely to READ those references.
+- **Rust toolchain (cargo/rustc, current stable ≥ 1.85 for edition 2024) — required only to REBUILD the native crate** at `packages/htmlwasher/native/`. Committed prebuilt `.node` binaries (added at Phase BIND) let contributors without Rust still `pnpm build`/`pnpm test` — the native build script self-skips when no toolchain is configured. `rust-analyzer` is first-class: it reads the in-repo crate AND the read-only references under `~/r/htmlwasher-sources/`.
 
 ## Reference sources are read-only (external)
 

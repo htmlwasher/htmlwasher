@@ -46,3 +46,9 @@ training/**/*.csv
 
 # NOTE: packages/htmlwasher/src/classifier/model/*.onnx and tfidf-vocab.json
 # ARE committed (shipped artifacts) — do not ignore them.
+
+# Rust native crate (packages/htmlwasher/native): build output + local .node.
+# Cargo.lock IS committed (the pnpm-lock gitignore convention does NOT extend to Cargo).
+# npm/<target>/*.node prebuilds (added at Phase BIND) ARE committed — do not ignore them.
+target/
+packages/htmlwasher/native/*.node

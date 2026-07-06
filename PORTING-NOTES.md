@@ -54,7 +54,39 @@ and `~/r/contextractor`.
   (structure tree + SPEC mapping), root SPEC.md, READMEs, `.claude/**`, `.gitignore`, and training
   docs. `pnpm ls -r` shows every package at its new path with its name unchanged. Gate green:
   `pnpm build && lint && test` (377 lib tests; corpus 28 fixtures PASS).
-- Phases CRATE → CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
+- **Phase CRATE — done.** `packages/htmlwasher/native/` (crate `htmlwasher-native`, plain lib —
+  cdylib/napi land at BIND) ports the live rs-trafilatura path through the tested v1 TS core with
+  the doc-09 divergences: bucket-B cleaning (`html_processing.rs` + `tags.rs`), the content-node
+  cascade (`selector/{content,discard,utils}.rs`), link density (`link_density.rs`), the relocated
+  `prune_unwanted_nodes` (`extractor/fallback.rs`), the 7 profiles + `PageType` (`page_type/mod.rs`),
+  and orchestration + the DUAL-mode serializer (`extract.rs`). Gate green: `cargo build/test`
+  (63 tests: 8 unit + 55 integration incl. the doc-09 backoff guards + malformed no-panic corpus +
+  adbar sanity), `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`. Decisions/deviations:
+  - **`html-cleaning` NOT wired.** 0.3.0 pins `dom_query 0.24`, type-incompatible with the mandated
+    `dom_query 0.28` (two dom_query trees). Bucket-B cleaning is ported directly from the tested v1
+    `clean.ts` instead — faithful + license-clean. (Resolves the CRATE license open question moot.)
+  - **dom_query `unwrap_node` is a footgun**: it removes a node's _parent_ (promoting the node + its
+    siblings), NOT "replace element with its children". Tag stripping uses `strip_elements` (correct
+    keep-children unwrap); `unwrap_node` is never used. This was the root cause of a 93%-content-loss
+    bug via `<meta>` in `<body>` (microdata) during cleaning.
+  - **Depth guard enforced.** `enforce_max_depth` (iterative, `MAX_TREE_DEPTH=512`) runs before
+    cleaning so no downstream recursion (dom_query's recursive `strip_elements`, the serializer)
+    overflows; verified on 3000-deep divs / 2000-deep tables in dev AND release. Table caps
+    (`MAX_TABLE_CELLS=20_000`, `MAX_TABLE_TEXT_LEN=200_000`) enforced in the serializer.
+  - **`remove_comments` implemented for real** (rs's `dom.rs` stub is a no-op) as a DOM comment strip.
+  - **`prune_unwanted_nodes` reconciled to ONE copy** in `extractor/fallback.rs`.
+  - **`COMMENTS_ARE_CONTENT` thread-local → explicit `comments_are_content` field** on `CoreOptions`.
+  - **`textLength` from DOM `text()`** of the kept subtree (the text twin), never regex; `''`-on-
+    whitespace contract preserved.
+  - **DEFERRED (honest partial):** `aggregate_sections`/`collect_repeated_items` post-passes (dead
+    flags in v1; carried as profile config, effect measured at VALIDATE) and the structured
+    JSON-LD/Discourse/baseline rescue fallbacks are NOT ported this phase — the v1-equivalent core
+    cascade (selector → semantic → scoring → body) + backoff + body fallback is.
+  - **RE-BASELINED tests:** the v1 "no class/style/id leakage" assertions invert under preserve-markup
+    (attributes SURVIVE); the original whitelist behavior is retained behind `EmitMode::WhitelistParity`
+    and tested there. `precision`↔`recall` does not change output on the 4 adbar pages (matches v1's
+    documented finding); its observable effect is proven by synthetic link-density tests in `tests/extract.rs`.
+- Phases CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
@@ -324,18 +356,32 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
 
 ## v2 open questions (resolve at the named phase)
 
-- **CRATE — `html-cleaning` crate license** (crates.io). Verify FIRST; keep-vs-reimplement shapes the whole
-  port. Record in `@/NOTICE` at POLISH.
-- **CRATE — `remove_comments` no-op stub.** Bucket B needs comments gone; implement a real comment-strip DOM pass.
-- **CRATE — two `prune_unwanted_nodes` copies** (`html_processing.rs:914` + `extractor/pruning.rs`) → reconcile to one.
+- **CRATE — `html-cleaning` crate license — RESOLVED (moot).** 0.3.0 is MIT OR Apache-2.0 but pins
+  `dom_query 0.24`, type-incompatible with the mandated `dom_query 0.28`; NOT wired (bucket-B cleaning
+  ported directly from v1 `clean.ts`). No `@/NOTICE` entry needed for it.
+- **CRATE — `remove_comments` no-op stub — RESOLVED.** Implemented as a real DOM comment-strip pass
+  (`html_processing.rs::remove_comments`, iterating comment nodes).
+- **CRATE — two `prune_unwanted_nodes` copies — RESOLVED.** Reconciled to ONE copy in
+  `extractor/fallback.rs::prune_unwanted_nodes`.
+- **CRATE — dom_query `unwrap_node` footgun — RESOLVED.** It removes a node's PARENT, not the node;
+  tag stripping uses `strip_elements` instead. Flagged so CLASSIFY/BIND avoid it.
 - **CLASSIFY — does `default_left` ever activate?** `extract_features.py` fills a DENSE f[] (0.0 for absent,
   never NaN). If features are never truly missing, `default_left` is inert and strict-`<` with 0.0-for-absent
   is the whole story → trivial exact parity. Verify against the exported JSON dump; if so, document that the
   evaluator need not special-case missing routing (but honor it defensively).
 - **CLASSIFY — `token_pattern`/`ngram_range` of the shipped vocab.** Confirm the retrain uses
   `(?u)\b\w\w+\b` unigrams so `tfidf-vocab.json` column order (89..188) is reproduced on both sides.
-- **VALIDATE — score movement from newly-live `aggregate_sections`/`collect_repeated_items`.** These were dead
-  flags in v1; live in the Rust core they may move P/R/F1. Investigate any drop, document any gain, re-baseline.
+- **VALIDATE — score movement from `aggregate_sections`/`collect_repeated_items`.** CRATE carried these as
+  profile config only (dead flags in v1, not yet functional in Rust) — so VALIDATE should match v1 scores, not
+  see a lift. If they are made functional later, they may move P/R/F1: investigate any drop, document any gain.
+- **RETEST-deferred — rs-trafilatura structured rescues + aggregation passes (the "newly live" behavior).**
+  The crate reproduces v1's extraction (selector → semantic → scoring → body cascade + name-filter backoff +
+  whole-body fallback); it does NOT yet port `extractor/fallback.rs`'s structured rescues (JSON-LD `articleBody`,
+  Discourse `data-preloaded`, external-candidate comparison, baseline `should_discard` pruning) or the
+  `aggregate_sections`/`collect_repeated_items` post-passes. Intentional for regression parity (v1 lacked them
+  → no VALIDATE regression), but they are the enhancements the brief wanted. Port them if RETEST's live corpus
+  shows DOM-extraction failures a structured rescue would fix, or a per-type F1 gap the aggregation passes would
+  close. Caveat: a fallback win synthesizes markup (preservation is best-effort by construction).
 - **BIND — Zig + WASI SDK.** Cross-building linux-gnu needs `cargo-zigbuild` (`napi build -x`); the
   wasm32-wasip1-threads fallback needs `WASI_SDK_PATH`. Install at BIND/CI, not before.
 
