@@ -14,7 +14,11 @@ license = "Apache-2.0"
 repository = "https://github.com/glueo/htmlwasher"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# `deny` (not `forbid`): our own code never writes `unsafe` (deny is a hard error),
+# but napi-derive's generated addon code requires `unsafe` and permits it with a local
+# `#[allow(unsafe_code)]` — which `forbid` (unlike `deny`) would override and reject,
+# making the napi binding uncompilable. So: deny for us, allowed only inside napi codegen.
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

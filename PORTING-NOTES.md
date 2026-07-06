@@ -119,7 +119,40 @@ and `~/r/contextractor`.
     not the small vocab), which breaks artifact reproducibility vs `training/`. Fixed: added
     `!**/native/artifacts` to `biome.json` `files.includes` (alongside `!**/classifier/model` + `!**/fixtures`).
     Always regenerate artifacts from `training/` (canonical `json.dumps`); never let biome touch them.
-- Phases BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
+- **Phase BIND — done.** napi-rs v3 addon surface (`src/binding.rs`) + `build.rs` + the contextractor
+  committed-prebuild packaging landed in `packages/htmlwasher/native/`. JS API: async
+  `extract(html, options?) → Promise<ExtractResult>` (napi `AsyncTask` on the libuv threadpool) +
+  `extractSync`; `ExtractOptions {pageType?, focus?, url?}` → the crate `Options`; `ExtractResult
+{contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings}`; typed errors → JS
+  exceptions. Auto-generated `index.d.ts` types `pageType`/`focus` as string-literal UNIONS (the 7 wire
+  strings incl. `'collection'`; `'precision' | 'balanced' | 'recall'`), asserted by the vitest smoke
+  test. `pnpm build`/`lint`/`test` green
+  (flagship v1 suite still 377; native smoke 4/4), cargo test 95, and clippy (default and
+  `--features napi`) plus fmt all clean. Committed the host `darwin-arm64` prebuild
+  (`npm/darwin-arm64/*.node`) + the generated
+  loader; the other 4 native targets (Zig) + `wasm32-wasip1-threads` (WASI SDK) are CI-deferred (dirs +
+  package.json + README note only — binaries NOT faked). Key decisions:
+  - **`napi-build` is v2, not v3.** napi/napi-derive are v3 (3.10 / 3.5) but napi-build is versioned
+    independently and maxes at 2.3.x (`napi-build = "2"`). Resolves the brief's `napi-build = "3"`.
+  - **`unsafe_code = "forbid"` → `"deny"`** (root workspace). napi-derive's generated code needs
+    `unsafe` behind a local `#[allow(unsafe_code)]`, which `forbid` overrides and rejects (E0453) —
+    the binding is uncompilable under forbid. `deny` still hard-errors on OUR unsafe. Locked-decision
+    deviation, forced by napi; documented in-line in `Cargo.toml`.
+  - **napi behind a default-OFF `napi` cargo feature** (optional `napi`/`napi-derive` deps). A
+    `#[cfg(not(test))]` gate is NOT enough: integration tests link the lib built WITHOUT `cfg(test)`,
+    so binding + Node-API symbols leak into the test exe (undefined-symbol link error). The feature
+    gate keeps `cargo test`/`build`/`clippy` pure-Rust; `napi build --features napi` builds the addon.
+  - **`pageType`/`focus` typed as string-literal UNIONS at the FFI boundary** (`String` fields +
+    `#[napi(ts_type = "'article' | … | 'service'")]`), NOT `#[napi(string_enum)]` const enums. Two
+    reasons: the frozen public API is a plain string union with no TS enums, AND bundlers (esbuild/vitest)
+    ERASE `const enum`s — a caller must pass the raw wire string, which a const-enum type rejects, so every
+    `pipeline.ts` call would need a cast (and the smoke test failed to type-check). The union `ts_type` gives
+    the exact `.d.ts` type AND working runtime strings; `binding.rs` converts string↔crate enum. (Initial
+    BIND used `string_enum`; corrected to `ts_type` unions during BIND verification.)
+  - **biome/knip ignores** for the generated loader (`native/*.js|cjs|mjs|d.ts`) + `ignoreWorkspaces`
+    for the binary prebuild packages. (knip's repo-wide exit-1 is PRE-EXISTING flagship unused exports,
+    not from BIND — INTEGRATE consumes/removes them.)
+- Phases INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
@@ -416,8 +449,11 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
   → no VALIDATE regression), but they are the enhancements the brief wanted. Port them if RETEST's live corpus
   shows DOM-extraction failures a structured rescue would fix, or a per-type F1 gap the aggregation passes would
   close. Caveat: a fallback win synthesizes markup (preservation is best-effort by construction).
-- **BIND — Zig + WASI SDK.** Cross-building linux-gnu needs `cargo-zigbuild` (`napi build -x`); the
-  wasm32-wasip1-threads fallback needs `WASI_SDK_PATH`. Install at BIND/CI, not before.
+- **BIND — Zig + WASI SDK — DEFERRED TO CI (as planned).** The host `aarch64-apple-darwin` prebuild is
+  built + committed. The other 4 native targets need `cargo-zigbuild` (`napi build -x`) and
+  `wasm32-wasip1-threads` needs `WASI_SDK_PATH` — neither is on this host, so their `npm/<target>/`
+  dirs + `package.json` + a README note exist but the binaries are CI's job (NOT faked). `build:wasm`
+  script is wired for CI.
 
 ---
 

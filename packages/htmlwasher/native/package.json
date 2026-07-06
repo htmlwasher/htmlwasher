@@ -1,0 +1,43 @@
+{
+  "name": "@htmlwasher/native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "napi-rs v3 binding around the htmlwasher-native Rust extraction core (boilerplate removal + page-type classifier). Consumed only by the htmlwasher pipeline.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "napi": {
+    "binaryName": "htmlwasher-native",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc",
+      "wasm32-wasip1-threads"
+    ]
+  },
+  "scripts": {
+    "build": "node -e \"if (!process.env.CARGO_HOME && !process.env.npm_config_rebuild_native) { console.log('@htmlwasher/native: skipping build (committed prebuilds present; set CARGO_HOME or npm_config_rebuild_native=1 to rebuild).'); process.exit(0); } require('child_process').execSync('napi build --platform --release --features napi', { stdio: 'inherit' });\"",
+    "build:rebuild": "napi build --platform --release --features napi",
+    "build:debug": "napi build --platform --features napi",
+    "build:wasm": "napi build --platform --release --features napi --target wasm32-wasip1-threads",
+    "test": "node -e \"const cp = require('child_process'); if (process.env.CARGO_HOME || process.env.npm_config_rebuild_native) { cp.execSync('cargo test --workspace', { stdio: 'inherit' }); } cp.execSync('vitest run', { stdio: 'inherit' });\"",
+    "lint": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.7.0",
+    "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "@htmlwasher/native-darwin-arm64": "file:npm/darwin-arm64",
+    "@htmlwasher/native-darwin-x64": "file:npm/darwin-x64",
+    "@htmlwasher/native-linux-arm64-gnu": "file:npm/linux-arm64-gnu",
+    "@htmlwasher/native-linux-x64-gnu": "file:npm/linux-x64-gnu",
+    "@htmlwasher/native-win32-x64-msvc": "file:npm/win32-x64-msvc",
+    "@htmlwasher/native-wasm32-wasi": "file:npm/wasm32-wasi"
+  }
+}

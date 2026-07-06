@@ -82,6 +82,32 @@ U+001C–U+001F, U+0085; excludes U+FEFF); selectolax comma-union NO-dedup (one 
 sub-selector, document order); the 500_000-byte body-text gate; scikit-learn TF-IDF (smooth_idf, L2);
 `<template>` content excluded natively by dom_query/html5ever (matches lexbor).
 
+## napi binding (Phase BIND) — `@htmlwasher/native`
+
+The napi-rs v3 addon surface (`src/binding.rs`), behind the `napi` cargo feature (default
+OFF so `cargo test`/`build`/`clippy` build the pure-Rust `lib` with no Node-API symbols;
+only `napi build --features napi` compiles the cdylib addon). Deps: `napi` v3 (optional,
+`napi9`+`async`), `napi-derive` v3 (optional), `napi-build` v2 (build-dep).
+
+- `extract(html, options?) → Promise<ExtractResult>` — async on the libuv threadpool
+  (napi `AsyncTask`; never blocks the event loop).
+- `extractSync(html, options?) → ExtractResult` — synchronous.
+- `ExtractOptions { pageType?: PageType, focus?: 'precision'|'balanced'|'recall', url?: string }`
+  → mapped to the crate `Options` (default emit = preserve-markup).
+- `ExtractResult { contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings }`
+  — `pageType` is a `PageType` string enum whose 7 values are the wire strings
+  (`Category → "collection"`); `confidence` is omitted on a `pageType` override. Typed crate
+  errors become JS exceptions (nothing panics). `index.d.ts` is auto-generated.
+
+Packaging (contextractor committed-prebuild pattern): `package.json` (`@htmlwasher/native`,
+private) with a self-skipping `build` (skips when no `CARGO_HOME`/`npm_config_rebuild_native`
+and a prebuild is present) and a `test` that runs `cargo test` + the vitest smoke test when a
+toolchain is present, vitest-only otherwise. `optionalDependencies` = 5 native targets +
+`wasm32-wasi`, each `npm/<target>/` a private os/cpu-scoped package. The generated loader
+(`index.js`/`index.d.ts` + wasm glue) is committed; the crate-root `*.node` is gitignored while
+`npm/<target>/*.node` prebuilds are committed. `test/smoke.test.ts` loads the built binding and
+extracts a fixture end-to-end.
+
 ## Modules
 
 - `options.rs`/`result.rs`/`error.rs` — the public surface.
@@ -95,6 +121,8 @@ sub-selector, document order); the 500_000-byte body-text gate; scikit-learn TF-
 - `selector/{content,discard,utils}.rs` — the content-node cascade, name-based discard predicates,
   content-rule matching.
 - `extractor/fallback.rs` — `prune_unwanted_nodes` (reconciled single copy).
+- `binding.rs` — the napi-rs v3 addon surface (`extract`/`extractSync`), behind the `napi` feature.
+- `build.rs` — `napi_build::setup()` (cdylib link args).
 - `page_type/mod.rs` — `PageType` + the 7 `ExtractionProfile` constants (verbatim) + the `classify`
   cascade.
 - `page_type/{url,features,tfidf,gbdt,model,signals}.rs` — the 3-stage classifier: URL heuristics, the
@@ -111,6 +139,10 @@ sub-selector, document order); the 500_000-byte body-text gate; scikit-learn TF-
   uses `strip_elements`.
 - **GBDT splits evaluated in float32** to match XGBoost (f64 comparison shifts probs; argmax unaffected).
 - **`onnxruntime` NOT used** — the classifier is a pure-Rust GBDT over the XGBoost JSON dump (no ONNX).
+- **`unsafe_code = "deny"` (not `forbid`)** at the workspace — our code never writes `unsafe`, but
+  napi-derive's generated addon code requires it via a local `#[allow(unsafe_code)]`, which `forbid`
+  (unlike `deny`) would reject, making the binding uncompilable. The `napi` feature is default-OFF so
+  the deny is trivially satisfied on the pure-Rust builds.
 - **Deferred this phase:** `aggregate_sections`/`collect_repeated_items` post-passes (carried as
   profile config; measured at VALIDATE) and the structured JSON-LD/Discourse/baseline rescue paths.
   The v1-equivalent core cascade + backoff + body fallback is ported.
@@ -118,7 +150,9 @@ sub-selector, document order); the 500_000-byte body-text gate; scikit-learn TF-
 ## Gate
 
 `cargo build --workspace`, `cargo test --workspace` (95 tests), `cargo clippy --workspace
---all-targets -- -D warnings`, `cargo fmt --check` — all green. `tests/classifier_parity.rs` is the
+--all-targets -- -D warnings` (+ `--features napi` to lint the binding), `cargo fmt --check` — all
+green. Monorepo: `pnpm build` (native self-skips to the committed prebuild), `pnpm lint`, `pnpm test`
+(flagship v1 suite + the native vitest smoke test) all green. `tests/classifier_parity.rs` is the
 CLASSIFY gate: numeric ≤ 1e-6, tfidf ≤ 1e-6, probs ≤ 1e-4, argmax 100% on all 15 fixtures (actual:
 numeric ≤ 3.4e-13, tfidf ≤ 2.2e-16, probs ≤ 6.9e-8, argmax 15/15). Production code uses `Result` + `?`
 (no `unwrap`/`expect`/`unsafe`); tests permit unwrap/expect via `clippy.toml` + a per-file allow.

@@ -16,6 +16,13 @@
 //!   Rust sanitizes nothing else — the TS washing stage owns all tag/attribute/scheme
 //!   /CSS policy and MUST always run over [`ExtractResult::content_html`].
 
+// The napi addon surface (Phase BIND). Behind the `napi` feature (default OFF) so
+// `cargo test`/`cargo build`/`cargo clippy` build the pure-Rust `lib` (and its test
+// binaries) with NO Node-API symbols; only `napi build --features napi` (the prebuild)
+// compiles this module into the cdylib addon.
+#[cfg(feature = "napi")]
+mod binding;
+
 pub mod dom;
 pub mod error;
 pub mod extract;

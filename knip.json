@@ -1,5 +1,12 @@
 {
-  "ignore": [".claude/hooks/**", "prompts/**", "sources/**", "training/**", "**/fixtures/**"],
+  "ignore": [
+    ".claude/hooks/**",
+    "prompts/**",
+    "sources/**",
+    "training/**",
+    "**/fixtures/**",
+    "packages/htmlwasher/native/index.js"
+  ],
   "ignoreDependencies": [
     "cspell",
     "@cspell/dict-bash",
@@ -7,10 +14,15 @@
     "@cspell/dict-git",
     "@cspell/dict-rust"
   ],
+  "ignoreWorkspaces": ["packages/htmlwasher/native/npm/*"],
   "workspaces": {
     "packages/htmlwasher": {
       "entry": "src/index.ts",
       "project": "src/**"
+    },
+    "packages/htmlwasher/native": {
+      "entry": "test/**/*.test.ts",
+      "project": "test/**"
     },
     "packages/live-crawl-tester": {
       "entry": "src/index.ts",
