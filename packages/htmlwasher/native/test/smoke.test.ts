@@ -62,8 +62,18 @@ describe('@htmlwasher/native — napi binding smoke test', () => {
   });
 
   it('extract runs async on the libuv threadpool and returns a Promise', async () => {
-    const result = await native.extract(fixture('4720.html'), { focus: 'balanced' });
+    const result = await native.extract(fixture('0488.html'), { focus: 'balanced' });
     expect(result.contentHtml.length).toBeGreaterThan(0);
+    expect((WIRE_PAGE_TYPES as readonly string[]).includes(result.pageType)).toBe(true);
+    expect(/<script/i.test(result.contentHtml)).toBe(false);
+  });
+
+  it('a JS-skeleton page whose only static text is hidden extracts empty (hidden-element discard)', async () => {
+    // 4720.html is a JS-rendered product skeleton; its sole static text is an SEO
+    // <h1> inside a display:none div, which the Trafilatura-parity hidden-element
+    // pass now drops (previously extracted as textLength 10 / "content-very-short").
+    const result = await native.extract(fixture('4720.html'), { focus: 'balanced' });
+    expect(result.textLength).toBe(0);
     expect((WIRE_PAGE_TYPES as readonly string[]).includes(result.pageType)).toBe(true);
     expect(/<script/i.test(result.contentHtml)).toBe(false);
   });

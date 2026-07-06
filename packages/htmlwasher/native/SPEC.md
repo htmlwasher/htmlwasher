@@ -46,7 +46,9 @@ Option<PageType>` (drives profile selection; `None` = the `Article` profile / cl
 ## Pipeline (`extract.rs::extract_content`)
 
 parse (`dom_query`/html5ever) → `enforce_max_depth` → `clean_document` (bucket B) → `find_content_node`
-(profile selectors → content rules → `article`/`main`/`[role=main]` → readability scoring → body) →
+(profile selectors → content rules → `article`/`main`/`[role=main]` → readability scoring → body) —
+the scoring stage carries rs-trafilatura's coverage guard: a winner covering < 3/10 of the body text
+is rejected so flat-body pages (content as bare `<p>`s under `<body>`) fall back to the body floor →
 per-render clone (`to_fragment`) with the relocated DOM passes [`prune_unwanted_nodes` link density →
 header/footer-outside-`article`/`main` → unconditional `is_always_excluded_name` + BreadcrumbList →
 gated `is_boilerplate` (skipped on the backoff path) → empty-node prune] → DUAL-mode serializer →
@@ -126,7 +128,9 @@ extracts a fixture end-to-end.
 - `tags.rs` — the tag catalogs (`TAGS_TO_CLEAN`/`TAGS_TO_STRIP`/`EMPTY_TAGS_TO_REMOVE`/void/hard-skip).
 - `patterns.rs` — token/word split + whitespace-collapse helpers.
 - `html_processing.rs` — bucket-B `clean_document`, real `remove_comments`, `prune_empty_elements`,
-  `enforce_max_depth`.
+  `enforce_max_depth`. `clean_document` also removes visually-hidden subtrees first
+  (`remove_hidden_elements` — canonical Trafilatura's `OVERALL_DISCARD_XPATH` hidden-element rule,
+  matched by go-trafilatura, absent from rs-trafilatura), backed off when it would delete every `<p>`.
 - `link_density.rs` — `link_density_test(_tables)`, `delete_by_link_density`.
 - `selector/{content,discard,utils}.rs` — the content-node cascade, name-based discard predicates,
   content-rule matching.

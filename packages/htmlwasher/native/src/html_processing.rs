@@ -13,7 +13,7 @@
 
 use dom_query::NodeRef;
 
-use crate::dom::{all_elements, select_all, tag_of};
+use crate::dom::{all_elements, class_of, id_of, select_all, tag_of};
 use crate::options::{CoreOptions, Focus};
 use crate::tags::{
     EMPTY_TAGS_TO_REMOVE, IMAGE_CLEAN_TAGS, TABLE_TAGS_TO_STRIP, TAGS_TO_CLEAN, TAGS_TO_STRIP,
@@ -79,6 +79,62 @@ fn paragraph_count(root: &NodeRef) -> usize {
     select_all(root, "p").len()
 }
 
+/// Whether an element matches the visually-hidden discard predicate of canonical
+/// Trafilatura's `OVERALL_DISCARD_XPATH` (second expression, `xpaths.py`) — ONLY
+/// its hidden-element conditions: `re:test(@id|@style, 'hidden')` (substring on id
+/// or style, never class), `contains(@style, 'display:none')` / `'display: none'`,
+/// the hidden class tokens from `re:test(@class, '^hide-|-hide-|hide-print| hidden|
+/// hide|noprint|notloaded')`, and `@aria-hidden='true'`. go-trafilatura carries the
+/// identical rule (`overallDiscardedContentRule2`); rs-trafilatura dropped it, so
+/// this follows the Python/Go behavior authorities. The rest of that XPath's
+/// discard logic (comment/reply/sidebar classes) is covered by the existing discard
+/// machinery and intentionally NOT duplicated here. Matching is case-sensitive
+/// substring/prefix, like XPath `contains()`/`re:test` and the Go port.
+fn is_hidden_element(node: &NodeRef) -> bool {
+    // re:test(@id|@style, 'hidden') — also catches e.g. `visibility:hidden`.
+    let id = id_of(node);
+    let style = node
+        .attr("style")
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    if id.contains("hidden") || style.contains("hidden") {
+        return true;
+    }
+    // contains(@style, 'display:none') or contains(@style, 'display: none')
+    if style.contains("display:none") || style.contains("display: none") {
+        return true;
+    }
+    // re:test(@class, '^hide-|-hide-|hide-print| hidden| hide|noprint|notloaded')
+    let class = class_of(node);
+    if class.starts_with("hide-")
+        || class.contains("-hide-")
+        || class.contains("hide-print")
+        || class.contains(" hidden")
+        || class.contains(" hide")
+        || class.contains("noprint")
+        || class.contains("notloaded")
+    {
+        return true;
+    }
+    // @aria-hidden='true'
+    node.attr("aria-hidden")
+        .map(|v| v.to_string())
+        .unwrap_or_default()
+        == "true"
+}
+
+/// Remove visually-hidden subtrees (whole-subtree deletion, matching Trafilatura's
+/// `delete_element` inside `prune_unwanted_nodes` — see [`is_hidden_element`]).
+/// Iterates a document-order element snapshot for deterministic ordering; matches
+/// inside an already-removed ancestor become harmless detached-node removals.
+pub fn remove_hidden_elements(root: &NodeRef) {
+    for el in all_elements(root) {
+        if is_hidden_element(&el) {
+            el.remove_from_parent();
+        }
+    }
+}
+
 /// Push `tag` onto an ordered list if not already present (dedup, order-preserving).
 fn push_unique<'a>(list: &mut Vec<&'a str>, tag: &'a str) {
     if !list.contains(&tag) {
@@ -86,10 +142,11 @@ fn push_unique<'a>(list: &mut Vec<&'a str>, tag: &'a str) {
     }
 }
 
-/// Clean the document by discarding unwanted elements (go `docCleaning`). Strips the
-/// "tags to strip" (keeping children), removes the "tags to clean" (with children),
-/// drops HTML comments, and prunes empty elements. In recall mode it backs off the
-/// clean pass if it would delete every `<p>`.
+/// Clean the document by discarding unwanted elements (go `docCleaning`). Removes
+/// visually-hidden subtrees first ([`remove_hidden_elements`], with a zero-`<p>`
+/// backoff), strips the "tags to strip" (keeping children), removes the "tags to
+/// clean" (with children), drops HTML comments, and prunes empty elements. In recall
+/// mode it backs off the clean pass if it would delete every `<p>`.
 pub fn clean_document(root: &NodeRef, opts: &CoreOptions) {
     let mut cleaning_list: Vec<&str> = TAGS_TO_CLEAN.to_vec();
     let mut stripping_list: Vec<&str> = TAGS_TO_STRIP.to_vec();
@@ -119,6 +176,21 @@ pub fn clean_document(root: &NodeRef, opts: &CoreOptions) {
         for el in select_all(root, selector) {
             el.remove_from_parent();
         }
+    }
+
+    // Trafilatura parity: drop visually-hidden subtrees (screen-reader spans,
+    // `display:none` blocks, `aria-hidden`) BEFORE the strip/clean lists so hidden
+    // text never feeds scoring. Backed off like the recall-mode clean pass below:
+    // pages that hide their whole body (cloaked/JS-revealed content) must not lose
+    // every paragraph.
+    if paragraph_count(root) > 0 {
+        let backup = root.inner_html().to_string();
+        remove_hidden_elements(root);
+        if paragraph_count(root) == 0 {
+            root.set_html(backup);
+        }
+    } else {
+        remove_hidden_elements(root);
     }
 
     // Unwrap the strip list (remove the tag, keep its children). dom_query's

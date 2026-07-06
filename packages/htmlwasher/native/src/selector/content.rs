@@ -12,6 +12,13 @@ use crate::selector::utils::{ContentRule, rule};
 /// Minimum text length (Unicode scalars) for a selector match to win outright.
 const MIN_SELECTOR_CONTENT: usize = 100;
 
+/// Reject a scoring winner covering under this fraction (numerator/denominator) of the
+/// body text (rs-trafilatura `extract.rs` "coverage < 0.3" guard): the selection is
+/// likely a fragment of flat-body content (e.g. one small div among thousands of
+/// body-level `<p>`s); return `None` so the cascade falls back to the body floor.
+const MIN_SCORING_COVERAGE_NUM: usize = 3;
+const MIN_SCORING_COVERAGE_DEN: usize = 10;
+
 const ARTICLE_DIV_MAIN_SECTION: &[&str] = &["article", "div", "main", "section"];
 
 /// Content-node selector rules, tried in order (go `contentRule1..5`).
@@ -197,12 +204,22 @@ fn find_by_scoring<'a>(body: &NodeRef<'a>, opts: &CoreOptions) -> Option<NodeRef
             best_score = score;
         }
     }
+    // Coverage guard (rs-trafilatura): a winner covering < 3/10 of the body text is a
+    // fragment, not the main content — reject it and let the caller use the body floor.
+    if let Some(ref el) = best {
+        let body_len = text_len(body);
+        if body_len > 0
+            && text_len(el) * MIN_SCORING_COVERAGE_DEN < body_len * MIN_SCORING_COVERAGE_NUM
+        {
+            return None;
+        }
+    }
     best
 }
 
 /// Select the main-content element. Cascade: profile selectors → ported content
-/// selectors → semantic elements → scoring → the whole body. Never returns nothing
-/// (body is the floor).
+/// selectors → semantic elements → scoring (with the < 3/10 body-text coverage guard)
+/// → the whole body. Never returns nothing (body is the floor).
 #[must_use]
 pub fn find_content_node<'a>(body: &NodeRef<'a>, opts: &CoreOptions) -> NodeRef<'a> {
     if !opts.content_selectors.is_empty() {

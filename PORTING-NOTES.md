@@ -280,6 +280,32 @@ MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts
   - **Final gate (all three stacks green):** `pnpm build && lint && test` (flagship 233, native smoke 4/4,
     corpus PASS, adbar P=0.814/R=0.848/F1=0.831); `cargo test --workspace` + `clippy --all-targets -D
 warnings` + `fmt --check`; `uv run pytest` (17) + `uvx ruff` clean. **Deliverables checklist fully checked.**
+- **Bench-improve run (2026-07-06, `/bench:improve`) — token F1 0.873 → 0.897, htmlwasher now LEADS
+  rs-trafilatura (0.881) on the 44-page live corpus** (report: `@/benchmarks/2026-07-06-2106-benchmark.md`).
+  Two defaults-only Rust-core fixes, both faithful reference ports, 0/44 page regressions:
+  - **Scoring coverage guard (`selector/content.rs`).** The Gutenberg-class flat-body gap root-caused: NOT
+    a fallback gap after all — rs-trafilatura wins those pages via a `coverage < 0.3` guard in its heuristic
+    scorer (best candidate covering <30% of body text → `None` → whole-body extraction). Its celebrated
+    `candidate_is_usable`/`compare_external_extraction` pair is effectively DEAD upstream (the "external"
+    candidate is built then discarded via `let _ =`), so the previously-deferred ">2x even when substantial"
+    port is moot. Ported the guard into `find_by_scoring` (winner <30% of body text → fall through to the
+    body floor; scoring stage only). gutenberg P&P F1 0.028 → 0.999 (1.8k → 128.7k words), preserve-markup
+    intact (no bare-`<p>` synth needed). +3 tests incl. a gated Gutenberg cache-fixture test.
+  - **Hidden-element discard (`html_processing.rs`).** Ported the hidden-element conditions of canonical
+    Trafilatura's default `OVERALL_DISCARD_XPATH` 2nd expression (xpaths.py:131-140; identical rule in
+    go-trafilatura; ABSENT from rs-trafilatura): `hidden` substring in id/style, `display:none`/`display:
+none` styles, `hide-`/`-hide-`/`hide-print`/`hidden`/`hide`/`noprint`/`notloaded` class tokens,
+    `aria-hidden="true"` — whole-subtree removal in `clean_document`, with an all-`<p>`-hidden backoff.
+    Kills e.g. Wikipedia's 50× `<span style="display: none;">Unsupported:</span>` sr-only spans (TypeScript
+    page 0.905 → 0.936; 5 more pages +0.006..+0.025). +10 tests. Gotcha: the napi smoke test's 4720.html
+    fixture is an AliExpress JS-skeleton whose ONLY static text was a hidden SEO `<h1>` — it now correctly
+    extracts empty (Trafilatura drops it too); smoke test re-pointed + a new test pins that behavior.
+  - **Documented, not tuned:** overreacted.io's gap is figure-wrapped code kept by htmlwasher's deliberate
+    `include_images=true` default (Trafilatura's default deletes `<figure>` subtrees wholesale — with
+    `include_images=True` it keeps the code too); webscraper.io/travel_2 are reference noise on tiny or
+    reference-inconsistent pages; forum/listing/collection types htmlwasher already leads rs on.
+  - **Offline oracle held:** adbar P 0.814→0.825 / R 0.848→0.840 / F1 0.831→0.832; corpus tester PASS
+    (100% page-type accuracy); cargo + pnpm gates green; host prebuild rebuilt + committed.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
 
