@@ -20,7 +20,7 @@ Rebuild **htmlwasher** (npm package `htmlwasher`, this repo) so that its compute
 
 Also unchanged in role: the **metadata sidecar** (TypeScript), the **offline CLI**, the offline **Python `training/` pipeline** (its export format changes), and the offline **wash-corpus-tester** E2E harness (`packages/wash-corpus-tester/` after the restructure).
 
-This is a **migration, not a greenfield build**: v1 (all-TypeScript, Phases 0–8 of the original brief) is implemented, tested (≈369 library tests, adbar eval F1 ≈ 0.80, classifier held-out accuracy 0.777), and its public API is frozen. v2 adopts the contextractor repo layout (flat `packages/*`, the Rust crate nested at `packages/htmlwasher/native/`), replaces the flagship's `src/{core,classifier,profiles}/` with that crate, makes the TS washing stage the sole sanitization authority (context doc 09), and deletes the runtime ONNX dependency, while every v1 behavior contract and test floor continues to hold — with the expected output diffs re-baselined rather than regressed: the deliberate `styled`/`correct` × extraction markup preservation (doc 09), doc 09's marginal preset-level attribute diffs (attributes the presets allow that v1's core stripped, e.g. `a[title]`), and movement from the newly-live aggregation passes (Phase VALIDATE).
+This brief runs in either of two modes — **update-in-place** (the default, when a working v1 exists) or **from scratch** (greenfield); see **Operating modes** below. In update mode it is a migration, not a rewrite: v1 (all-TypeScript, Phases 0–8 of the original brief) is implemented, tested (≈369 library tests, adbar eval F1 ≈ 0.80, classifier held-out accuracy 0.777), and its public API is frozen. v2 adopts the contextractor repo layout (flat `packages/*`, the Rust crate nested at `packages/htmlwasher/native/`), replaces the flagship's `src/{core,classifier,profiles}/` with that crate, makes the TS washing stage the sole sanitization authority (context doc 09), and deletes the runtime ONNX dependency, while every v1 behavior contract and test floor continues to hold — with the expected output diffs re-baselined rather than regressed: the deliberate `styled`/`correct` × extraction markup preservation (doc 09), doc 09's marginal preset-level attribute diffs (attributes the presets allow that v1's core stripped, e.g. `a[title]`), and movement from the newly-live aggregation passes (Phase VALIDATE).
 
 ## What v2 changes, and why
 
@@ -31,6 +31,23 @@ This is a **migration, not a greenfield build**: v1 (all-TypeScript, Phases 0–
 - **The Rust core sanitizes nothing — TypeScript owns all markup policy.** Context doc 09's code investigation splits the v1 core's removals into three buckets: **boilerplate selection** (stays — the product feature), **extraction hygiene** (stays — `<script>`/`<style>`/nav noise must die *before* text/link-density scoring, which incidentally guarantees scripts never cross the FFI), and **output sanitization/normalization** (the ~60-tag emit whitelist + attribute stripping — **deleted from Rust**; the washing presets duplicated it downstream all along). The serializer keeps its boilerplate-skip layer but emits kept nodes with original tags and attributes. Payoff: one sanitization authority instead of two whitelists drifting across languages, the `styled`/`correct` levels finally work with extraction (v1 stripped `class`/`style` before washing could keep them), and the v1 dead-filter ordering hazard disappears structurally. Preconditions are baked into the plan: the unconditional security floor (Phase FLOOR), serializer guard relocation, and DOM-based text length (the sanitization-ownership locked decision).
 - **The repo adopts the `~/r/contextractor` layout.** Flat `packages/*` (the flagship moves to `packages/htmlwasher/`, the two testers move up from `tools/htmlwasher/` to `packages/*`, the `tools/` grouping dissolves), the Rust crate nested inside the flagship at `packages/htmlwasher/native/` as the root Cargo workspace's sole member, and prebuilt `.node` binaries committed under `npm/<target>/` so contributors without a Rust toolchain can still build and test the TS packages (the native build script self-skips — contextractor's proven pattern). This completes the restructure the executed `2026-06-27` package-naming prompt explicitly deferred.
 - **What deliberately stays TypeScript:** the public `wash()` API and types, the washing pillar (all five levels, custom `SanitizeConfig`, security floor), the metadata sidecar, decode (`chardet`/`iconv-lite`), and the CLI. Do NOT port these to Rust.
+
+---
+
+## Operating modes — build from scratch or update in place
+
+This brief runs either way. Detect the mode at Phase ORIENT: does a working v1 tree exist (`packages/htmlwasher/`, or the pre-restructure `htmlwasher/`, with a green test suite)?
+
+- **Update mode (default — v1 exists).** The phases exactly as written: v1 is the regression oracle, RESTRUCTURE `git mv`s the existing dirs, FLOOR fixes the real v1 wildcard bug, INTEGRATE deletes `src/{core,classifier,profiles}/`, and VALIDATE/RETEST compare against the recorded v1 baseline. Keep `pnpm test` green throughout.
+- **From-scratch mode (greenfield — no v1).** Every pillar is built fresh in the target layout; the same phases apply, adapted:
+  - **ORIENT** — no v1 perf/score baseline to capture; record the reference engines (upstream Trafilatura, rs-trafilatura) as the comparison targets instead.
+  - **FLOOR** — there is no v1 bug to fix, but the unconditional security floor and the wildcard-`SanitizeConfig` guard are still built into the washing pillar from the start (requirements, not a retrofit).
+  - **RESTRUCTURE** — create the `packages/*` layout directly; nothing to move or rename.
+  - **CRATE / CLASSIFY / BIND** — identical: port from the rs-trafilatura references. Where a phase says "port the v1 test cases," author equivalent cases from the reference behavior + this brief's locked contracts (the v1 TS core is a convenience, not a prerequisite).
+  - **INTEGRATE** — write `pipeline.ts`, the washing pillar, the metadata sidecar, and the CLI fresh against the frozen public API defined here; nothing to delete.
+  - **VALIDATE / RETEST** — no v1 numbers to regress against; the bar is this brief's target scores (adbar F1 in the ballpark of upstream Trafilatura; classifier ≈ 0.78) and parity with the reference engines.
+
+  Wherever the brief says "the v1 suite/baseline is the oracle," read it as: **the recorded v1 baseline in update mode; the reference engines + this brief's target contracts in from-scratch mode.**
 
 ---
 
@@ -182,12 +199,13 @@ The repo is already equipped for this build — use these capabilities rather th
 - **Docs lookup — napi-rs v3, `dom_query`, XGBoost JSON model format, sanitize-html** → the `context7` plugin (library docs, already enabled) + `WebFetch`; for open questions / debugging, the `web-research-specialist` agent. (No MCP server is needed — context7 + WebFetch + LSP cover it; do not add one.)
 - **Full-repo review (Phase POLISH) + per-change review** → the `code-reviewer` agent (v2: three-stack Rust/TS/Python with the FFI/no-panic/preserve-markup checklist) and the `/meta:code-review-autofix` command; the `security-guidance` plugin and `@/.claude/rules/security.md` govern the untrusted-HTML floor.
 - **Checks** → the `test-runner` agent runs format/lint/type-check/tests; `pnpm build && pnpm lint && pnpm test` plus `cargo test --workspace` / `cargo clippy` and the training `pytest`/`ruff` are the gates.
+- **Deep live retest (Phase RETEST)** → the standalone `~/r/htmlwasher-external-tester/` benchmark (external — it hits the network) and its `benchmark-runner` agent + `run-benchmark` skill: four-engine token fidelity vs the Trafilatura reference plus the Claude `visual-extraction-judge` workflow (completeness + cleanliness). Copy its methodology; keep it reference-relative and defaults-only.
 
 ---
 
 ## Build order (phased, with explicit gates)
 
-Work phase by phase. **Do not advance until the phase's gate passes.** Commit after each phase. Keep `pnpm test` green throughout — the v1 suite is the safety net until INTEGRATE swaps the implementation.
+Work phase by phase. **Do not advance until the phase's gate passes.** Commit after each phase. Keep `pnpm test` green throughout — in update mode the v1 suite is the safety net until INTEGRATE swaps the implementation; from scratch, the growing fresh suite is the net (see **Operating modes**).
 
 ### Phase ORIENT
 
@@ -249,6 +267,21 @@ Merged from the executed `2026-06-27` package-naming prompt, whose Notes explici
 - Run the wash-corpus-tester across all 7 page types; hard security asserts and the page-type accuracy floor must hold. Compare performance against the v1 baseline captured at Phase ORIENT — expect the Rust core to be faster; document it.
 - **Gate:** scores + perf documented in `PORTING-NOTES.md`; no floor regressions.
 
+### Phase RETEST — deep external retest + autofix loop (live pages)
+
+The offline gates (adbar eval, wash-corpus-tester) never see real-page behavior, cross-engine fidelity, or human-like visual quality. Close that gap with the standalone live benchmark at `~/r/htmlwasher-external-tester/` (external by design — it does the one thing the library never does: hit the network), then autofix to the bar. Copy/adapt its methodology — its `benchmark-runner` agent and `run-benchmark` skill are the reference procedure; keep the run honest exactly as they prescribe.
+
+- **Wire it to the v2 build.** The tester consumes htmlwasher as a `file:` dependency — after RESTRUCTURE the flagship lives at `~/r/htmlwasher/packages/htmlwasher`, so update the tester's `file:` path and `pnpm install`, and rebuild htmlwasher's `dist/` first (it imports built output). The tester's rs-trafilatura path dep points at the read-only reference and is unaffected. In from-scratch mode this is the first time the tester points at the new build — verify all four engines run.
+- **Run both report pairs** (per the tester's `run-benchmark` skill):
+  - **Token report** (`pnpm bench`): fetch the corpus (≥ 30 public pages across the 7 types, cached, ~1 req/sec), run all four engines (htmlwasher, Trafilatura = reference, rs-trafilatura, mozilla/readability), and score token precision/recall/F1 vs the Trafilatura reference + internal median speed + success rate + output size.
+  - **Visual report** (`pnpm visual:prep` → the `visual-extraction-judge` workflow, one vision agent per page → `pnpm visual:report`): Claude scores every engine on **completeness** (kept the main content) and **cleanliness** (dropped the boilerplate) against the rendered screenshot — reference-free, and it scores Trafilatura too.
+- **Autofix loop (deep, iterative — the point of this phase).** Treat both reports as findings; root-cause each into the responsible layer, fix, rebuild, re-run, and iterate until the bar holds:
+  - Rank by impact: per-page / per-type token-F1 regressions (update mode) or gaps vs Trafilatura (from-scratch); visual completeness/cleanliness misses; per-page extractor failures; speed regressions vs the ORIENT baseline.
+  - Root-cause honestly into the **Rust core** (extraction / serializer / profiles), the **classifier** (a wrong page type routes the wrong profile), or the **washing stage** (over- or under-stripping) — delegate via `rust-pro` / `ts-pro` / `python-pro` and confirm with `code-reviewer`. Heuristics: a visual "dropped real content" is usually over-aggressive boilerplate removal or a misrouted profile; "kept boilerplate" is the opposite; a token-F1 cliff isolated to one page type points at that type's profile or its classifier accuracy.
+  - **Fix root causes, never the benchmark.** Fidelity is reference-relative (agreement with Trafilatura, not human gold); speed is internal extraction time; htmlwasher does more (HTML out + classification + formatting), so its time/size are not like-for-like. **Defaults only — no per-page or per-corpus precision/recall tuning, and never special-case a URL.** A fix that only moves the benchmark is a regression in disguise.
+  - After every fix, re-run the offline gates (`pnpm test`, `cargo test --workspace`, the adbar eval) so a live-page win never regresses the offline oracle.
+- **Gate:** on the live corpus, htmlwasher shows no per-type token-F1 regression vs the baseline (update mode) / sits in the ballpark of Trafilatura and no worse than rs-trafilatura (from-scratch); visual completeness + cleanliness are not worse than the baseline / are competitive with the reference engines; zero unhandled extractor failures; every offline gate still green. Commit the refreshed `reports/` in the tester and record the run + the fixes it drove in `PORTING-NOTES.md`.
+
 ### Phase POLISH — licensing, docs, review
 
 - Licensing: the Rust core is now a **code-level derivative** of rs-trafilatura (MIT OR Apache-2.0) — extend `@/NOTICE` accordingly (Murrough Foley attribution moves to/remains "derived from", now covering shipped Rust code). Keep and re-point the existing derived-from attributions rather than dropping them as stale: adbar/trafilatura (the metadata port still ships unchanged) and go-trafilatura (its tag catalogs/attribute whitelist now reach the shipped crate through rs-trafilatura's lineage — re-point file references from the deleted `src/core/*` to `packages/htmlwasher/native`). Refresh the NOTICE bundled-dependency section (onnxruntime and `model.onnx` out; the napi loader/platform packages and `model.xgb.json` in). Record the `html-cleaning` license verified at Phase CRATE, set crate `license` fields (Apache-2.0, matching the repo), keep WCXB CC-BY-4.0 attribution, keep SPDX headers where substantial code is ported.
@@ -301,11 +334,22 @@ Unchanged in role from v1 (it already exists and passes; Phase RESTRUCTURE moves
 - [ ] Python↔Rust parity: feature vectors within 1e-6, argmax 100% on fixtures; held-out accuracy re-reported.
 - [ ] adbar eval: floors hold, no regression vs P ≈ 0.79 / R ≈ 0.81 / F1 ≈ 0.80; results + perf comparison in `PORTING-NOTES.md`.
 - [ ] wash-corpus-tester green across all 7 page types, offline, in `pnpm test`.
+- [ ] Phase RETEST run: the external live benchmark (token fidelity vs Trafilatura + visual completeness/cleanliness across the four engines) shows no per-type regression vs the baseline / parity with the reference engines; the autofix loop closed every root-caused finding (defaults only, no benchmark-tuning); refreshed `reports/` committed in the tester and the run recorded in `PORTING-NOTES.md`.
 - [ ] `@/NOTICE` + crate license fields updated for the code-level rs-trafilatura derivation; `html-cleaning` license verified.
-- [ ] All `SPEC.md`s, `README.md`s, and **`@/CLAUDE.md`** (Rust toolchain now required; new structure/commands) in sync.
+- [ ] All `SPEC.md`s, `README.md`s, and **`@/CLAUDE.md`** (Rust toolchain now required; new structure/commands) in sync — including a real v2 rewrite of the **root `@/SPEC.md`** (hybrid Rust+TS+Python architecture, the napi boundary, the preserve-markup split, the operating modes).
+- [ ] This brief updated in place from the run's learnings (corrections folded in, `PORTING-NOTES.md` + context docs current) so it re-runs cleanly from scratch or as an update.
 - [ ] Full-repo review + autofix completed; `pnpm build && pnpm lint && pnpm test`, `cargo test --workspace`, `cargo clippy`, training `pytest`/`ruff` all green.
 
 Work incrementally, commit per phase, keep `PORTING-NOTES.md` current, and ask only when a decision cannot be resolved from this brief, the references, or the v1 code.
+
+---
+
+## Keep this brief current — self-improving + spec sync
+
+Every run must leave two living documents better than it found them, so the next run (in either mode) is smoother. Do this continuously as the build proceeds, not only at the end.
+
+- **Update this brief from what the run taught it.** Whenever a phase reveals the brief was wrong, stale, or thin — a reference `file:line` that moved, a locked decision that didn't survive contact with the code, a gotcha a gate should have caught, a step that needed a retry, an assumption that only holds in one mode — fold the correction back into THIS file in the same session (minimal diff): fix the offending sentence in place, append durable gotchas to the "Learnings carried" section below, and record port-level specifics in `@/PORTING-NOTES.md` (and the relevant `context/` doc when the finding is architectural). Treat the brief as re-runnable code, not a frozen artifact — after every session it must still run cleanly from scratch OR as an update. This mirrors `@/.claude/rules/self-improving-prompts.md`.
+- **Keep the specs in sync — and rewrite the root `@/SPEC.md`.** Per the repo's spec-maintenance rule, every `SPEC.md` moves in the same change as the code it documents. In particular the **root `@/SPEC.md`** needs a real v2 rewrite: it currently describes the all-TypeScript v1 system, and after the migration it must document the hybrid architecture — the `packages/htmlwasher/native/` Rust crate and the napi boundary, the preserve-markup / TS-owned-sanitization split (context doc 09), the XGBoost-JSON classifier (no ONNX), the contextractor-style layout, and these two operating modes. The package specs (flagship `packages/htmlwasher/SPEC.md`, the native crate, `training/SPEC.md`) and this root spec are all deliverables, not afterthoughts.
 
 ---
 
