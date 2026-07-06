@@ -195,7 +195,25 @@ MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts
     preserve-markup Rust core, not a regression; floors pages>50/P>0.6/R>0.65/F1>0.65 all cleared).
     Offline wash-corpus-tester: 28 fixtures, security-at-all-levels 0, verdict PASS. `npx knip`
     cleaner (the onnxruntime/classifier dead exports it flagged are gone).
-- Phases VALIDATE → RETEST → POLISH — pending. Gate each
+- **Phase VALIDATE — done.** Regression + perf vs the ORIENT v1 baseline, all measured on the same
+  commit as INTEGRATE (no code change between).
+  - **adbar eval (extraction quality): P=0.814 / R=0.844 / F1=0.828** over 100 pages — a modest LIFT vs
+    v1's ≈0.79 / 0.81 / 0.80; all floors cleared (pages>50, P>0.6, R>0.65, F1>0.65). **No regression.**
+    The gain is NOT from `aggregate_sections`/`collect_repeated_items` (those are deferred, not live);
+    it traces to the faithful-but-corrected Rust port (the `strip_elements`-vs-`unwrap_node` fix that
+    avoided v1-class content loss, cleaner content-node selection) plus preserve-markup retaining
+    marginally more matchable text. Documented as a gain.
+  - **wash-corpus-tester:** 28 fixtures, page-type accuracy 100%, hard failures 0, security-at-all-levels
+    0, verdict PASS.
+  - **Perf (Rust core vs v1 TS `extractContentHTML`, same adbar corpus / harness, node 22.13):**
+    apples-to-apples **extract-only** (pageType override, no classifier) = **~3× faster** — sum-of-medians
+    350 ms vs 1033 ms, p50 2.7 ms vs 8.4 ms, 906 KB page 6.7 ms vs 20.9 ms (3.14×). The **full**
+    classify+extract stage pipeline actually runs = 1003 ms sum / p50 8.4 ms / large page 15.8 ms (1.33×
+    faster on the large page) — i.e. comparable to v1's _extraction-only_ baseline DESPITE also running
+    the 189-feature classifier, which is ~65% of the full time (feature extraction dominates, as expected).
+    Rust harness saved at `scratchpad/perf-rust.mjs`. **Gate met:** scores + perf documented, no floor
+    regressions.
+- Phases RETEST → POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
@@ -509,9 +527,12 @@ The TS-side regression oracle now lives in `packages/htmlwasher/test/validation/
 - **CLASSIFY — `token_pattern`/`ngram_range` — RESOLVED.** `tfidf-vocab.json` ships
   `tokenPattern="(?u)\b\w\w+\b"`, `ngramRange=[1,1]`, 100 unigram terms; the Rust tokenizer reproduces the
   column order (tfidf parity ≤ 2.2e-16).
-- **VALIDATE — score movement from `aggregate_sections`/`collect_repeated_items`.** CRATE carried these as
-  profile config only (dead flags in v1, not yet functional in Rust) — so VALIDATE should match v1 scores, not
-  see a lift. If they are made functional later, they may move P/R/F1: investigate any drop, document any gain.
+- **VALIDATE — score movement — RESOLVED.** The adbar eval LIFTED to P=0.814/R=0.844/F1=0.828 (vs v1
+  ≈0.79/0.81/0.80) — investigated: NOT from `aggregate_sections`/`collect_repeated_items` (still deferred,
+  not functional), but from the faithful-but-corrected Rust port (`strip_elements`-vs-`unwrap_node` fix that
+  avoided v1-class content loss + cleaner selection) plus preserve-markup retaining marginally more matchable
+  text. A documented GAIN, no floor regression (see the VALIDATE phase entry). Rust core ~3× faster on
+  extraction (extract-only vs v1 `extractContentHTML`).
 - **RETEST-deferred — rs-trafilatura structured rescues + aggregation passes (the "newly live" behavior).**
   The crate reproduces v1's extraction (selector → semantic → scoring → body cascade + name-filter backoff +
   whole-body fallback); it does NOT yet port `extractor/fallback.rs`'s structured rescues (JSON-LD `articleBody`,
