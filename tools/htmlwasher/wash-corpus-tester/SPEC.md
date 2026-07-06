@@ -53,11 +53,11 @@ Every fixture is washed through these `boilerplate` x `level` combos:
 
 ### Hard (any failure fails the run)
 
-- **Security (core invariant)** — at every **sanitizing** washing level (`minimal`, `standard`,
-  `permissive`, `styled`) the cleaned output contains no `<script>` tag, no `on<event>=` handler
-  attribute, and no `javascript:` URL. The `correct` level is normalize-only (skips sanitization by
-  design, per `htmlwasher` `types.ts`), so survivals at `correct` are recorded as documented **soft**
-  warnings, not failures.
+- **Security (core invariant)** — at **every** washing level, **including `correct`**, the cleaned
+  output contains no `<script>` tag, no `on<event>=` handler attribute, and no `javascript:` URL.
+  This is a HARD assertion everywhere: the v2 `htmlwasher` washing floor is unconditional (context
+  doc 09) — `enforceSecurityFloor` + `sanitizeStyledHtml` run as the final pass on every level
+  including `correct` — so a survival is always a real failure, never a normalize-only soft exemption.
 - **Non-empty output** — cleaned HTML is non-empty, unless the input lacks substantial body text
   (< `SUBSTANTIAL_BODY_TEXT` = 200 chars of tag-stripped text — a JS-shell / near-empty page), in
   which case empty extraction output is legitimate.
@@ -72,7 +72,6 @@ Every fixture is washed through these `boilerplate` x `level` combos:
 - **Page-type plausibility** — detected (from the `balanced` x `standard` reference combo) vs.
   expected page type. A single mismatch is a warning. The run fails only if aggregate page-type
   accuracy across all fixtures drops below `PAGE_TYPE_ACCURACY_FLOOR` = `0.4`.
-- **`correct`-level security survivals** — see above; documented behavior.
 
 ## Public API (`src/corpus-runner.ts`)
 

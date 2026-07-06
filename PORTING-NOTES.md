@@ -26,8 +26,26 @@ and `~/r/contextractor`.
   Branch `rust-core`; only brief/context docs committed so far — no v2 production code yet.
 - **Phase ORIENT — done** (this block). Module map, strip list, dormant exclusion, perf
   baseline below. No production code.
-- Phases FLOOR → RESTRUCTURE → CRATE → CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST →
-  POLISH — pending. Gate each before advancing; commit per phase; keep `pnpm test` green.
+- **Phase FLOOR — done.** The TS washing floor is now UNCONDITIONAL: `enforceSecurityFloor`
+  then `sanitizeStyledHtml` run as the final pass on EVERY `washHtml` path (preset, custom
+  config, and `correct`), no longer gated on `configAllowsStyle`. This closes the doc-09 bypass
+  where a custom `{ allowedAttributes: { '*': ['*'] } }` config passed shape validation and kept
+  `onclick` plus a `javascript:` CSS URL. New regression tests: the exact wildcard config
+  (`wash.test.ts`) and hostile input through the public `wash()` at every level with
+  `boilerplate: 'balanced'` (`pipeline.test.ts`); the wash-corpus-tester now hard-asserts security
+  at EVERY level incl. `correct` (stale soft-exemption removed from `corpus-runner.ts`/`report.ts`).
+  SPECs updated. `pnpm build && lint && test` green (377 lib tests; corpus 28 fixtures,
+  security-failures-at-all-levels 0, verdict PASS).
+  - **Gotcha (carry into every later phase gate): a cached-green `pnpm test` is NOT a real run.**
+    The baseline `pnpm test` reported `FULL TURBO` (all 4 tasks cached), so `htmlwasher#test` never
+    actually executed — a hardcoded stale-session scratchpad path in `cli-program.test.ts`
+    (`/private/tmp/.../<old-session-id>/scratchpad`) was ENOENT-ing and only surfaced once a source
+    edit invalidated the turbo cache. Fixed to a per-run `mkdtemp` temp dir. Lesson: after each phase
+    force a genuine run (`turbo run test --force`, or rely on a source edit to bust the cache); never
+    trust cached green as the regression oracle. And capture the real exit code — a piped
+    `pnpm test | tail` masks it behind `tail`'s exit status.
+- Phases RESTRUCTURE → CRATE → CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH —
+  pending. Gate each before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
 

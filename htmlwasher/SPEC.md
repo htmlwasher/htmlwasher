@@ -44,13 +44,17 @@ level. Instead of a named `level`, callers may pass a fully-custom `config` (a
 takes precedence over `level`. These options (plus the optional `url` context)
 are the entire user-facing surface; there are deliberately no
 `includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
-security floor is enforced at **every** washing level — including `correct` —
-and regardless of `config`: `<script>` (tag + text), every `on*` handler,
-`javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS are
-always stripped, and any config (or the `styled` level) that allows inline
-`style` additionally gets the CSS-URL allow-list. `correct` is normalize-only
-only for the tag _allow-list_ (it runs no preset, preserving all benign
-tags/attributes); it still runs the mandatory floor.
+security floor is **unconditional**: `enforceSecurityFloor` + the CSS-URL
+sanitizer (`sanitizeStyledHtml`) run as the final washing pass on **every** path —
+every preset level (including `correct`) and every custom `config`. `<script>`
+(tag + text), every `on*` handler, `javascript:`/`vbscript:`/untrusted `data:`
+URLs, and dangerous inline CSS (`expression()`, `-moz-binding`,
+`url(javascript:|data:)`, `@import`) are always stripped — **not** gated on
+whether the config happens to allow inline `style`. This closes the
+wildcard-config bypass a `{ "allowedAttributes": { "*": ["*"] } }` custom config
+previously exploited (it passes shape validation, keeps `onclick`, and defeats the
+CSS gate). `correct` is normalize-only only for the tag _allow-list_ (it runs no
+preset, preserving all benign tags/attributes); it still runs the mandatory floor.
 
 #### Boundary validation and input cap
 
@@ -218,15 +222,17 @@ read).
 - `src/washing/` — HTML washing. Entry: `washHtml(html, level, { minify?, hardened?, config? })`
   / `washBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
   prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
-  (sanitize-html + level preset) → re-normalize (if transformTags) → DOCTYPE →
-  format. The named-preset sanitize stage is skipped for `correct` (no
-  allow-list), but the **security floor runs at every level including `correct`**:
-  the no-config path runs `enforceSecurityFloor` + `sanitizeStyledHtml`, which
-  force-strip `<script>` (tag + text), every `on*` handler, `javascript:`/
-  `vbscript:`/untrusted `data:` URLs, and dangerous inline CSS, while leaving every
-  benign tag/attribute in place; the `styled` level (or any config that permits
-  inline `style`) adds the CSS-URL allow-list. Optional DOMPurify/jsdom hardened
-  backend behind the `Sanitizer` seam. _implemented (Phase 6)_
+  (sanitize-html + level preset or custom config; skipped for bare `correct`) →
+  re-normalize (if transformTags) → **security floor (UNCONDITIONAL)** → DOCTYPE →
+  format. The named-preset sanitize stage is skipped for `correct` (no allow-list),
+  but the **security floor runs on every path — every level (including `correct`)
+  and every custom `config`**: `enforceSecurityFloor` + `sanitizeStyledHtml` run as
+  the final pass, force-stripping `<script>` (tag + text), every `on*` handler,
+  `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS (the
+  CSS-URL allow-list is applied unconditionally, not only when a config permits
+  inline `style`), while leaving every benign tag/attribute in place — closing the
+  `{ "allowedAttributes": { "*": ["*"] } }` wildcard-config bypass. Optional
+  DOMPurify/jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → wash(level),
   exposing the public `wash()`. _implemented_
 - `src/cli-program.ts` — the offline CLI core: `buildProgram()` (commander),

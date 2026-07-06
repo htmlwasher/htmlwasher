@@ -35,19 +35,6 @@ export const PAGE_TYPE_ACCURACY_FLOOR = 0.4;
  */
 export const SUBSTANTIAL_BODY_TEXT = 200;
 
-/**
- * Washing levels that sanitize the HTML. The security invariant (no <script>,
- * no on*= handler, no javascript: URL) is a HARD assertion at these levels.
- * `correct` is intentionally normalize-only (skips sanitization), so script
- * survival there is documented behavior, recorded only as a soft warning.
- */
-const SANITIZING_LEVELS: ReadonlySet<string> = new Set([
-  'minimal',
-  'standard',
-  'permissive',
-  'styled',
-]);
-
 /** The (boilerplate, level) combos every fixture is run through. */
 export const COMBOS = [
   { boilerplate: 'balanced', level: 'standard' },
@@ -195,22 +182,17 @@ function loadManifest(): CorpusManifest {
   return manifest;
 }
 
-/** Whether a combo's washing level sanitizes (vs. `correct`'s normalize-only). */
-function isSanitizing(level: WashingLevel): boolean {
-  return SANITIZING_LEVELS.has(level);
-}
-
 /** Outcome of asserting one (fixture, combo): pass + how many security checks failed HARD. */
 interface AssertOutcome {
   pass: boolean;
-  /** Security failures counted against the run (sanitizing levels only). */
+  /** Security failures counted against the run (all levels — the floor is unconditional). */
   hardSecurityFailures: number;
 }
 
 /**
  * Assert the security + structural invariants for one (fixture, combo) result.
- * Mutates `hardFailures` / `softFailures`. Returns whether all HARD passed and
- * how many sanitizing-level security checks failed.
+ * Mutates `hardFailures`. Returns whether all HARD passed and how many security
+ * checks failed.
  */
 function assertCombo(
   fixture: CorpusFixture,
@@ -219,7 +201,6 @@ function assertCombo(
   minimalTagCount: number,
   inputBodyTextLength: number,
   hardFailures: AssertionFailure[],
-  softFailures: AssertionFailure[],
 ): AssertOutcome {
   const comboLabel = `${combo.boilerplate}x${combo.level}`;
   const html = result.html;
@@ -236,25 +217,16 @@ function assertCombo(
       detail,
     });
   };
-  // SECURITY at sanitizing levels is HARD; at `correct` (normalize-only, skips
-  // sanitization by design) it is recorded only as a documented soft warning.
-  const sanitizing = isSanitizing(combo.level);
+  // SECURITY is HARD at EVERY level. In v2 the TS washing floor is UNCONDITIONAL
+  // (context doc 09): `enforceSecurityFloor` + `sanitizeStyledHtml` run as the final
+  // pass on every level INCLUDING `correct`, so a surviving <script>/on*/javascript:
+  // URL is always a real failure — never a documented normalize-only exemption.
   const securityFail = (assertion: string, detail: string): void => {
-    if (sanitizing) {
-      hardSecurityFailures += 1;
-      fail(assertion, detail);
-    } else {
-      softFailures.push({
-        fixture: fixture.file,
-        combo: comboLabel,
-        tier: 'soft',
-        assertion,
-        detail: `${detail} (expected: '${combo.level}' is normalize-only and skips sanitization)`,
-      });
-    }
+    hardSecurityFailures += 1;
+    fail(assertion, detail);
   };
 
-  // SECURITY (core invariant): no script tag survives at any sanitizing level.
+  // SECURITY (core invariant): no script tag survives at any level.
   if (SCRIPT_TAG.test(html)) {
     securityFail('no-script', '<script> survived in cleaned output');
   }
@@ -346,7 +318,6 @@ export async function runCorpus(): Promise<CorpusReport> {
         minimalTagCount,
         inputBodyTextLength,
         hardFailures,
-        softFailures,
       );
       securityFailureCount += hardSecurityFailures;
       if (pass) hardPassCount += 1;

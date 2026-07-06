@@ -1,16 +1,19 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildProgram, type CliIo, type ResolvedCliOptions, runWash } from './cli-program.js';
 import { DEFAULT_BOILERPLATE_MODE, DEFAULT_WASHING_LEVEL } from './types.js';
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/classifier/0488.html', import.meta.url));
 
-const SCRATCH =
-  '/private/tmp/claude-501/-Users-miroslavsekera-r-htmlwasher/52b04631-938a-4661-9405-ebbaaf5aef1a/scratchpad';
+// A per-run OS temp directory (created in beforeAll) where the CLI tests write
+// their config/output fixtures. Never hardcode a session scratchpad path — those
+// are per-session and get cleaned up, ENOENT-ing this suite on any later run.
+let scratchDir: string;
 
 const PAGE = `<!doctype html><html><head><title>Real Title — Site</title>
 <script>tracker()</script></head>
@@ -62,15 +65,16 @@ function opts(overrides: Partial<ResolvedCliOptions> = {}): ResolvedCliOptions {
   };
 }
 
-const tmpFiles: string[] = [];
 function tmpPath(name: string): string {
-  const p = join(SCRATCH, `cli-test-${Date.now()}-${name}`);
-  tmpFiles.push(p);
-  return p;
+  return join(scratchDir, `cli-test-${Date.now()}-${name}`);
 }
 
+beforeAll(async () => {
+  scratchDir = await mkdtemp(join(tmpdir(), 'htmlwasher-cli-test-'));
+});
+
 afterAll(async () => {
-  await Promise.all(tmpFiles.map((p) => rm(p, { force: true })));
+  if (scratchDir !== undefined) await rm(scratchDir, { recursive: true, force: true });
 });
 
 describe('runWash', () => {

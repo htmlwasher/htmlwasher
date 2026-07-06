@@ -4,21 +4,26 @@
 // process-html.ts pipeline, retargeted onto htmlwasher's five WashingLevels
 // (minimal | standard | permissive | styled | correct — NO `*-reader` variants).
 //
-// Pipeline order (matches the reference exactly):
-//   NORMALIZE  — parse5 well-forming (full doc vs fragment via isHtmlDocument)
-//   SANITIZE   — sanitize-html preset (skipped entirely for `correct`)
-//   RE-NORMALIZE — only when the preset defines transformTags
-//   DOCTYPE    — prepend `<!DOCTYPE html>` to full documents, post-sanitize
-//   FORMAT     — prettier by default; html-minifier-terser when `minify: true`
+// Pipeline order:
+//   NORMALIZE      — parse5 well-forming (full doc vs fragment via isHtmlDocument)
+//   SANITIZE       — sanitize-html preset or custom config (skipped for bare `correct`)
+//   RE-NORMALIZE   — only when the preset/config defines transformTags
+//   SECURITY FLOOR — UNCONDITIONAL: enforceSecurityFloor + sanitizeStyledHtml on EVERY
+//                    path (preset, custom config, and `correct`)
+//   DOCTYPE        — prepend `<!DOCTYPE html>` to full documents, post-floor
+//   FORMAT         — prettier by default; html-minifier-terser when `minify: true`
 //
 // Messages accumulate across stages. Formatting failure is non-fatal (warning +
 // unformatted output). `correct` is normalize-only for the tag ALLOW-LIST — it
 // applies no preset, so arbitrary/benign tags and attributes (and deprecated tags)
-// are preserved unchanged. But the security floor is non-negotiable at EVERY level:
-// even `correct` (with no custom config) still runs `enforceSecurityFloor` +
-// `sanitizeStyledHtml`, which force-strip `<script>`, all `on*` handlers,
-// `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS, while
-// leaving every benign tag/attribute in place.
+// are preserved unchanged. But the security floor is non-negotiable and UNCONDITIONAL
+// at EVERY level and for EVERY config: the final pass always runs
+// `enforceSecurityFloor` + `sanitizeStyledHtml`, which force-strip `<script>`, all
+// `on*` handlers, `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous
+// inline CSS, while leaving every benign tag/attribute in place. This is what makes
+// the v2 washing stage a safe sole-sanitization-authority for the unsanitized HTML
+// the Rust boilerplate core emits (context doc 09) and closes the wildcard-config
+// bypass a `{ allowedAttributes: { '*': ['*'] } }` custom config otherwise exploited.
 
 import { minify as minifyHtml } from 'html-minifier-terser';
 import type { Message, WashingLevel } from '../types.js';
@@ -46,16 +51,6 @@ export interface WashOptions {
    * `level` is `correct`, which alone is normalize-only).
    */
   config?: SanitizeConfig;
-}
-
-/**
- * Does this config permit inline `style` (the `<style>` tag or a `style`
- * attribute on any tag)? Such configs need the CSS-URL allow-list layered on
- * top — sanitize-html does not filter `url()`/`expression()`/`@import` in CSS.
- */
-function configAllowsStyle(config: SanitizeConfig): boolean {
-  if ((config.allowedTags ?? []).includes('style')) return true;
-  return Object.values(config.allowedAttributes ?? {}).some((attrs) => attrs.includes('style'));
 }
 
 /** The output of a washing run: cleaned HTML plus accumulated diagnostics. */
@@ -114,23 +109,24 @@ export async function washHtml(
       }
       // Do not fail if re-normalization fails — keep the sanitized HTML.
     }
-
-    // CSS-URL gap closure for any config that permits inline `style` (the
-    // `styled` preset, or a custom config that allows the `<style>` tag / a
-    // `style` attribute): sanitize-html does not filter `url()` / `expression()`
-    // / `@import` inside inline `style` or `<style>`.
-    if (configAllowsStyle(config)) {
-      currentHtml = sanitizeStyledHtml(currentHtml);
-    }
-  } else {
-    // SECURITY FLOOR — `correct` with no custom config resolves no preset, so the
-    // sanitize stage above is skipped. The brief still requires the floor at EVERY
-    // level: force-strip `<script>`/`on*`/dangerous URL schemes (preserving all
-    // benign tags/attributes), then close the inline-CSS gap. `correct` thus stays
-    // normalize-only for benign markup while never leaking active content.
-    currentHtml = enforceSecurityFloor(currentHtml);
-    currentHtml = sanitizeStyledHtml(currentHtml);
   }
+
+  // SECURITY FLOOR — UNCONDITIONAL final washing pass on EVERY path (preset, custom
+  // config, AND `correct` with no config). In v2 the TS washing stage is the SOLE
+  // sanitization authority (the Rust boilerplate core sanitizes nothing — context
+  // doc 09), so the floor can never be gated. `enforceSecurityFloor` force-strips
+  // `<script>`, every `on*` handler, and `javascript:`/`vbscript:`/untrusted `data:`
+  // URL schemes while preserving all benign tags/attributes; `sanitizeStyledHtml`
+  // then closes the inline-CSS gap sanitize-html leaves untouched
+  // (`url(javascript:|data:)`, `expression()`, `@import`, `-moz-binding`). Running
+  // BOTH here — NOT gated on `configAllowsStyle`'s literal-`'style'` check — closes
+  // the proven bypass where a custom `{ allowedAttributes: { '*': ['*'] } }` config
+  // sails through sanitize-html still carrying `onclick` and a `javascript:` CSS URL
+  // (doc 09, empirically verified). Both passes preserve benign markup and are
+  // idempotent no-ops on already-clean output, so layering them over the presets and
+  // `correct` costs safety, not fidelity.
+  currentHtml = enforceSecurityFloor(currentHtml);
+  currentHtml = sanitizeStyledHtml(currentHtml);
 
   // DOCTYPE — full documents only, post-sanitize, if not already present.
   if (

@@ -98,6 +98,44 @@ describe('washHtml — custom config (WashOptions.config)', () => {
     );
     expect(html.toLowerCase()).not.toContain('javascript:');
   });
+
+  // --- doc 09: the wildcard-config bypass regression guard ---
+  // `{ allowedAttributes: { '*': ['*'] } }` passes shape-only validation, and the
+  // wildcard `'*'` VALUE defeated both v1 defenses: `filterEventHandlers` only
+  // strips literal `on*`-NAMED keys (not the `'*'` value, so `onclick` survived
+  // sanitize-html), and the old `configAllowsStyle` gate checked `.includes('style')`
+  // (`['*']` is not `'style'`, so the CSS sanitizer was skipped and a `javascript:`
+  // CSS URL survived). The UNCONDITIONAL floor closes both.
+  it('closes the wildcard-config bypass: { allowedAttributes: { "*": ["*"] } } strips on*/javascript:/CSS (doc 09)', async () => {
+    const { html } = await washHtml(
+      '<p onclick="steal()" style="background:url(javascript:alert(1))">Hi</p>' +
+        '<script>alert(2)</script><a href="javascript:evil()">l</a>',
+      'standard',
+      { config: { allowedTags: ['p', 'a', 'script'], allowedAttributes: { '*': ['*'] } } },
+    );
+    const lower = html.toLowerCase();
+    expect(lower).not.toContain('<script');
+    expect(lower).not.toContain('alert(2)');
+    expect(lower).not.toContain('onclick');
+    expect(lower).not.toContain('steal()');
+    expect(lower).not.toContain('javascript:');
+    // Benign text still survives — the floor removes only active-content vectors.
+    expect(html).toContain('Hi');
+  });
+
+  it('closes the wildcard bypass at `correct` too (no preset, wildcard attrs, dangerous CSS)', async () => {
+    const { html } = await washHtml(
+      '<div onmouseover="x()"><p style="width:expression(alert(1))">hi</p>' +
+        '<a href="vbscript:msgbox(1)">l</a></div>',
+      'correct',
+      { config: { allowedAttributes: { '*': ['*'] } } },
+    );
+    const lower = html.toLowerCase();
+    expect(lower).not.toContain('onmouseover');
+    expect(lower).not.toContain('expression(');
+    expect(lower).not.toContain('vbscript:');
+    expect(html).toContain('hi');
+  });
 });
 
 describe('washHtml — security at EVERY level (incl. styled and correct)', () => {

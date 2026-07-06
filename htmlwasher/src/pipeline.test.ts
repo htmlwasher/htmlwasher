@@ -135,6 +135,47 @@ describe('wash() orchestration', () => {
     expect(html).toContain('hi');
   });
 
+  // doc 09 forward-guard: after Phase INTEGRATE the Rust core emits UNSANITIZED
+  // preserve-markup HTML, so the washing floor is the ONLY thing between
+  // extracted-but-hostile content and the output. v1 exercised hostile input only
+  // on `none`-mode paths; assert the floor through the EXTRACTION path at every
+  // level too — active-content vectors live INSIDE the main article here.
+  const HOSTILE_MAIN = `<!doctype html><html><head><title>T</title></head><body>
+    <nav><a href="/">home</a></nav>
+    <main><article class="article-content">
+      <h1>Genuine Headline</h1>
+      <p onclick="steal()">This is the genuine article body with plenty of words so it is chosen as the main content node of this page for sure.</p>
+      <script>alert('xss-in-content')</script>
+      <p style="background:url(javascript:alert(1))">A second real paragraph, long enough to keep the article selected as the main content of the page.</p>
+      <a href="javascript:evil()">malicious inline link inside the kept content</a>
+    </article></main>
+  </body></html>`;
+
+  for (const level of ['minimal', 'standard', 'permissive', 'styled', 'correct'] as const) {
+    it(`security floor holds through wash() at boilerplate:balanced × ${level}`, async () => {
+      const { html } = await wash(HOSTILE_MAIN, { boilerplate: 'balanced', level });
+      const lower = html.toLowerCase();
+      expect(lower).not.toContain('<script');
+      expect(lower).not.toContain('xss-in-content');
+      expect(lower).not.toContain('onclick');
+      expect(lower).not.toContain('javascript:');
+    });
+  }
+
+  it('closes the wildcard-config bypass end-to-end through wash() with extraction on', async () => {
+    const { html } = await wash(HOSTILE_MAIN, {
+      boilerplate: 'balanced',
+      config: {
+        allowedTags: ['p', 'a', 'article', 'h1', 'script'],
+        allowedAttributes: { '*': ['*'] },
+      },
+    });
+    const lower = html.toLowerCase();
+    expect(lower).not.toContain('<script');
+    expect(lower).not.toContain('onclick');
+    expect(lower).not.toContain('javascript:');
+  });
+
   it('handles empty input', async () => {
     const { html } = await wash('');
     expect(typeof html).toBe('string');
