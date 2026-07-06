@@ -172,6 +172,19 @@ Every package and the repo root carries a `SPEC.md`; keep each `SPEC.md` and `RE
 
 ---
 
+## Required tooling
+
+The repo is already equipped for this build — use these capabilities rather than reinventing them. Delegate substantial work to the agents; consult the skills for language conventions; the `LSP` tool (rust-analyzer / pyright / typescript-language-server, all enabled) gives go-to-definition, types, and diagnostics across all three stacks.
+
+- **Rust — author the crate + read the references** → the `rust-pro` agent (v2: reads `~/r/htmlwasher-sources/` AND writes `packages/htmlwasher/native/` — the fork, the napi bindings, the GBDT evaluator). Language conventions: the `rust`, `rust-packaging`, `rust-testing-patterns` skills. Toolchain: `cargo`/`clippy` are installed; the `wasm32-wasip1-threads` rustup target is installed. `@napi-rs/cli` is a **per-package devDependency** added at Phase BIND (not a global CLI); cross-building the Linux-gnu targets needs **Zig** (`cargo-zigbuild`, via `napi build -x`) and the WASM fallback needs a **WASI SDK** (`WASI_SDK_PATH`) — install those at Phase BIND / in CI, not before.
+- **TypeScript — washing, pipeline rewire, CLI, types** → the `ts-pro` agent; the `typescript` skill.
+- **Python — training, XGBoost-JSON export, feature parity** → the `python-pro` agent; the `python`, `python-packaging`, `python-testing-patterns`, `python-performance-optimization`, `async-python-patterns` skills.
+- **Docs lookup — napi-rs v3, `dom_query`, XGBoost JSON model format, sanitize-html** → the `context7` plugin (library docs, already enabled) + `WebFetch`; for open questions / debugging, the `web-research-specialist` agent. (No MCP server is needed — context7 + WebFetch + LSP cover it; do not add one.)
+- **Full-repo review (Phase POLISH) + per-change review** → the `code-reviewer` agent (v2: three-stack Rust/TS/Python with the FFI/no-panic/preserve-markup checklist) and the `/meta:code-review-autofix` command; the `security-guidance` plugin and `@/.claude/rules/security.md` govern the untrusted-HTML floor.
+- **Checks** → the `test-runner` agent runs format/lint/type-check/tests; `pnpm build && pnpm lint && pnpm test` plus `cargo test --workspace` / `cargo clippy` and the training `pytest`/`ruff` are the gates.
+
+---
+
 ## Build order (phased, with explicit gates)
 
 Work phase by phase. **Do not advance until the phase's gate passes.** Commit after each phase. Keep `pnpm test` green throughout — the v1 suite is the safety net until INTEGRATE swaps the implementation.
