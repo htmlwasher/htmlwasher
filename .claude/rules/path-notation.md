@@ -5,8 +5,8 @@ Use the `@/` prefix for all repo-root-relative paths in prompts, commands, rules
 ## Format
 
 - `@/.claude/commands/sync/spec.md`
-- `@/htmlwasher/src/core/extract.ts`
-- `@/tools/htmlwasher/live-crawl-tester/src/index.ts`
+- `@/packages/htmlwasher/src/core/extract.ts`
+- `@/packages/live-crawl-tester/src/index.ts`
 - `@/training/SPEC.md`
 - `@/prompts/2026-6-24-init/prompt.md`
 

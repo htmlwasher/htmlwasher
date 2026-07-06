@@ -8,11 +8,11 @@
     "@cspell/dict-rust"
   ],
   "workspaces": {
-    "htmlwasher": {
+    "packages/htmlwasher": {
       "entry": "src/index.ts",
       "project": "src/**"
     },
-    "tools/htmlwasher/live-crawl-tester": {
+    "packages/live-crawl-tester": {
       "entry": "src/index.ts",
       "project": "src/**"
     }

@@ -27,7 +27,7 @@ before a stable release.
 
 This is a pnpm + turbo monorepo.
 
-- `@/htmlwasher/` — the TypeScript library (the npm package
+- `@/packages/htmlwasher/` — the TypeScript library (the npm package
   `htmlwasher`). Strict TypeScript, Node 22+. Holds the core extraction
   algorithm, metadata extraction, the page-type classifier (189-feature
   extractor plus ONNX backends), per-page-type profiles, and the HTML-washing
@@ -37,12 +37,12 @@ This is a pnpm + turbo monorepo.
   trains the page-type classifier from the public WCXB dataset and exports
   `model.onnx` + `tfidf-vocab.json`. It is run offline, is not a pnpm workspace
   package, and is not shipped at runtime.
-- `@/tools/htmlwasher/wash-corpus-tester/` — a separate **offline** TypeScript workspace
+- `@/packages/wash-corpus-tester/` — a separate **offline** TypeScript workspace
   package: runs htmlwasher end-to-end over saved WCXB HTML fixtures (≥3 per page
   type × 7 types) across boilerplate × washing-level combos, asserting the
   security invariants + page-type plausibility and emitting a report. No network
   (`pnpm test:corpus`).
-- `@/tools/htmlwasher/live-crawl-tester/` — a separate scaffold stub for a future live-site
+- `@/packages/live-crawl-tester/` — a separate scaffold stub for a future live-site
   fetcher; not part of the htmlwasher pipeline (htmlwasher itself never fetches).
 - `~/r/htmlwasher-sources/` — six read-only reference repositories (rs-trafilatura,
   web-page-classifier, go-trafilatura, adbar/trafilatura, trafilatura-rs,

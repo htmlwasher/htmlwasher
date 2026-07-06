@@ -7,7 +7,7 @@
 
 This is the **offline** training project for htmlwasher's page-type
 classifier. It trains a standard XGBoost model from the public WCXB dataset and
-exports two artifacts into `@/htmlwasher/src/classifier/model/`:
+exports two artifacts into `@/packages/htmlwasher/src/classifier/model/`:
 
 - `model.onnx` — the trained classifier, run in Node via onnxruntime (no Python
   at runtime).
@@ -30,12 +30,12 @@ exports two artifacts into `@/htmlwasher/src/classifier/model/`:
   rate-limit-resilient, idempotent.
 - `extract_features.py` — compute the **89 numeric** features (+ the
   `title_meta` TF-IDF input) with byte-for-byte **parity** to the TypeScript
-  extractor in `@/htmlwasher/src/classifier/features/`.
+  extractor in `@/packages/htmlwasher/src/classifier/features/`.
 - `train.py` — train an `XGBClassifier`, evaluate on the held-out TEST split,
   export `model.onnx`, emit `tfidf-vocab.json`, and copy both into
-  `@/htmlwasher/src/classifier/model/`.
+  `@/packages/htmlwasher/src/classifier/model/`.
 - `make_parity_fixtures.py` — emit small TS↔Python parity fixtures into
-  `@/htmlwasher/fixtures/classifier/`.
+  `@/packages/htmlwasher/fixtures/classifier/`.
 
 ## Usage
 
@@ -62,11 +62,11 @@ The **WCXB** (Web Content Extraction Benchmark) dataset is licensed
 
 Reproduce the full attribution/NOTICE block required by the upstream and
 reference licenses (see the repository root `NOTICE` and
-`@/htmlwasher/README.md`).
+`@/packages/htmlwasher/README.md`).
 
 ## What is committed vs. not
 
 - **Committed:** the trained artifacts `model.onnx` and `tfidf-vocab.json` (they
-  live in `@/htmlwasher/src/classifier/model/`), plus this skeleton.
+  live in `@/packages/htmlwasher/src/classifier/model/`), plus this skeleton.
 - **Never committed:** the WCXB dataset, downloaded data, the `.venv`, and any
   intermediate `*.parquet` / `*.csv` (see `.gitignore`).

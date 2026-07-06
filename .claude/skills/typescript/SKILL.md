@@ -5,7 +5,7 @@ description: TypeScript development guidelines for this workspace. Use when writ
 
 # TypeScript Guidelines
 
-Standards for the TypeScript that ships the product: the `htmlwasher` extraction library and the `tools/htmlwasher/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
+Standards for the TypeScript that ships the product: the `htmlwasher` extraction library and the `packages/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
 
 ## Type system
 
@@ -21,7 +21,7 @@ Biome handles both lint and format (not ESLint or Prettier) for JS/TS/JSON. `pnp
 
 ## Testing — vitest
 
-`*.test.ts` next to source; vitest preferred (`node:test` for zero-dep scripts). HTML fixture tests for the extraction library live in `htmlwasher/test/` with fixtures under `htmlwasher/fixtures/`. AAA pattern, light mocking, dependency injection over heavy mocks. Run `pnpm test` from the repo root.
+`*.test.ts` next to source; vitest preferred (`node:test` for zero-dep scripts). HTML fixture tests for the extraction library live in `packages/htmlwasher/test/` with fixtures under `packages/htmlwasher/fixtures/`. AAA pattern, light mocking, dependency injection over heavy mocks. Run `pnpm test` from the repo root.
 
 - **`vitest run` exits 1 with zero `*.test.ts` files** — packages without tests need `vitest run --passWithNoTests` in their `test` script, or the recursive `pnpm test` fails.
 

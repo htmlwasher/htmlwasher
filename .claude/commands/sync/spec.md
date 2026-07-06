@@ -11,8 +11,8 @@ This is the interactive counterpart to the autonomous `/autonomous:maintenance:s
 
 ## Source → SPEC mapping
 
-- `htmlwasher/src/**` → `htmlwasher/SPEC.md`
-- `tools/htmlwasher/live-crawl-tester/src/**` → `tools/htmlwasher/live-crawl-tester/SPEC.md`
+- `packages/htmlwasher/src/**` → `packages/htmlwasher/SPEC.md`
+- `packages/live-crawl-tester/src/**` → `packages/live-crawl-tester/SPEC.md`
 - `training/**/*.py` → `training/SPEC.md`
 - Architecture or data-flow changes in any of the above → root `SPEC.md`
 
@@ -22,8 +22,8 @@ Run `git diff --name-only HEAD~1..HEAD` and `git status --short` to identify rec
 
 For each SPEC.md file, read the spec and its corresponding source entry points:
 
-- `htmlwasher/src/index.ts` — library public exports
-- `tools/htmlwasher/live-crawl-tester/src/index.ts` (or its main entry) — live-crawl-tester public surface
+- `packages/htmlwasher/src/index.ts` — library public exports
+- `packages/live-crawl-tester/src/index.ts` (or its main entry) — live-crawl-tester public surface
 - `training/*.py` — training scripts and model/vocab export entry points
 
 Read every relevant file. Do not skip a package because its source did not appear in the recent diff — drift can accumulate silently.
@@ -72,7 +72,7 @@ Apply the user's chosen fix immediately after each answer before asking the next
 
 ## Step README-CHECK: Verify README accuracy
 
-After applying spec edits, skim each affected README (`htmlwasher/README.md`, `tools/htmlwasher/live-crawl-tester/README.md`, `training/README.md`, root `README.md`) for prose that drifted from the same source change. Fix any stale description by hand with the Edit tool. The repo has no codegen-driven README regions, so there is nothing to regenerate — commit any README prose fixes alongside the SPEC.md edits as part of the same sync.
+After applying spec edits, skim each affected README (`packages/htmlwasher/README.md`, `packages/live-crawl-tester/README.md`, `training/README.md`, root `README.md`) for prose that drifted from the same source change. Fix any stale description by hand with the Edit tool. The repo has no codegen-driven README regions, so there is nothing to regenerate — commit any README prose fixes alongside the SPEC.md edits as part of the same sync.
 
 > **Context**: SPEC.md and README prose are both derived from the same source truth. The `spec-gate.sh` Stop hook enforces SPEC.md updates during development; this command handles catch-up syncs when drift has accumulated.
 
@@ -84,8 +84,8 @@ After all fixes are applied, stage and commit with a message listing which SPEC.
 git add -A
 git commit -m "docs(spec): sync SPEC.md files with source
 
-- htmlwasher/SPEC.md: <what changed>
-- tools/htmlwasher/live-crawl-tester/SPEC.md: <what changed>"
+- packages/htmlwasher/SPEC.md: <what changed>
+- packages/live-crawl-tester/SPEC.md: <what changed>"
 git push
 ```
 

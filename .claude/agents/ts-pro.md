@@ -1,6 +1,6 @@
 ---
 name: ts-pro
-description: Master TypeScript with strict type-checking, modern Node 22+ patterns, and production-ready practices. Expert in pnpm workspaces, Biome (lint + format), vitest, DOM libraries (linkedom/parse5/htmlparser2), onnxruntime, and async patterns. Use PROACTIVELY for TypeScript development in this repo. <example>Context: User wants a new washing option in the library. user: 'Add a `level` option to the wash() API' assistant: 'I'll use the ts-pro agent to add the washing-level option in the htmlwasher library and update its tests' <commentary>TypeScript library work in the htmlwasher package is handled by the ts-pro agent.</commentary></example> <example>Context: User wants to extend the classifier backend. user: 'Add an onnxruntime-web WASM backend behind the PageTypeClassifier interface' assistant: 'I'll use the ts-pro agent to add the backend in htmlwasher/src/classifier/ behind the existing interface and update its tests' <commentary>Classifier interface work is TypeScript development, so use the ts-pro agent.</commentary></example>
+description: Master TypeScript with strict type-checking, modern Node 22+ patterns, and production-ready practices. Expert in pnpm workspaces, Biome (lint + format), vitest, DOM libraries (linkedom/parse5/htmlparser2), onnxruntime, and async patterns. Use PROACTIVELY for TypeScript development in this repo. <example>Context: User wants a new washing option in the library. user: 'Add a `level` option to the wash() API' assistant: 'I'll use the ts-pro agent to add the washing-level option in the htmlwasher library and update its tests' <commentary>TypeScript library work in the htmlwasher package is handled by the ts-pro agent.</commentary></example> <example>Context: User wants to extend the classifier backend. user: 'Add an onnxruntime-web WASM backend behind the PageTypeClassifier interface' assistant: 'I'll use the ts-pro agent to add the backend in packages/htmlwasher/src/classifier/ behind the existing interface and update its tests' <commentary>Classifier interface work is TypeScript development, so use the ts-pro agent.</commentary></example>
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
@@ -40,7 +40,7 @@ htmlwasher is a faithful **TypeScript port of Trafilatura** with page-type-aware
   - `src/classifier/` — `PageTypeClassifier` interface + ONNX backends; `features/` is the 181-feature extractor (hot path uses `htmlparser2`); `model/` ships `model.onnx` + `tfidf-vocab.json`
   - `src/profiles/` — per-page-type extraction profiles + confidence scoring
   - `test/` and `fixtures/` — co-located unit tests and golden HTML fixtures
-- `tools/htmlwasher/live-crawl-tester/` — a separate workspace package: a polite live-site E2E fetcher (robots.txt, rate limit, disk cache) that runs extraction + classification over real URLs. **Not** Crawlee/Playwright.
+- `packages/live-crawl-tester/` — a separate workspace package: a polite live-site E2E fetcher (robots.txt, rate limit, disk cache) that runs extraction + classification over real URLs. **Not** Crawlee/Playwright.
 
 `training/` is an offline Python project (not a pnpm workspace package, not shipped at runtime) — it is the python-pro agent's domain, not yours.
 

@@ -3,7 +3,7 @@
 > Status: IMPLEMENTED. `download_wcxb.py`, `extract_features.py`, `train.py`, and
 > `make_parity_fixtures.py` exist and run end-to-end; `model.onnx` +
 > `tfidf-vocab.json` are exported and copied into the TS package, and
-> `htmlwasher/fixtures/classifier/` holds the TS↔Python parity fixtures.
+> `packages/htmlwasher/fixtures/classifier/` holds the TS↔Python parity fixtures.
 > Authority: `@/prompts/2026-6-24-init/prompt.md` (Phase 4) and the feature
 > contract in `@/training/FEATURES.md`.
 
@@ -15,7 +15,7 @@ runtime artifacts consumed by the TypeScript library:
 - `model.onnx` — XGBoost classifier exported to ONNX.
 - `tfidf-vocab.json` — locked TF-IDF vocabulary + IDF weights.
 
-Both are written to `@/htmlwasher/src/classifier/model/` and are the
+Both are written to `@/packages/htmlwasher/src/classifier/model/` and are the
 only outputs committed to the repository. This project is offline-only, not a
 pnpm workspace member, and not shipped at runtime.
 
@@ -59,7 +59,7 @@ The pipeline is a four-stage flow, one script per stage.
   not) and **segfaults** when `.attributes` is read off iterated children on some
   deep trees.
 - **Parity requirement:** these features MUST match the TypeScript extractor in
-  `@/htmlwasher/src/classifier/features/` exactly. Validated by the TS↔Python
+  `@/packages/htmlwasher/src/classifier/features/` exactly. Validated by the TS↔Python
   parity fixtures (target ≥99% exact match; compare the **argmax class**, not raw
   probabilities).
 - **`title_meta_text` is a documented simplification:** `<title>` element text +
@@ -104,13 +104,13 @@ The pipeline is a four-stage flow, one script per stage.
 - Emit `tfidf-vocab.json`: `vocabulary` (term→index), `idf` (100), `numericMean`
   + `numericScale` (89 each, the StandardScaler stats), `classLabels` (7),
   `nNumeric` (89), `nTfidf` (100), `tokenPattern`, `ngramRange`, `lowercase`.
-- Copy `model.onnx` + `tfidf-vocab.json` into `@/htmlwasher/src/classifier/model/`
+- Copy `model.onnx` + `tfidf-vocab.json` into `@/packages/htmlwasher/src/classifier/model/`
   (the only committed copies; the `training/`-local copies are `.gitignore`d).
 
 ### Stage PARITY — `make_parity_fixtures.py`
 
 - Picks small (<60 KB) dev HTML pages (2 per type, 14 total), copies them to
-  `@/htmlwasher/fixtures/classifier/<id>.html`, and writes `parity.json`: per
+  `@/packages/htmlwasher/fixtures/classifier/<id>.html`, and writes `parity.json`: per
   fixture `{file, url, pageType, numeric[89], tfidf[100], argmax, argmaxLabel}`,
   with `argmax` from running the exported ONNX on the assembled 189-vector. The TS
   parity test re-extracts from the same HTML and compares.

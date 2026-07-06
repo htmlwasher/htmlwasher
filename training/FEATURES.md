@@ -2,7 +2,7 @@
 
 Authoritative spec for the htmlwasher page-type classifier, extracted from the
 Rust references. It is the contract for BOTH the offline Python training extractor
-(`training/`) and the TypeScript runtime extractor (`htmlwasher/src/classifier/`).
+(`training/`) and the TypeScript runtime extractor (`packages/htmlwasher/src/classifier/`).
 Both sides MUST produce byte-identical feature vectors so the trained model
 behaves the same at train and inference time.
 

@@ -20,10 +20,10 @@ and `~/r/contextractor`.
 
 ## v2 status (phase tracker)
 
-- **Operating mode: UPDATE-IN-PLACE.** A working v1 exists in the pre-restructure layout
-  (`@/htmlwasher/`, `@/tools/htmlwasher/`); `pnpm test` is green (28 corpus fixtures @ 100%
-  page-type accuracy, 0 security failures; ~369 lib tests). v1 is the regression oracle.
-  Branch `rust-core`; only brief/context docs committed so far — no v2 production code yet.
+- **Operating mode: UPDATE-IN-PLACE.** A working v1 exists (now at `@/packages/*` after Phase
+  RESTRUCTURE — originally `@/htmlwasher/` + `@/tools/htmlwasher/`); `pnpm test` is green (28 corpus
+  fixtures @ 100% page-type accuracy, 0 security failures; ~369 lib tests). v1 is the regression
+  oracle. Branch `rust-core`.
 - **Phase ORIENT — done** (this block). Module map, strip list, dormant exclusion, perf
   baseline below. No production code.
 - **Phase FLOOR — done.** The TS washing floor is now UNCONDITIONAL: `enforceSecurityFloor`
@@ -44,8 +44,18 @@ and `~/r/contextractor`.
     force a genuine run (`turbo run test --force`, or rely on a source edit to bust the cache); never
     trust cached green as the regression oracle. And capture the real exit code — a piped
     `pnpm test | tail` masks it behind `tail`'s exit status.
-- Phases RESTRUCTURE → CRATE → CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH —
-  pending. Gate each before advancing; commit per phase; keep `pnpm test` green.
+- **Phase RESTRUCTURE — done.** Adopted the contextractor flat `packages/*` layout via `git mv`:
+  `htmlwasher` to `packages/htmlwasher`, `tools/htmlwasher/{wash-corpus-tester,live-crawl-tester}` up
+  to `packages/*`, `tools/` dissolved. Package NAMES unchanged (`htmlwasher` published; `@htmlwasher/*`
+  testers private). `pnpm-workspace.yaml` set to the three contextractor globs; tsconfig `extends`
+  depth fixed (flagship gains one `../`, each tester loses one); `knip.json` workspace keys, the
+  `spec-gate.sh`/`test-gate.sh` path matchers, and off-by-one relative doc links (`../../../` to
+  `../`/`../../`) all repointed; full `tools/htmlwasher | @/htmlwasher/` sweep across CLAUDE.md
+  (structure tree + SPEC mapping), root SPEC.md, READMEs, `.claude/**`, `.gitignore`, and training
+  docs. `pnpm ls -r` shows every package at its new path with its name unchanged. Gate green:
+  `pnpm build && lint && test` (377 lib tests; corpus 28 fixtures PASS).
+- Phases CRATE → CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
+  before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
 
@@ -369,7 +379,7 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
   (parse5 normalize → linkedom) for byte-exact body text.
 - Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
   `wash()` returns `pageType` + `confidence`. `none` skips classification.
-- Phase 8 (offline wash-corpus tester) — done. `tools/htmlwasher/wash-corpus-tester/`: 28
+- Phase 8 (offline wash-corpus tester) — done. `packages/wash-corpus-tester/`: 28
   WCXB fixtures (≥3 per type × 7), 196 runs (7 boilerplate×level combos each),
   asserting security invariants + page-type plausibility, with a stdout table +
   `report.json`/`report.md`. Offline, deterministic, `pnpm test:corpus`.
@@ -386,7 +396,7 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
   pass through unchanged (recorded as soft warnings, not failures) — but the
   no-config path still runs `enforceSecurityFloor` + `sanitizeStyledHtml`, so
   `<script>`/`on*`/dangerous-URL/dangerous-CSS are stripped even there.
-- **`tools/htmlwasher/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
+- **`packages/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
   is `wash-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
   (an unimplemented network-fetch stub) is left untouched — deleting it would churn
   ~15 incidental references across the `.claude/` config for no functional gain,
@@ -511,7 +521,7 @@ trained-model argmax.
 
 ## Source → target module map
 
-### Boilerplate-removal core → `@/htmlwasher/src/core/`
+### Boilerplate-removal core → `@/packages/htmlwasher/src/core/`
 
 The core follows go-trafilatura's **keep-HTML** route (its `convertTags` keeps HTML,
 `html-processing.go:481-484`), NOT adbar's XML round-trip. Shared pipeline stages (adbar
@@ -566,7 +576,7 @@ rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre
   fallback on a pre-cleaning backup, then profile post-passes (`aggregate_sections`,
   `collect_repeated_items`, Category description prepend, Product JSON-LD description).
 
-### Metadata → `@/htmlwasher/src/metadata/` (optional sidecar)
+### Metadata → `@/packages/htmlwasher/src/metadata/` (optional sidecar)
 
 Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field MERGE (not a
 blanket override): meta/OpenGraph fill first; then JSON-LD fills EMPTY
@@ -587,7 +597,7 @@ ends with `clean_and_trim` (cap each string field to 10000 chars, then
 - `date.ts` — adbar delegates to the external **htmldate** `find_date`. htmlwasher must port
   a JSON-LD/meta/url/text date heuristic or a minimal htmldate equivalent (open question on scope).
 
-### Classifier → `@/htmlwasher/src/classifier/` + training
+### Classifier → `@/packages/htmlwasher/src/classifier/` + training
 
 - `classifier/features/` (TS, htmlparser2 hot-path) + `training/extract_features.py` (Python,
   selectolax) — the **same** 89-numeric + 100-TF-IDF extractor, byte-for-byte. Reproduce
@@ -607,7 +617,7 @@ ends with `clean_and_trim` (cap each string field to 10000 chars, then
   missing feature → 0.0. For TS↔Python (lexbor) feature parity, `parseDocumentSpec`
   strips `<template>` subtrees before counting features.
 
-### Per-type profiles → `@/htmlwasher/src/profiles/`
+### Per-type profiles → `@/packages/htmlwasher/src/profiles/`
 
 `ExtractionProfile` (`page_type/mod.rs:98-345`) LIVE fields: `comments_are_content`,
 `content_selectors`, `preserve_tags`, `boilerplate_selectors`, `aggregate_sections`,
@@ -623,7 +633,7 @@ deliberately. Copy the 7 profile selector/tag arrays verbatim. Confidence:
 the 27-feature ML quality model `predict_quality` is a _second_ model — out of scope unless
 confirmed).
 
-### HTML washing → `@/htmlwasher/src/washing/`
+### HTML washing → `@/packages/htmlwasher/src/washing/`
 
 Faithful port of `htmlprocessing-server/src/process-html.ts`. Pipeline order:
 decode (chardet, iconv-lite; buffers only), then normalize (parse5), then sanitize
@@ -648,7 +658,7 @@ html-minifier-terser when `minify`). Returns `{ html, messages }`.
   sanitize-html does NOT scheme-filter `url()` inside `style` attrs or `<style>` blocks, so
   `url(javascript:|data:)`, `expression()`, `@import`, `-moz-binding` survive by default.
 
-### Orchestration → `@/htmlwasher/src/pipeline.ts` + `index.ts`
+### Orchestration → `@/packages/htmlwasher/src/pipeline.ts` + `index.ts`
 
 `wash(html, { boilerplate?, level?, minify? })` → `{ html, messages, metadata? }`. Defaults:
 `boilerplate: 'balanced'`, `level: 'standard'`, `minify: false`. `boilerplate: 'none'`
@@ -693,10 +703,10 @@ options are the **entire** user surface — no `includeComments/Tables/Images/Li
 
 ## tools/ tester: brief vs scaffold drift (Phase 8)
 
-The brief (§4, §7, §8) specifies an **offline** `tools/htmlwasher/wash-corpus-tester/` (saved HTML
+The brief (§4, §7, §8) specifies an **offline** `packages/wash-corpus-tester/` (saved HTML
 fixtures in → cleaned HTML out, **no network**, ≥3 fixtures per page type × 7 types). The
-current scaffold instead has `tools/htmlwasher/live-crawl-tester/` (a polite network fetcher per
+current scaffold instead has `packages/live-crawl-tester/` (a polite network fetcher per
 CLAUDE.md). The brief and the §8 non-goals are explicit that htmlwasher never touches the
-network. **Decision: build `tools/htmlwasher/wash-corpus-tester/` per the brief** and reconcile the
+network. **Decision: build `packages/wash-corpus-tester/` per the brief** and reconcile the
 scaffold at Phase 8 (repoint the workspace, retire or repurpose the live-crawl-tester, and
 update CLAUDE.md / SPEC.md accordingly).
