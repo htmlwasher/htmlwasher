@@ -213,7 +213,48 @@ MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts
     the 189-feature classifier, which is ~65% of the full time (feature extraction dominates, as expected).
     Rust harness saved at `scratchpad/perf-rust.mjs`. **Gate met:** scores + perf documented, no floor
     regressions.
-- Phases RETEST → POLISH — pending. Gate each
+- **Phase RETEST — done.** Deep external live benchmark (`~/r/htmlwasher-external-tester/`, 44 cached
+  live pages, 4 engines, token F1 vs the Trafilatura reference) + a root-caused autofix (detailed below).
+  - **Wiring + a real finding:** repointed the tester's `file:` dep to `../htmlwasher/packages/htmlwasher`
+    and added `pnpm.overrides` `@htmlwasher/native → file:.../native`, because the flagship's
+    `@htmlwasher/native: workspace:*` dep does NOT resolve via plain `file:` outside the monorepo
+    (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`) — **htmlwasher is not yet consumable via `file:` outside its
+    workspace** (the brief's "ships prebuilds inside its own tarball while alpha" is unimplemented →
+    POLISH packaging item). With the override, htmlwasher v2 (Rust core) loads + runs from the external repo.
+  - **Token bench BEFORE the autofix:** htmlwasher F1 0.850 (P 0.918 / R 0.856) — a LIFT over v1's 0.841,
+    ~3× faster (median 111→36 ms), 100% success. vs rs-trafilatura (0.881): MORE precise (0.918 vs 0.897)
+    but lower recall (0.856 vs 0.915); the F1 gap (−0.031) was ALL on ARTICLE pages (hw 0.883 vs rs 0.990)
+    — htmlwasher wins/ties the other 5 types (forum +0.13, listing +0.09, collection +0.05, docs ≈).
+  - **Token bench AFTER the autofix:** htmlwasher **F1 0.873** (article 0.883→0.931), gap vs rs-trafilatura
+    closed to **−0.008**; antirez F1 0.002→1.000; every other type unchanged; 100% success. Offline oracle
+    held (adbar F1 0.831, corpus PASS, cargo 100). Refreshed `reports/` committed in the tester repo.
+  - **Remaining (future, NOT regressions):** the Gutenberg full-text case is a content-SELECTION gap (not a
+    fallback gap); `aggregate_sections`/`collect_repeated_items` + Discourse/product rescues stay deferred.
+    Visual layer: `visual:prep` regenerated the v2 bundles; the full Claude vision judge was not re-run (the
+    token P/R already quantify cleanliness↑/completeness; zero regressions to autofix) — pipeline stays wired.
+- **Phase RETEST autofix — done (partial, prioritized).** Ported the rs-trafilatura structured
+  RESCUES into `extractor/fallback.rs` + wired them into `lib.rs::extract` via
+  `extract.rs::rescue_under_extraction`: the profile-INDEPENDENT `baseline` (basic cleaning →
+  `<article>`/paragraph scraping with a focused `should_discard` → whole-body text) and the JSON-LD
+  `articleBody` pre-check (gated `MIN_STRUCTURED_BODY_LEN = 500`). Fired ONLY on genuine
+  under-extraction (`text_length < MIN_EXTRACTED_TEXT`, self-gating re-parse), keeps the longer result,
+  synthesizes best-effort bare `<p>` (doc-09 limitation) that stays script-free, and NEVER re-types the
+  page (classifier untouched). **antirez.com/news/123 BEFORE/AFTER:** `documentation`, textLength 26 /
+  ~5 words to `documentation` (unchanged type), textLength 4730 / ~816 words (`baseline-rescue`). Root
+  cause: the post body lived in `<article class="comment">`, dropped by the `comment` name filter; the
+  profile-independent baseline recovers it. Gate: `cargo test` 100 (5 new rescue tests + the gated
+  antirez fixture test), clippy (default and `--features napi`) plus fmt clean; host prebuild rebuilt +
+  committed; `pnpm build`/`test` green; the flagship adbar eval is `P=0.814/R=0.848/F1=0.831` (recall+F1
+  slightly UP vs the pre-fix 0.844/0.828 — the flagship IS wired to the Rust core via INTEGRATE, so the
+  rescue flows through `wash()`; the offline oracle confirms no precision regression from the rescue).
+  - **DEFERRED (lower-priority, honestly skipped):** `sanitize_tree` (dead whitelist-strip — TS washing
+    owns it, per the brief); the full `candidate_is_usable`/`compare_external_extraction` ">2x even when
+    substantial" comparison (only the conservative SHORT-branch replacement is wired, to protect adbar
+    precision — the Gutenberg-class "we extracted less than rs but still > min" case is a content-
+    SELECTION gap, not a fallback gap, so it is NOT fixed here); the Discourse `data-preloaded` +
+    Product-description rescues (not cheap — a second parse + bespoke JSON shape; skipped). The
+    `aggregate_sections`/`collect_repeated_items` passes remain deferred.
+- Phases POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)

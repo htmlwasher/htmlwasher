@@ -30,7 +30,9 @@ const PAGE_TYPE_TS: &str =
 /// suppresses `confidence`); `focus` tunes precision/recall; `url` feeds the cascade.
 #[napi(object)]
 pub struct ExtractOptions {
-    #[napi(ts_type = "'article' | 'forum' | 'product' | 'collection' | 'listing' | 'documentation' | 'service'")]
+    #[napi(
+        ts_type = "'article' | 'forum' | 'product' | 'collection' | 'listing' | 'documentation' | 'service'"
+    )]
     pub page_type: Option<String>,
     #[napi(ts_type = "'precision' | 'balanced' | 'recall'")]
     pub focus: Option<String>,
@@ -43,7 +45,9 @@ pub struct ExtractOptions {
 #[napi(object)]
 pub struct ExtractResult {
     pub content_html: String,
-    #[napi(ts_type = "'article' | 'forum' | 'product' | 'collection' | 'listing' | 'documentation' | 'service'")]
+    #[napi(
+        ts_type = "'article' | 'forum' | 'product' | 'collection' | 'listing' | 'documentation' | 'service'"
+    )]
     pub page_type: String,
     pub confidence: Option<f64>,
     pub text_length: u32,

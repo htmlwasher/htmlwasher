@@ -64,9 +64,11 @@ pub fn extract(html: &str, options: &Options) -> Result<ExtractResult, Error> {
         }
     };
     let core = CoreOptions::resolve_for(options, page_type);
-    Ok(extract::extract_from_doc(
-        &doc, &core, page_type, confidence,
-    ))
+    let mut result = extract::extract_from_doc(&doc, &core, page_type, confidence);
+    // Defaults-only robustness: rescue genuine under-extractions with the profile-
+    // independent baseline / JSON-LD articleBody (re-parses `html` only when short).
+    extract::rescue_under_extraction(html, page_type, confidence, &mut result);
+    Ok(result)
 }
 
 /// Convenience wrapper: extract with default options (balanced, preserve-markup, Article).

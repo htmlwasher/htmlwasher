@@ -55,6 +55,16 @@ short-extraction backoff + whole-body fallback.
 The **doc-09 backoff guard**: when the gated name filter would empty the content it backs off to the
 unfiltered render, while the unconditional always-excluded + BreadcrumbList drops still fire.
 
+**Under-extraction rescue (defaults-only robustness):** when the profile-driven result comes up short
+(`text_length < MIN_EXTRACTED_TEXT`), `rescue_under_extraction` re-parses the raw HTML and tries the
+profile-INDEPENDENT structured rescues — JSON-LD `articleBody` (gated at `MIN_STRUCTURED_BODY_LEN = 500`)
+then the `baseline` whole-document extraction (basic cleaning → `<article>`/paragraph scraping →
+whole-body text) — keeping the longer result. It self-gates (re-parse only when short) so pages that
+extract fine are untouched (no precision regression), and NEVER re-types the page (classifier verdict
+preserved). When a rescue wins, markup is best-effort synthesized bare `<p>` (the documented doc-09
+limitation) but still script-free. This fixes catastrophic under-extractions where the body lives in a
+container the profile drops (e.g. a blog post in `<article class="comment">`).
+
 ## Page-type classifier (3-stage cascade, no ONNX)
 
 When `options.page_type` is `None`, `extract` runs `page_type::classify(&doc, url)` over the raw
@@ -120,7 +130,9 @@ extracts a fixture end-to-end.
 - `link_density.rs` — `link_density_test(_tables)`, `delete_by_link_density`.
 - `selector/{content,discard,utils}.rs` — the content-node cascade, name-based discard predicates,
   content-rule matching.
-- `extractor/fallback.rs` — `prune_unwanted_nodes` (reconciled single copy).
+- `extractor/fallback.rs` — `prune_unwanted_nodes` (reconciled single copy) + the profile-INDEPENDENT
+  structured RESCUES (`baseline_paragraphs`, `extract_json_ld_article_body`) that recover the main
+  content when the profile-driven selection under-performs (fired from `extract.rs::rescue_under_extraction`).
 - `binding.rs` — the napi-rs v3 addon surface (`extract`/`extractSync`), behind the `napi` feature.
 - `build.rs` — `napi_build::setup()` (cdylib link args).
 - `page_type/mod.rs` — `PageType` + the 7 `ExtractionProfile` constants (verbatim) + the `classify`
@@ -149,7 +161,7 @@ extracts a fixture end-to-end.
 
 ## Gate
 
-`cargo build --workspace`, `cargo test --workspace` (95 tests), `cargo clippy --workspace
+`cargo build --workspace`, `cargo test --workspace` (100 tests), `cargo clippy --workspace
 --all-targets -- -D warnings` (+ `--features napi` to lint the binding), `cargo fmt --check` — all
 green. Monorepo: `pnpm build` (native self-skips to the committed prebuild), `pnpm lint`, `pnpm test`
 (flagship v1 suite + the native vitest smoke test) all green. `tests/classifier_parity.rs` is the

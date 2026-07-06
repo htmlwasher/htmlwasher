@@ -15,19 +15,25 @@ use dom_query::{Document, NodeRef};
 use crate::dom::{
     all_elements, body_or_root, has_ancestor_tag, parse, same_node, select_all, tag_of, text_len,
 };
-use crate::extractor::fallback::prune_unwanted_nodes;
+use crate::extractor::fallback::{
+    baseline_paragraphs, extract_json_ld_article_body, prune_unwanted_nodes,
+};
 use crate::html_processing::{
     MAX_TREE_DEPTH, clean_document, enforce_max_depth, prune_empty_elements,
 };
 use crate::options::{CoreOptions, EmitMode};
 use crate::page_type::PageType;
+use crate::patterns::collapse_ws;
 use crate::result::ExtractResult;
 use crate::selector::content::find_content_node;
 use crate::selector::discard::{is_always_excluded_name, is_boilerplate_named};
 use crate::tags::{SERIALIZE_HARD_SKIP, VOID_TAGS};
 
-/// Below this many chars of extracted text the whole-body fallback is tried.
-const MIN_EXTRACTED_TEXT: usize = 200;
+/// Below this many chars of extracted text the whole-body fallback + structured rescues are tried.
+pub const MIN_EXTRACTED_TEXT: usize = 200;
+
+/// JSON-LD `articleBody` rescue is only accepted at/above this length (rs `MIN_STRUCTURED_BODY_LEN`).
+const MIN_STRUCTURED_BODY_LEN: usize = 500;
 
 /// Exact resource caps from rs-trafilatura (`extract.rs:2969-2970`).
 const MAX_TABLE_CELLS: usize = 20_000;
@@ -393,6 +399,78 @@ fn apply_final_validations(result: &mut ExtractResult) {
     }
     if result.text_length > 0 && result.text_length < 25 {
         result.warnings.push("content-very-short".to_string());
+    }
+}
+
+/// Synthesize a preserve-markup result from rescued paragraph texts. Markup is
+/// best-effort bare `<p>` (the documented doc-09 limitation for fallback wins); the
+/// text is escaped, so the output is script-free and satisfies the FFI hygiene invariant.
+fn synth_result(
+    paragraphs: &[String],
+    page_type: PageType,
+    confidence: Option<f64>,
+    tag: &str,
+) -> ExtractResult {
+    let mut html = String::new();
+    let mut text = String::new();
+    for para in paragraphs {
+        if para.is_empty() {
+            continue;
+        }
+        html.push_str("<p>");
+        html.push_str(&escape_text(para));
+        html.push_str("</p>");
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        text.push_str(para);
+    }
+    let text_length = collapse_ws(&text).chars().count();
+    ExtractResult {
+        content_html: html,
+        page_type,
+        confidence,
+        text_length,
+        fallback_used: true,
+        warnings: vec![tag.to_string()],
+    }
+}
+
+/// Defaults-only robustness rescue: when the profile-driven extraction under-performs,
+/// try the profile-INDEPENDENT structured rescues (JSON-LD `articleBody`, then the
+/// `baseline` whole-document extraction) and keep the longer result. Self-gating —
+/// re-parses `html` (basic cleaning mutates that copy) only when under-extracting, so
+/// pages that extract fine are untouched (no precision regression). Never re-types the
+/// page (classifier verdict preserved).
+pub fn rescue_under_extraction(
+    html: &str,
+    page_type: PageType,
+    confidence: Option<f64>,
+    result: &mut ExtractResult,
+) {
+    if result.text_length >= MIN_EXTRACTED_TEXT {
+        return;
+    }
+    let doc = parse(html);
+
+    // JSON-LD articleBody (gated at MIN_STRUCTURED_BODY_LEN) — read scripts before baseline
+    // strips them.
+    if let Some(body) = extract_json_ld_article_body(&doc) {
+        let collapsed = collapse_ws(&body);
+        let len = collapsed.chars().count();
+        if len >= MIN_STRUCTURED_BODY_LEN && len > result.text_length {
+            *result = synth_result(&[collapsed], page_type, confidence, "json-ld-rescue");
+        }
+    }
+
+    // Baseline whole-document extraction (mutates `doc`).
+    let paragraphs = baseline_paragraphs(&doc);
+    let baseline_len = {
+        let joined = paragraphs.join(" ");
+        collapse_ws(&joined).chars().count()
+    };
+    if baseline_len > result.text_length && baseline_len >= MIN_EXTRACTED_TEXT {
+        *result = synth_result(&paragraphs, page_type, confidence, "baseline-rescue");
     }
 }
 
