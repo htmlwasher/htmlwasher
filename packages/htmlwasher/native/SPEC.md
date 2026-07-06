@@ -55,6 +55,33 @@ short-extraction backoff + whole-body fallback.
 The **doc-09 backoff guard**: when the gated name filter would empty the content it backs off to the
 unfiltered render, while the unconditional always-excluded + BreadcrumbList drops still fire.
 
+## Page-type classifier (3-stage cascade, no ONNX)
+
+When `options.page_type` is `None`, `extract` runs `page_type::classify(&doc, url)` over the raw
+document (one parse feeds both classify + extract) and reports `(pageType, confidence)`; `Some` skips it
+(confidence `None`). Stages:
+
+- **Stage 1 — URL** (`page_type/url.rs::classify_url`): ordered first-match; `extract_domain_path`
+  strips `https://` else `http://` (NOT `//`); empty URL → `Article`.
+- **Stage 2 — HTML signals** (`page_type/signals.rs`): `refine_with_signals` ONLY ever overrides
+  `Article` (JSON-LD `@type` exact/case-sensitive, og:type, product-grid/cart/pagination, docs-nav+code).
+- **Stage 3 — ML**: 189 features (89 numeric scaled by the baked StandardScaler ++ 100 TF-IDF over
+  `"{title} {description}"`) → the pure-Rust GBDT over the XGBoost native JSON dump.
+- **Confidence** (compare ARGMAX, never floats): `url != Article && ml == url` → `1.0`;
+  else `refined != Article && ml == refined` → `0.95`; else `(ml_type, ml_prob)`.
+
+**GBDT** (`page_type/gbdt.rs`): `multi:softprob`, 7 classes, 1400 trees, round-robin `tree_info[i]==i%7`;
+strict `<` → left, leaf weight = `split_conditions`; **splits evaluated in float32** (XGBoost stores
+features/thresholds as f32 — comparing in f64 shifts probs by up to ~0.3, though argmax is unaffected);
+`base_score` cancels under softmax (accumulate from 0). Artifacts (`artifacts/model.xgb.json`,
+`artifacts/tfidf-vocab.json`) are `include_str!`-baked and validated once behind a `LazyLock`.
+
+**Locked parity** (target = `training/extract_features.py`, byte-level; verified ≤1e-6 on 15 fixtures):
+UTF-8 byte lengths (`str::len`); the CPython `str.split()`/`str.strip()` whitespace class (adds
+U+001C–U+001F, U+0085; excludes U+FEFF); selectolax comma-union NO-dedup (one count per matching
+sub-selector, document order); the 500_000-byte body-text gate; scikit-learn TF-IDF (smooth_idf, L2);
+`<template>` content excluded natively by dom_query/html5ever (matches lexbor).
+
 ## Modules
 
 - `options.rs`/`result.rs`/`error.rs` — the public surface.
@@ -68,8 +95,13 @@ unfiltered render, while the unconditional always-excluded + BreadcrumbList drop
 - `selector/{content,discard,utils}.rs` — the content-node cascade, name-based discard predicates,
   content-rule matching.
 - `extractor/fallback.rs` — `prune_unwanted_nodes` (reconciled single copy).
-- `page_type/mod.rs` — `PageType` + the 7 `ExtractionProfile` constants (verbatim).
-- `extract.rs` — orchestration, the DUAL-mode serializer + text twin, relocated DOM passes, table caps.
+- `page_type/mod.rs` — `PageType` + the 7 `ExtractionProfile` constants (verbatim) + the `classify`
+  cascade.
+- `page_type/{url,features,tfidf,gbdt,model,signals}.rs` — the 3-stage classifier: URL heuristics, the
+  89-numeric extractor, the sklearn TF-IDF, the pure-Rust GBDT evaluator, the baked-artifact loader +
+  ML inference, and the HTML-signal refinement.
+- `extract.rs` — orchestration (`extract_from_doc` runs on the already-parsed, post-classify document),
+  the DUAL-mode serializer + text twin, relocated DOM passes, table caps.
 
 ## Deviations from the reference
 
@@ -77,13 +109,17 @@ unfiltered render, while the unconditional always-excluded + BreadcrumbList drop
   `dom_query 0.28`; bucket-B cleaning is ported directly from the tested v1 `clean.ts`.
 - **dom_query `unwrap_node` is never used** — it removes a node's PARENT, not the node; tag stripping
   uses `strip_elements`.
+- **GBDT splits evaluated in float32** to match XGBoost (f64 comparison shifts probs; argmax unaffected).
+- **`onnxruntime` NOT used** — the classifier is a pure-Rust GBDT over the XGBoost JSON dump (no ONNX).
 - **Deferred this phase:** `aggregate_sections`/`collect_repeated_items` post-passes (carried as
   profile config; measured at VALIDATE) and the structured JSON-LD/Discourse/baseline rescue paths.
   The v1-equivalent core cascade + backoff + body fallback is ported.
 
 ## Gate
 
-`cargo build --workspace`, `cargo test --workspace` (63 tests), `cargo clippy --workspace
---all-targets -- -D warnings`, `cargo fmt --check` — all green. Production code uses `Result` + `?`
+`cargo build --workspace`, `cargo test --workspace` (95 tests), `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo fmt --check` — all green. `tests/classifier_parity.rs` is the
+CLASSIFY gate: numeric ≤ 1e-6, tfidf ≤ 1e-6, probs ≤ 1e-4, argmax 100% on all 15 fixtures (actual:
+numeric ≤ 3.4e-13, tfidf ≤ 2.2e-16, probs ≤ 6.9e-8, argmax 15/15). Production code uses `Result` + `?`
 (no `unwrap`/`expect`/`unsafe`); tests permit unwrap/expect via `clippy.toml` + a per-file allow.
 The adbar sanity test skips gracefully when `~/r/htmlwasher-sources/trafilatura/tests/cache` is absent.

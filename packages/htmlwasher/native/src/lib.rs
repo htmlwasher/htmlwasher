@@ -36,20 +36,30 @@ pub use result::ExtractResult;
 
 /// Extract the main content of an HTML document.
 ///
-/// Parses `html`, removes boilerplate through the 3-stage node cascade, and returns
-/// the kept content as HTML (preserve-markup by default) plus the resolved page type
-/// and text length. The `page_type` in `options` selects the extraction profile;
-/// `None` reproduces classifier-less behavior (the `Article` profile).
+/// Parses `html` ONCE. When `options.page_type` is `None`, runs the 3-stage page-type
+/// cascade (URL heuristics → HTML signals → the ML model) over the raw document to pick
+/// the extraction profile and report `(pageType, confidence)`; when it is `Some`, that
+/// type is used directly (confidence `None`, no classifier). Then removes boilerplate
+/// through the node cascade and returns the kept content as HTML (preserve-markup by
+/// default) plus the page type, confidence, and text length.
 ///
 /// # Errors
 ///
-/// Currently infallible in practice — dom_query's parser always yields a tree and all
-/// traversal is stack-safe — but returns [`Error`] so the FFI boundary (Phase BIND)
-/// can surface option-parse and resource-guard failures without unwinding.
+/// Returns [`Error::ModelLoad`] if the baked classifier artifacts fail to load/validate
+/// (only reachable on the auto-classify path). Extraction itself is total.
 pub fn extract(html: &str, options: &Options) -> Result<ExtractResult, Error> {
-    let page_type = options.page_type.unwrap_or(PageType::Article);
-    let core = CoreOptions::resolve(options);
-    Ok(extract::extract_content(html, &core, page_type))
+    let doc = dom::parse(html);
+    let (page_type, confidence) = match options.page_type {
+        Some(pt) => (pt, None),
+        None => {
+            let url = options.url.as_deref().unwrap_or("");
+            page_type::classify(&doc, url)?
+        }
+    };
+    let core = CoreOptions::resolve_for(options, page_type);
+    Ok(extract::extract_from_doc(
+        &doc, &core, page_type, confidence,
+    ))
 }
 
 /// Convenience wrapper: extract with default options (balanced, preserve-markup, Article).

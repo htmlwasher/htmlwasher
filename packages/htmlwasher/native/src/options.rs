@@ -118,7 +118,13 @@ impl CoreOptions {
     /// Resolve public [`Options`] against the profile for the selected (or default) page type.
     #[must_use]
     pub fn resolve(options: &Options) -> Self {
-        let page_type = options.page_type.unwrap_or(PageType::Article);
+        Self::resolve_for(options, options.page_type.unwrap_or(PageType::Article))
+    }
+
+    /// Resolve public [`Options`] against a specific page type's profile (used after the
+    /// classifier cascade determines the type).
+    #[must_use]
+    pub fn resolve_for(options: &Options, page_type: PageType) -> Self {
         let profile = page_type.extraction_profile();
         Self {
             focus: options.focus,

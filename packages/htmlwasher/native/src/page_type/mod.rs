@@ -9,9 +9,45 @@
 
 use std::str::FromStr;
 
+use dom_query::Document;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
+
+pub mod features;
+pub mod gbdt;
+pub mod model;
+pub mod signals;
+pub mod tfidf;
+pub mod url;
+
+/// The result of the 3-stage page-type cascade.
+pub type Classification = (PageType, Option<f64>);
+
+/// Run the 3-stage page-type cascade over a parsed document + URL.
+///
+/// Stage 1 = URL heuristics; Stage 2 = HTML-signal refinement (only ever overrides
+/// `Article`); Stage 3 = the ML model. Agreement rule: `url_type != Article && ml ==
+/// url_type` → `(url_type, 1.0)`; else `refined != Article && ml == refined` →
+/// `(refined, 0.95)`; else `(ml_type, ml_prob)`.
+///
+/// # Errors
+/// Returns [`Error::ModelLoad`] when the baked classifier artifacts fail to load.
+pub fn classify(doc: &Document, url: &str) -> Result<Classification, Error> {
+    let url_type = url::classify_url(url);
+    let signals = signals::extract_html_signals(doc);
+    let refined = signals::refine_with_signals(url_type, &signals);
+
+    let (ml_type, ml_conf) = model::model()?.classify_ml(doc, url);
+
+    if url_type != PageType::Article && ml_type == url_type {
+        return Ok((url_type, Some(1.0)));
+    }
+    if refined != PageType::Article && ml_type == refined {
+        return Ok((refined, Some(0.95)));
+    }
+    Ok((ml_type, Some(ml_conf)))
+}
 
 /// The type of content on a web page. Seven variants; the internal `Category`
 /// variant serializes to the wire string `"collection"` (and `FromStr`/serde accept

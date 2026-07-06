@@ -86,7 +86,40 @@ and `~/r/contextractor`.
     (attributes SURVIVE); the original whitelist behavior is retained behind `EmitMode::WhitelistParity`
     and tested there. `precision`↔`recall` does not change output on the 4 adbar pages (matches v1's
     documented finding); its observable effect is proven by synthetic link-density tests in `tests/extract.rs`.
-- Phases CLASSIFY → BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
+- **Phase CLASSIFY — done.** The 3-stage cascade + confidence + 189-feature extractor + pure-Rust GBDT
+  landed in `packages/htmlwasher/native/src/page_type/{url,features,tfidf,gbdt,model,signals}.rs` + the
+  `classify` fn in `mod.rs`, wired into `lib.rs::extract` (one parse feeds classify + extract; auto-classify
+  when `page_type` is `None`, else the override with confidence `None`). Ported from the proven v1
+  `src/classifier/*` (100%-parity target). Artifacts `artifacts/{model.xgb.json,tfidf-vocab.json}` are
+  `include_str!`-baked + `LazyLock`-validated. **Parity gate GREEN** (`tests/classifier_parity.rs`, 15
+  fixtures): numeric ≤ 3.4e-13, tfidf ≤ 2.2e-16, probs ≤ 6.9e-8, **argmax 15/15**. Full gate: 95 tests,
+  `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` all green. Key findings:
+  - **GBDT must evaluate splits in float32.** XGBoost stores features/thresholds as f32; comparing in f64
+    branches differently for a feature value near a split threshold, shifting probs by up to ~0.31 on one
+    fixture (argmax unaffected). Casting `(v as f32) < (thr as f32)` in `gbdt.rs` dropped the worst prob
+    diff from 3.1e-1 to 6.9e-8. (Resolves the fixture-0 vs fixture-4853 discrepancy.)
+  - **`base_score` (0.5) is inert.** A single scalar added to all 7 class margins → cancels under softmax;
+    margins accumulate from 0. `default_left` is present but never set (dense features) — the defensive
+    branch never fires. No early stopping (all 1400 trees; `iteration_indptr` = 201, attributes empty).
+  - **`<template>` needs NO explicit stripping.** Unlike linkedom (which forced the v1 `parseDocumentSpec`
+    template removal), dom_query/html5ever stores template children in a separate `template_contents`
+    fragment, so `.text()`/selectors/`children()` never descend into them — matching lexbor natively.
+  - **`dom::parse` == `parseDocumentSpec`.** html5ever's spec parse matches lexbor/selectolax on nested
+    `<body>` coercion + trailing whitespace text nodes; body-text parity is exact (f[58] within 1e-13).
+  - **`onnxruntime` dropped** — the classifier is a pure-Rust GBDT over the XGBoost JSON dump.
+  - **Python side (`training/`):** ONNX export removed; `train.py` writes the XGBoost native JSON dump
+    (`clf.get_booster().save_model` → `native/artifacts/model.xgb.json`) + `tfidf-vocab.json`;
+    `make_parity_fixtures.py` emits `native/tests/fixtures/classifier-parity.json` (15 fixtures). The retrain
+    is deterministic: held-out accuracy **0.7769** / macro-F1 0.6632 (matches v1), the model is byte-identical
+    to v1's, JSON round-trip argmax 100%. `pytest` + `ruff` green; `onnxmltools`/`skl2onnx` dropped from
+    `requirements.txt`; the training-root `model.onnx` removed. v1's shipped `src/classifier/model/*` untouched
+    (it leaves at INTEGRATE), so the v1 suite stays green.
+  - **Gotcha — biome reformats generated JSON artifacts.** `pnpm build`'s `pnpm fix` (biome) reformatted
+    `native/artifacts/tfidf-vocab.json` (biome skips the 1.8 MB `model.xgb.json` — over its size limit — but
+    not the small vocab), which breaks artifact reproducibility vs `training/`. Fixed: added
+    `!**/native/artifacts` to `biome.json` `files.includes` (alongside `!**/classifier/model` + `!**/fixtures`).
+    Always regenerate artifacts from `training/` (canonical `json.dumps`); never let biome touch them.
+- Phases BIND → INTEGRATE → VALIDATE → RETEST → POLISH — pending. Gate each
   before advancing; commit per phase; keep `pnpm test` green.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
@@ -365,12 +398,13 @@ scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY 
   `extractor/fallback.rs::prune_unwanted_nodes`.
 - **CRATE — dom_query `unwrap_node` footgun — RESOLVED.** It removes a node's PARENT, not the node;
   tag stripping uses `strip_elements` instead. Flagged so CLASSIFY/BIND avoid it.
-- **CLASSIFY — does `default_left` ever activate?** `extract_features.py` fills a DENSE f[] (0.0 for absent,
-  never NaN). If features are never truly missing, `default_left` is inert and strict-`<` with 0.0-for-absent
-  is the whole story → trivial exact parity. Verify against the exported JSON dump; if so, document that the
-  evaluator need not special-case missing routing (but honor it defensively).
-- **CLASSIFY — `token_pattern`/`ngram_range` of the shipped vocab.** Confirm the retrain uses
-  `(?u)\b\w\w+\b` unigrams so `tfidf-vocab.json` column order (89..188) is reproduced on both sides.
+- **CLASSIFY — does `default_left` ever activate? — RESOLVED (no).** The exported dump has `default_left`
+  present but 0 nodes set it (dense f[], never NaN). The evaluator honors it defensively but it never fires;
+  strict-`<` with 0.0-for-absent is the whole story. NEW finding: the split comparison must be **float32**
+  (see the CLASSIFY phase bullet) — that, not missing-routing, was the probs-parity blocker.
+- **CLASSIFY — `token_pattern`/`ngram_range` — RESOLVED.** `tfidf-vocab.json` ships
+  `tokenPattern="(?u)\b\w\w+\b"`, `ngramRange=[1,1]`, 100 unigram terms; the Rust tokenizer reproduces the
+  column order (tfidf parity ≤ 2.2e-16).
 - **VALIDATE — score movement from `aggregate_sections`/`collect_repeated_items`.** CRATE carried these as
   profile config only (dead flags in v1, not yet functional in Rust) — so VALIDATE should match v1 scores, not
   see a lift. If they are made functional later, they may move P/R/F1: investigate any drop, document any gain.

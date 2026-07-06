@@ -396,7 +396,7 @@ fn apply_final_validations(result: &mut ExtractResult) {
     }
 }
 
-/// Extract the main content of an HTML document with pre-resolved core options.
+/// Extract the main content, parsing `html` into a fresh document (confidence `None`).
 ///
 /// This is total: dom_query's parser always yields a tree and every traversal is
 /// stack-safe, so malformed/deeply-nested input yields an (possibly empty) result
@@ -404,8 +404,25 @@ fn apply_final_validations(result: &mut ExtractResult) {
 #[must_use]
 pub fn extract_content(html: &str, opts: &CoreOptions, page_type: PageType) -> ExtractResult {
     let doc = parse(html);
-    let Some(body) = body_or_root(&doc) else {
-        return ExtractResult::empty(page_type);
+    extract_from_doc(&doc, opts, page_type, None)
+}
+
+/// Extract the main content from an ALREADY-PARSED document.
+///
+/// The classifier cascade classifies on this same (raw, read-only) document BEFORE
+/// this runs, so one parse feeds both classify + extract. This mutates the document
+/// (depth guard, cleaning), so it must run AFTER any classification.
+#[must_use]
+pub fn extract_from_doc(
+    doc: &Document,
+    opts: &CoreOptions,
+    page_type: PageType,
+    confidence: Option<f64>,
+) -> ExtractResult {
+    let Some(body) = body_or_root(doc) else {
+        let mut empty = ExtractResult::empty(page_type);
+        empty.confidence = confidence;
+        return empty;
     };
 
     // Enforce the depth guard up front so no downstream recursion can overflow.
@@ -415,36 +432,24 @@ pub fn extract_content(html: &str, opts: &CoreOptions, page_type: PageType) -> E
     let content = find_content_node(&body, opts);
     let primary = extract_from(&content, opts);
 
+    let make = |html: String, text_length: usize, fallback_used: bool| ExtractResult {
+        content_html: html,
+        page_type,
+        confidence,
+        text_length,
+        fallback_used,
+        warnings: Vec::new(),
+    };
+
     let mut result = if primary.text_length < MIN_EXTRACTED_TEXT && !same_node(&content, &body) {
         let fallback = extract_from(&body, opts);
         if fallback.text_length > primary.text_length {
-            ExtractResult {
-                content_html: fallback.html,
-                page_type,
-                confidence: None,
-                text_length: fallback.text_length,
-                fallback_used: true,
-                warnings: Vec::new(),
-            }
+            make(fallback.html, fallback.text_length, true)
         } else {
-            ExtractResult {
-                content_html: primary.html,
-                page_type,
-                confidence: None,
-                text_length: primary.text_length,
-                fallback_used: false,
-                warnings: Vec::new(),
-            }
+            make(primary.html, primary.text_length, false)
         }
     } else {
-        ExtractResult {
-            content_html: primary.html,
-            page_type,
-            confidence: None,
-            text_length: primary.text_length,
-            fallback_used: false,
-            warnings: Vec::new(),
-        }
+        make(primary.html, primary.text_length, false)
     };
 
     apply_final_validations(&mut result);

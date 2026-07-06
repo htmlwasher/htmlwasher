@@ -22,4 +22,8 @@ pub enum Error {
         /// The depth limit that was exceeded.
         limit: usize,
     },
+
+    /// The baked classifier artifact (model or vocab) failed to parse or validate.
+    #[error("classifier artifact load failed: {0}")]
+    ModelLoad(String),
 }

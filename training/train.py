@@ -12,24 +12,24 @@ Pipeline (offline, CPU-only, seconds-to-minutes at this scale):
 5. SMOTE-oversample the minority classes (fallback to ``sample_weight`` if SMOTE
    cannot run on the data — documented at runtime).
 6. Train ``XGBClassifier(multi:softprob, 7 classes, hist)``.
-7. Export ``model.onnx`` (pure XGB on the 189-vector — scaling/TF-IDF live in the
-   feature code, NOT in the ONNX graph) and ``tfidf-vocab.json``.
+7. Export ``model.xgb.json`` (the XGBoost native JSON dump — trees + ``tree_info``
+   round-robin class layout + ``default_left`` + ``base_score``; scaling/TF-IDF
+   live in the feature code, NOT in the model) and ``tfidf-vocab.json``.
 8. Evaluate on the held-out TEST split; print accuracy + per-class P/R/F1 +
    confusion matrix.
 
-Artifacts are copied into ``htmlwasher/src/classifier/model/``.
+Artifacts are written into ``packages/htmlwasher/native/artifacts/`` where a
+pure-Rust GBDT evaluator (no onnxruntime) consumes them at inference time.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
-from onnxmltools import convert_xgboost
-from onnxmltools.convert.common.data_types import FloatTensorType
+import xgboost as xgb
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import (
     accuracy_score,
@@ -44,15 +44,14 @@ from download_wcxb import CLASS_LABELS, LabeledPage, build_index, download
 from extract_features import N_NUMERIC, extract_numeric_features, title_meta_text
 
 HERE = Path(__file__).parent
-MODEL_OUT = HERE / "model.onnx"
-VOCAB_OUT = HERE / "tfidf-vocab.json"
-TS_MODEL_DIR = HERE.parent / "htmlwasher" / "src" / "classifier" / "model"
+ARTIFACTS_DIR = HERE.parent / "packages" / "htmlwasher" / "native" / "artifacts"
+MODEL_OUT = ARTIFACTS_DIR / "model.xgb.json"
+VOCAB_OUT = ARTIFACTS_DIR / "tfidf-vocab.json"
 
 N_TFIDF = 100
 N_CLASSES = 7
 N_FEATURES = N_NUMERIC + N_TFIDF  # 189
 RANDOM_STATE = 42
-ONNX_OPSET = 13  # ai.onnx opset; ai.onnx.ml stays at its converter default.
 
 # TF-IDF config (locked into tfidf-vocab.json so the TS runtime reproduces it):
 # sklearn default token_pattern drops 1-char tokens; smooth_idf gives the
@@ -153,23 +152,14 @@ def main() -> None:
     # --- Evaluate on the held-out TEST split ---
     _evaluate(clf, x_test, y_test)
 
-    # --- Export ONNX ---
-    initial_type = [("input", FloatTensorType([None, N_FEATURES]))]
-    onnx_model = convert_xgboost(clf, initial_types=initial_type, target_opset=ONNX_OPSET)
-    MODEL_OUT.write_bytes(onnx_model.SerializeToString())
+    # --- Export the XGBoost native JSON dump + tfidf-vocab.json ---
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    clf.get_booster().save_model(str(MODEL_OUT))
     print(f"Wrote {MODEL_OUT} ({MODEL_OUT.stat().st_size} bytes)")
-
-    # --- Emit tfidf-vocab.json ---
     _write_vocab(vectorizer, scaler)
 
-    # --- Copy artifacts into the TS package ---
-    TS_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(MODEL_OUT, TS_MODEL_DIR / "model.onnx")
-    shutil.copy2(VOCAB_OUT, TS_MODEL_DIR / "tfidf-vocab.json")
-    print(f"Copied artifacts into {TS_MODEL_DIR}")
-
-    # --- Cross-check ONNX argmax against the native classifier on TEST ---
-    _verify_onnx(onnx_model, clf, x_test)
+    # --- Round-trip the JSON dump: reloaded Booster argmax must match native ---
+    _verify_json(clf, x_test)
 
 
 def _balance(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, str]:
@@ -248,17 +238,18 @@ def _write_vocab(vectorizer: TfidfVectorizer, scaler: StandardScaler) -> None:
     print(f"Wrote {VOCAB_OUT} (vocab terms: {len(vocab)})")
 
 
-def _verify_onnx(onnx_model, clf: XGBClassifier, x_test: np.ndarray) -> None:
-    """Confirm the exported ONNX argmax matches the native XGBoost on TEST."""
-    import onnxruntime as ort
-
-    sess = ort.InferenceSession(onnx_model.SerializeToString(), providers=["CPUExecutionProvider"])
-    input_name = sess.get_inputs()[0].name
-    out = sess.run(None, {input_name: x_test.astype(np.float32)})
-    onnx_label = out[0]
+def _verify_json(clf: XGBClassifier, x_test: np.ndarray) -> None:
+    """Confirm ``model.xgb.json`` round-trips: a fresh Booster reloaded from the
+    dump must reproduce the trained classifier's argmax on TEST (100%)."""
+    booster = xgb.Booster()
+    booster.load_model(str(MODEL_OUT))
+    probs = booster.predict(xgb.DMatrix(x_test))  # (n, 7) for multi:softprob
+    reloaded_label = np.asarray(probs).argmax(axis=1)
     native_label = clf.predict(x_test)
-    agree = float(np.mean(np.asarray(onnx_label).ravel() == native_label))
-    print(f"ONNX vs native argmax agreement on TEST: {agree * 100:.2f}%")
+    agree = float(np.mean(reloaded_label == native_label))
+    print(f"model.xgb.json round-trip argmax agreement on TEST: {agree * 100:.2f}%")
+    if agree != 1.0:
+        raise AssertionError(f"model.xgb.json round-trip mismatch: {agree * 100:.2f}% (< 100%)")
 
 
 if __name__ == "__main__":

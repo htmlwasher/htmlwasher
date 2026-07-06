@@ -1,18 +1,21 @@
 # htmlwasher — model training (offline)
 
 > Status: IMPLEMENTED. The offline pipeline trains the page-type classifier
-> (Phase 4 of `@/prompts/2026-6-24-init/prompt.md`) and exports `model.onnx` +
-> `tfidf-vocab.json`. See `@/training/SPEC.md` for the full design and
-> `@/training/FEATURES.md` for the authoritative feature contract.
+> (Phase 4 / Phase CLASSIFY of `@/prompts/2026-6-24-init/prompt.md`) and exports
+> `model.xgb.json` + `tfidf-vocab.json` plus the Rust↔Python parity fixture. See
+> `@/training/SPEC.md` for the full design and `@/training/FEATURES.md` for the
+> authoritative feature contract.
 
 This is the **offline** training project for htmlwasher's page-type
 classifier. It trains a standard XGBoost model from the public WCXB dataset and
-exports two artifacts into `@/packages/htmlwasher/src/classifier/model/`:
+exports two artifacts into `@/packages/htmlwasher/native/artifacts/`:
 
-- `model.onnx` — the trained classifier, run in Node via onnxruntime (no Python
-  at runtime).
-- `tfidf-vocab.json` — the locked TF-IDF vocabulary plus IDF weights, so the
-  TypeScript feature extractor reproduces training-time features exactly.
+- `model.xgb.json` — the XGBoost native JSON dump (trees + `tree_info`
+  round-robin class layout + `default_left` + `base_score`). Evaluated at runtime
+  by a pure-Rust GBDT evaluator in the crate — no ONNX, no onnxruntime.
+- `tfidf-vocab.json` — the locked TF-IDF vocabulary plus IDF weights and the
+  baked StandardScaler stats, so the Rust feature extractor reproduces
+  training-time features exactly.
 
 ## Scope and status
 
@@ -32,10 +35,10 @@ exports two artifacts into `@/packages/htmlwasher/src/classifier/model/`:
   `title_meta` TF-IDF input) with byte-for-byte **parity** to the TypeScript
   extractor in `@/packages/htmlwasher/src/classifier/features/`.
 - `train.py` — train an `XGBClassifier`, evaluate on the held-out TEST split,
-  export `model.onnx`, emit `tfidf-vocab.json`, and copy both into
-  `@/packages/htmlwasher/src/classifier/model/`.
-- `make_parity_fixtures.py` — emit small TS↔Python parity fixtures into
-  `@/packages/htmlwasher/fixtures/classifier/`.
+  export `model.xgb.json` (native JSON dump) + `tfidf-vocab.json` into
+  `@/packages/htmlwasher/native/artifacts/`, and round-trip-verify the dump.
+- `make_parity_fixtures.py` — emit the Rust↔Python parity fixture
+  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`.
 
 ## Usage
 
@@ -44,8 +47,8 @@ Run from `@/training/`:
 ```bash
 uv venv && uv pip install -r requirements.txt
 uv run python download_wcxb.py        # fetch WCXB into data/wcxb/ (idempotent)
-uv run python train.py                # train + export model.onnx + tfidf-vocab.json
-uv run python make_parity_fixtures.py # regenerate the TS parity fixtures
+uv run python train.py                # train + export model.xgb.json + tfidf-vocab.json
+uv run python make_parity_fixtures.py # regenerate classifier-parity.json
 uv run pytest                         # offline unit tests
 uvx ruff check . && uvx ruff format .
 ```
@@ -66,7 +69,11 @@ reference licenses (see the repository root `NOTICE` and
 
 ## What is committed vs. not
 
-- **Committed:** the trained artifacts `model.onnx` and `tfidf-vocab.json` (they
-  live in `@/packages/htmlwasher/src/classifier/model/`), plus this skeleton.
+- **Committed:** the trained artifacts `model.xgb.json` + `tfidf-vocab.json` (in
+  `@/packages/htmlwasher/native/artifacts/`), the parity fixture
+  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`, and this
+  skeleton. (The v1 `@/packages/htmlwasher/src/classifier/model/model.onnx` +
+  `tfidf-vocab.json` also stay committed until Phase INTEGRATE — this pipeline no
+  longer writes them.)
 - **Never committed:** the WCXB dataset, downloaded data, the `.venv`, and any
   intermediate `*.parquet` / `*.csv` (see `.gitignore`).

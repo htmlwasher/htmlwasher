@@ -15,6 +15,7 @@
       "!**/*.svg",
       "!**/fixtures",
       "!**/classifier/model",
+      "!**/native/artifacts",
       "!**/dist",
       "!**/node_modules"
     ]
