@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-// The corpus test runs trafilaturacore (incl. ONNX classification) across every
+// The corpus test runs trafilaturacore (incl. GBDT page-type classification) across every
 // fixture x combo, fully offline. Give it a generous timeout — there is one
 // long-running E2E test, not many small ones.
 export default defineConfig({

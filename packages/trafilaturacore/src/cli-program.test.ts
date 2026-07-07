@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildProgram, type CliIo, type ResolvedCliOptions, runClean } from './cli-program.js';
-import { DEFAULT_BOILERPLATE_MODE, DEFAULT_CLEANING_LEVEL } from './types.js';
+import { DEFAULT_BOILERPLATE_MODE } from './types.js';
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/classifier/0488.html', import.meta.url));
 
@@ -57,7 +57,6 @@ function makeIo(stdinHtml = ''): CliIo & { stdout: StringSink; stderr: StringSin
 function opts(overrides: Partial<ResolvedCliOptions> = {}): ResolvedCliOptions {
   return {
     boilerplate: DEFAULT_BOILERPLATE_MODE,
-    level: DEFAULT_CLEANING_LEVEL,
     minify: false,
     json: false,
     quiet: false,
@@ -97,9 +96,9 @@ describe('runClean', () => {
 
   it('--minify output is shorter and has no double spaces vs non-minified', async () => {
     const plain = makeIo(PAGE);
-    await runClean(opts({ input: '-', boilerplate: 'none' }), plain);
+    await runClean(opts({ input: '-', boilerplate: 'clean-only' }), plain);
     const minified = makeIo(PAGE);
-    await runClean(opts({ input: '-', boilerplate: 'none', minify: true }), minified);
+    await runClean(opts({ input: '-', boilerplate: 'clean-only', minify: true }), minified);
     expect(minified.stdout.text.length).toBeLessThanOrEqual(plain.stdout.text.length);
     expect(minified.stdout.text).not.toMatch(/ {2}/);
   });
@@ -116,11 +115,14 @@ describe('runClean', () => {
     expect(io.stderr.text).toBe('');
   });
 
-  it('--boilerplate none --level correct passes markup through', async () => {
-    const io = makeIo('<div><custom-x>hi there words</custom-x></div>');
-    const code = await runClean(opts({ input: '-', boilerplate: 'none', level: 'correct' }), io);
+  it('--boilerplate clean-only cleans the whole document (no extraction)', async () => {
+    const io = makeIo('<div><p>hi there words</p><custom-x>and more text</custom-x></div>');
+    const code = await runClean(opts({ input: '-', boilerplate: 'clean-only' }), io);
     expect(code).toBe(0);
-    expect(io.stdout.text).toContain('<custom-x>');
+    // The default config keeps <p>, unwraps <div>/<custom-x> keeping their text.
+    expect(io.stdout.text).toContain('<p>hi there words</p>');
+    expect(io.stdout.text).toContain('and more text');
+    expect(io.stdout.text).not.toContain('<custom-x');
   });
 
   it('-o <file> writes the file and stdout stays empty', async () => {
@@ -134,18 +136,16 @@ describe('runClean', () => {
     expect(io.stderr.text).toContain('Wrote ');
   });
 
-  it('-c <file.json> applies a custom config and wins over --level', async () => {
+  it('-c <file.json> applies a custom config, replacing the default', async () => {
     const cfg = tmpPath('config.json');
     await writeFile(cfg, JSON.stringify({ allowedTags: ['p'] }));
-    const io = makeIo('<div><p>Hi there words</p><span>x</span></div>');
-    const code = await runClean(
-      opts({ input: '-', boilerplate: 'none', level: 'permissive', config: cfg }),
-      io,
-    );
+    const io = makeIo('<ul><li>x</li></ul><p>Hi there words</p>');
+    const code = await runClean(opts({ input: '-', boilerplate: 'clean-only', config: cfg }), io);
     expect(code).toBe(0);
     expect(io.stdout.text).toContain('<p>Hi there words</p>');
-    expect(io.stdout.text).not.toContain('<div');
-    expect(io.stdout.text).not.toContain('<span');
+    // The default config would keep <ul>/<li>; the custom config keeps only <p>.
+    expect(io.stdout.text).not.toContain('<ul');
+    expect(io.stdout.text).not.toContain('<li');
   });
 
   it('a missing config file exits 1 with a clear stderr message', async () => {
@@ -238,11 +238,20 @@ describe('option validation (parser layer)', () => {
     expect(message).toMatch(/xyz/);
   });
 
-  it('invalid --level xyz returns a non-zero code + clear message', () => {
-    const { exitCode, message } = parse(['x.html', '--level', 'xyz']);
-    expect(exitCode).not.toBe(0);
-    expect(message).toMatch(/level/i);
-    expect(message).toMatch(/xyz/);
+  it("accepts --boilerplate clean-only (the renamed 'none' mode)", () => {
+    // Exercise parseBoilerplate's accept path through commander. Re-registering
+    // .action() replaces the real handler, so runClean never touches real streams.
+    const program = buildProgram().exitOverride();
+    let parsedMode: string | undefined;
+    program.action((_input: string | undefined, o: { boilerplate: string }) => {
+      parsedMode = o.boilerplate;
+    });
+    program.parse(['node', 'trafilaturacore', 'x.html', '--boilerplate', 'clean-only']);
+    expect(parsedMode).toBe('clean-only');
+    // Help text documents the renamed mode and no longer mentions --level.
+    const helpText = buildProgram().helpInformation();
+    expect(helpText).toContain('clean-only');
+    expect(helpText).not.toContain('--level');
   });
 });
 

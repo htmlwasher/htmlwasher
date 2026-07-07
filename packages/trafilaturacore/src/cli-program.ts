@@ -18,12 +18,9 @@ import { clean } from './index.js';
 import {
   type BoilerplateMode,
   type CleanConfig,
-  type CleaningLevel,
   cleanConfigError,
   DEFAULT_BOILERPLATE_MODE,
-  DEFAULT_CLEANING_LEVEL,
   isBoilerplateMode,
-  isCleaningLevel,
 } from './types.js';
 
 // The package version, resolved at runtime relative to this file: from src/ in
@@ -40,17 +37,7 @@ const { version: packageVersion } = createRequire(import.meta.url)('../package.j
 function parseBoilerplate(value: string): BoilerplateMode {
   if (!isBoilerplateMode(value)) {
     throw new Error(
-      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or none.`,
-    );
-  }
-  return value;
-}
-
-/** Option parser for `--level`: validate against the runtime guard. */
-function parseLevel(value: string): CleaningLevel {
-  if (!isCleaningLevel(value)) {
-    throw new Error(
-      `Invalid --level value: '${value}'. Use minimal, standard, permissive, styled, or correct.`,
+      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or clean-only.`,
     );
   }
   return value;
@@ -65,8 +52,7 @@ export interface ResolvedCliOptions {
   /** Path to an HTML file, `-`, or `undefined` → read from stdin. */
   input?: string;
   boilerplate: BoilerplateMode;
-  level: CleaningLevel;
-  /** Path to a custom cleaning-config `.json` file. Takes precedence over `level`. */
+  /** Path to a custom cleaning-config `.json` file. Replaces the default config. */
   config?: string;
   minify: boolean;
   /** Context only — never fetched. */
@@ -141,7 +127,7 @@ export async function runClean(opts: ResolvedCliOptions, io: CliIo): Promise<num
 
   // --- Resolve a custom cleaning config (--config <file.json>), if given ---
   // Read + JSON.parse + validate at the boundary, exactly like the library;
-  // when supplied it takes precedence over --level.
+  // when supplied it replaces the default Trafilatura-aligned config.
   let config: CleanConfig | undefined;
   if (opts.config !== undefined) {
     let raw: string;
@@ -171,7 +157,6 @@ export async function runClean(opts: ResolvedCliOptions, io: CliIo): Promise<num
   // --- Run clean (offline; url is context only, never fetched) ---
   const result = await clean(html, {
     boilerplate: opts.boilerplate,
-    level: opts.level,
     config,
     minify: opts.minify,
     url: opts.url,
@@ -239,19 +224,13 @@ export function buildProgram(): Command {
     .argument('[input]', 'path to an HTML file; omit or use "-" to read HTML from stdin')
     .option(
       '-b, --boilerplate <mode>',
-      'boilerplate-removal mode: precision | balanced | recall | none',
+      'boilerplate-removal mode: precision | balanced | recall | clean-only',
       parseBoilerplate,
       DEFAULT_BOILERPLATE_MODE,
     )
     .option(
-      '-l, --level <level>',
-      'HTML cleaning level: minimal | standard | permissive | styled | correct',
-      parseLevel,
-      DEFAULT_CLEANING_LEVEL,
-    )
-    .option(
       '-c, --config <file.json>',
-      'custom cleaning config (JSON CleanConfig); takes precedence over --level',
+      'custom cleaning config (JSON CleanConfig); replaces the default config',
     )
     .option('-m, --minify', 'minify the output HTML instead of pretty-formatting it', false)
     .option('-u, --url <url>', 'source URL for classifier/metadata context only — NEVER fetched')
@@ -262,7 +241,6 @@ export function buildProgram(): Command {
       const resolved: ResolvedCliOptions = {
         input,
         boilerplate: opts.boilerplate,
-        level: opts.level,
         config: opts.config,
         minify: opts.minify,
         url: opts.url,
@@ -288,7 +266,6 @@ export function buildProgram(): Command {
 /** The shape commander hands the action for the options registered above. */
 interface CommanderOptions {
   boilerplate: BoilerplateMode;
-  level: CleaningLevel;
   config?: string;
   minify: boolean;
   url?: string;

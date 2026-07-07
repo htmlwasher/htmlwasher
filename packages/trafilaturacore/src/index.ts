@@ -4,7 +4,8 @@
 // The public entry point is the async clean() (src/pipeline.ts), composing:
 //   - the @trafilaturacore/native Rust core — Trafilatura-derived boilerplate removal
 //     + page-type classification, emitting preserve-markup, UNSANITIZED HTML;
-//   - the TypeScript cleaning levels (src/cleaning/) — the sole sanitization
+//   - the TypeScript cleaning stage (src/cleaning/, driven by the single
+//     Trafilatura-aligned DEFAULT_CLEAN_CONFIG) — the sole sanitization
 //     authority over that output;
 //   - the TypeScript metadata sidecar (src/metadata/).
 

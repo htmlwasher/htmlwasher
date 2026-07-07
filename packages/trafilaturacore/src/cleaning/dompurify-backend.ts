@@ -16,8 +16,8 @@
 // event handlers, and `javascript:`/`data:` URLs by its own hardened defaults.
 
 import { type Cleaner, filterEventHandlers } from './cleaner.js';
+import type { CleanConfig } from './config.js';
 import { isHtmlDocument } from './normalize.js';
-import type { CleanConfig } from './presets/index.js';
 
 // Minimal structural types for the lazily-imported optional deps. We avoid a
 // top-level type import so a missing `@types/*` never breaks `tsc` for callers
@@ -50,11 +50,11 @@ function flattenAllowList(config: CleanConfig): {
       }
     }
   }
-  // `styled` allows class/style globally; flattening above already captures them.
+  // A config may allow class/style globally; flattening above already captures them.
   return { tags, attrs: [...attrSet] };
 }
 
-/** Apply the preset's simple tag-rename transforms before DOMPurify runs. */
+/** Apply the config's simple tag-rename transforms before DOMPurify runs. */
 function applyTransformTags(html: string, transformTags: Record<string, string>): string {
   let out = html;
   for (const [from, to] of Object.entries(transformTags)) {

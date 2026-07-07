@@ -2,8 +2,8 @@
 
 Status: implemented (alpha). This document tracks the public API surface and module
 layout of the `trafilaturacore` library (build brief:
-[`@/prompts/2026-6-24-init/prompt.md`](../prompts/2026-6-24-init/prompt.md);
-port map: [`@/PORTING-NOTES.md`](../PORTING-NOTES.md)). Every module below is
+[`@/prompts/2026-6-24-init/prompt.md`](../../prompts/2026-6-24-init/prompt.md);
+port map: [`@/PORTING-NOTES.md`](../../PORTING-NOTES.md)). Every module below is
 implemented and covered by a green test suite; APIs may still change before a
 stable release. Keep this spec in sync with the source.
 
@@ -23,7 +23,9 @@ network. It has two orthogonal, composable pillars:
   UNSANITIZED (bucket-C output sanitization is deleted from the crate per doc 09).
   Gated by a boilerplate-removal mode.
 - **HTML cleaning** — a sanitize-html-based sanitize + normalize + format stage,
-  exposed as five cleaning levels. It owns ALL sanitization: the Rust core's
+  driven by the single Trafilatura-aligned `DEFAULT_CLEAN_CONFIG` (replaceable
+  with a custom `CleanConfig`; there is no "cleaning level" concept — upstream
+  Trafilatura has none either). It owns ALL sanitization: the Rust core's
   unsanitized `contentHtml` MUST flow through `cleanHtml` (it always does).
 
 ## Public API surface
@@ -38,20 +40,20 @@ clean(html: string, options?: CleanOptions): Promise<CleanResult>
 ```
 
 Stages: metadata sidecar (from the original document) → boilerplate(mode) →
-clean(level). For any mode other than `none`, `pipeline.ts` calls the
+clean(config). For any mode other than `clean-only`, `pipeline.ts` calls the
 `@trafilaturacore/native` Rust core's async `extract(html, { focus, url })`, which
 classifies the page and routes extraction through the matching per-type profile
 **internally** and returns the preserve-markup content HTML plus the detected
 `pageType` + `confidence` (both surfaced on the result). The public `clean()` never
 passes a `pageType` override — the classifier always auto-runs. When extraction
-yields empty content, `clean()` keeps the whole document and warns. `mode: 'none'`
-bypasses the FFI call entirely (no extraction, no classification) and cleans the
-whole document.
+yields empty content, `clean()` keeps the whole document and warns.
+`mode: 'clean-only'` bypasses the FFI call entirely (no extraction, no
+classification) and cleans the whole document.
 
 #### Native diagnostics and degradation
 
 The native module is loaded **lazily** (a cached dynamic import) on the first
-non-`none` clean — `boilerplate: 'none'`, metadata-only use, and any platform
+non-`clean-only` clean — `boilerplate: 'clean-only'`, metadata-only use, and any platform
 without a loadable prebuilt `.node` never touch the FFI module (package import
 and the CLI keep working). The core's non-fatal `warnings` (`body-fallback-used`,
 `content-very-short`, `json-ld-rescue`, `baseline-rescue`) surface in
@@ -66,37 +68,36 @@ whole document` warning, and omits `pageType`/`confidence`. `clean()` still thro
 ### Markup-preservation semantics (doc 09)
 
 Because the Rust core is preserve-markup, `class`/inline `style`/`data-*`/`id`
-survive extraction (v1's TS core stripped them before cleaning) — so at cleaning
-levels that permit those attributes they now flow all the way through: `styled`
-keeps `class` + inline `style`; `correct` (normalize-only) keeps everything the
-security floor allows, incl. `data-*`. The lower presets (`minimal`/`standard`/
-`permissive`) still drop `class`/`style` per their allow-lists. **Fallback-path
-limitation:** when a structured/baseline fallback wins, the crate synthesizes
-markup (e.g. bare `<p>`), so markup preservation is best-effort by construction —
-"original markup" always means "modulo doc-cleaning".
+survive extraction (v1's TS core stripped them before cleaning) — so a custom
+`config` that permits those attributes lets them flow all the way through. The
+default Trafilatura-aligned config drops them per its scoped attribute
+allow-list. **Fallback-path limitation:** when a structured/baseline fallback
+wins, the crate synthesizes markup (e.g. bare `<p>`), so markup preservation is
+best-effort by construction — "original markup" always means "modulo
+doc-cleaning".
 
-The two knobs are orthogonal — any boilerplate mode combines with any cleaning
-level. Instead of a named `level`, callers may pass a fully-custom `config` (a
-`CleanConfig` — pure JSON data); when set it drives the sanitize stage and
-takes precedence over `level`. These options (plus the optional `url` context)
-are the entire user-facing surface; there are deliberately no
+The two knobs are orthogonal — any boilerplate mode combines with the default or
+a custom cleaning config. The sanitize stage ALWAYS runs, driven by
+`DEFAULT_CLEAN_CONFIG`; callers may pass a fully-custom `config` (a
+`CleanConfig` — pure JSON data) that **replaces** the default Trafilatura-aligned
+config. These options (plus the optional `url` context) are the entire
+user-facing surface; there are deliberately no
 `includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
 security floor is **unconditional**: `enforceSecurityFloor` + the CSS-URL
 cleaner (`cleanStyledHtml`) run as the final cleaning pass on **every** path —
-every preset level (including `correct`) and every custom `config`. `<script>`
-(tag + text), every `on*` handler, `javascript:`/`vbscript:`/untrusted `data:`
+the default config and every custom `config`. `<script>` (tag + text), every
+`on*` handler, `javascript:`/`vbscript:`/untrusted `data:`
 URLs, and dangerous inline CSS (`expression()`, `-moz-binding`,
 `url(javascript:|data:)`, `@import`) are always stripped — **not** gated on
 whether the config happens to allow inline `style`. This closes the
 wildcard-config bypass a `{ "allowedAttributes": { "*": ["*"] } }` custom config
 previously exploited (it passes shape validation, keeps `onclick`, and defeats the
-CSS gate). `correct` is normalize-only only for the tag _allow-list_ (it runs no
-preset, preserving all benign tags/attributes); it still runs the mandatory floor.
+CSS gate).
 
 #### Boundary validation and input cap
 
 `clean()` validates inputs at the boundary: it throws a `TypeError` when `html` is
-not a string, when `options.boilerplate`/`options.level` is provided-but-invalid,
+not a string, when `options.boilerplate` is provided-but-invalid,
 or when `options.config` is provided-but-invalid. It accepts
 `CleanOptions.maxInputBytes?: number` (default `DEFAULT_MAX_INPUT_BYTES` = 10 MB
 UTF-8) and throws a `RangeError` when the input's UTF-8 byte length exceeds it — a
@@ -118,16 +119,15 @@ trafilaturacore [input] [options]
   from **stdin**. A bare invocation with an interactive TTY and no piped input
   fails with exit code 1 rather than hanging.
 
-| Option                     | Maps to `clean()` | Notes                                                                            |
-| -------------------------- | ----------------- | -------------------------------------------------------------------------------- |
-| `-b, --boilerplate <mode>` | `boilerplate`     | `precision\|balanced\|recall\|none`; default `balanced`. Validated.              |
-| `-l, --level <level>`      | `level`           | `minimal\|standard\|permissive\|styled\|correct`; default `standard`. Validated. |
-| `-c, --config <file.json>` | `config`          | custom `CleanConfig` JSON file; read + validated; precedence over `--level`.     |
-| `-m, --minify`             | `minify`          | minify the output instead of pretty-formatting.                                  |
-| `-u, --url <url>`          | `url`             | context only — **never fetched**.                                                |
-| `-o, --output <file>`      | —                 | write the result to a file instead of stdout.                                    |
-| `--json`                   | —                 | emit `{ html, metadata, pageType, confidence, messages }` as pretty JSON.        |
-| `-q, --quiet`              | —                 | suppress the stderr diagnostics + `[pageType conf]` line.                        |
+| Option                     | Maps to `clean()` | Notes                                                                          |
+| -------------------------- | ----------------- | ------------------------------------------------------------------------------ |
+| `-b, --boilerplate <mode>` | `boilerplate`     | `precision\|balanced\|recall\|clean-only`; default `balanced`. Validated.      |
+| `-c, --config <file.json>` | `config`          | custom `CleanConfig` JSON file; read + validated; replaces the default config. |
+| `-m, --minify`             | `minify`          | minify the output instead of pretty-formatting.                                |
+| `-u, --url <url>`          | `url`             | context only — **never fetched**.                                              |
+| `-o, --output <file>`      | —                 | write the result to a file instead of stdout.                                  |
+| `--json`                   | —                 | emit `{ html, metadata, pageType, confidence, messages }` as pretty JSON.      |
+| `-q, --quiet`              | —                 | suppress the stderr diagnostics + `[pageType conf]` line.                      |
 
 I/O semantics: stdout carries the cleaned HTML (or JSON); stderr carries the
 `messages` diagnostics and a `[pageType confidence]` line (suppressed by `--quiet`,
@@ -146,22 +146,48 @@ as the program entry point.
 ### Types — _implemented in `src/types.ts`_
 
 - `BOILERPLATE_MODES` (`as const`) + `BoilerplateMode` =
-  `'precision' | 'balanced' | 'recall' | 'none'`. Default `'balanced'`. Maps to
-  Trafilatura's `favor_precision`/`favor_recall`; `none` skips boilerplate removal
-  entirely (cleans the whole document — trafilaturacore's addition).
-- `CLEANING_LEVELS` (`as const`) + `CleaningLevel` =
-  `'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'`. Default
-  `'standard'`. The single tag-inclusion control. No `*-reader` variants.
+  `'precision' | 'balanced' | 'recall' | 'clean-only'`. Default `'balanced'`. Maps
+  to Trafilatura's `favor_precision`/`favor_recall`; `clean-only` skips
+  boilerplate removal + classification entirely (cleans the whole document,
+  never loads the FFI binding — trafilaturacore's addition).
+- `DEFAULT_CLEAN_CONFIG` (a `CleanConfig`, defined in `src/cleaning/config.ts`,
+  re-exported from the root via `types.ts`) — the single Trafilatura-aligned
+  cleaning config, derived from Trafilatura 2.1.0: `allowedTags` = Trafilatura's
+  HTML output vocabulary (`TEI_VALID_TAGS` rendered via `HTML_CONVERSIONS` —
+  `p`, `h1`–`h6`, `ul`/`li`, `table`/`tr`/`td`/`th`, `blockquote`, `pre`, `br`,
+  `img`, `a`, `i`/`strong`/`u`/`var`/`sub`/`sup`, `del`, plus
+  `html`/`head`/`meta`/`body` scaffolding and `title` for whole-document
+  cleaning) union rs-trafilatura's serializer whitelist additions (`ol`, `code`,
+  `hr`, `dl`/`dt`/`dd`, `caption`/`colgroup`/`col`, `q`, `em`/`b`/`s`,
+  `kbd`/`samp`, `figure`/`figcaption`/`picture`/`source`). Trafilatura's
+  `MANUALLY_CLEANED` list maps to `nonTextTags` (subtree discarded WITH content:
+  `nav`, `aside`, `form` + form controls, `video`/`audio`, `time`,
+  `svg`/`canvas`, `iframe`/`object`/`embed`, `style`/`script`/`noscript`, … —
+  minus the image-mode rescues `figure`/`picture`/`source`, minus `head`
+  (scaffolding), minus `header`/`footer`, which the Rust core emits inside
+  `article`/`main`, so they are unwrapped instead). Trafilatura's
+  `MANUALLY_STRIPPED` list is simply NOT allowed = tag unwrapped, content kept
+  (`div`, `span`, `section`, `article`, `main`, `header`, `footer`, `abbr`,
+  `cite`, `mark`, `small`, `thead`/`tbody`/`tfoot`, …; the HTML5 re-normalizer
+  (parse5) re-synthesizes a bare `<tbody>` around rows, like a browser).
+  `CUT_EMPTY_ELEMS` is NOT mirrored (no sanitize-html equivalent; the Rust core
+  prunes empties during extraction). `allowedAttributes` is scoped:
+  `a[href,title]`, `img[src,alt,title,width,height]`, `td[colspan,rowspan]`,
+  `th[colspan,rowspan,scope]`, `blockquote[cite]`, `q[cite]`,
+  `ol[start,type,reversed]`, `code[class]`, `col`/`colgroup[span]`,
+  `source[src,srcset,type,media]`, `html[lang]`, `meta[charset,name,content]`.
+  `transformTags` normalizes legacy tags: `strike`→`del`, `tt`→`var`,
+  `dir`→`ul`, `listing`→`pre`, `xmp`→`pre`, `plaintext`→`pre`.
 - `PAGE_TYPES` (`as const`) + `PageType` = the 7 types
   (`article, forum, product, collection, listing, documentation, service` — note
   `collection`, not `category`).
-- `CleanOptions` = `{ boilerplate?, level?, config?, minify?, maxInputBytes?, url? }`.
+- `CleanOptions` = `{ boilerplate?, config?, minify?, maxInputBytes?, url? }`.
   `minify` defaults to `false` (prettier-format); `url` is context-only and never
-  fetched. `config?: CleanConfig` is a fully-custom cleaning config that takes
-  precedence over `level`. `maxInputBytes?` (default `DEFAULT_MAX_INPUT_BYTES` =
-  10 MB UTF-8) caps the input size. `clean()` throws a `TypeError` when `html` is
-  not a string or when `boilerplate`/`level`/`config` is provided-but-invalid, and
-  a `RangeError` when the input exceeds `maxInputBytes`.
+  fetched. `config?: CleanConfig` is a fully-custom cleaning config that replaces
+  the default Trafilatura-aligned config. `maxInputBytes?` (default
+  `DEFAULT_MAX_INPUT_BYTES` = 10 MB UTF-8) caps the input size. `clean()` throws
+  a `TypeError` when `html` is not a string or when `boilerplate`/`config` is
+  provided-but-invalid, and a `RangeError` when the input exceeds `maxInputBytes`.
 - `CleanConfig` = `{ allowedTags?, allowedAttributes?, allowedClasses?,
 selfClosing?, nonTextTags?, transformTags? }` — all JSON-serializable (plain data,
   no functions). `isCleanConfig(value)` / `cleanConfigError(value)` are the
@@ -169,11 +195,12 @@ selfClosing?, nonTextTags?, transformTags? }` — all JSON-serializable (plain d
   the library and the CLI validate with them.
 - `CleanResult` = `{ html: string; messages: Message[]; metadata?: Metadata;
 pageType?: PageType; confidence?: number }` (`pageType`/`confidence` set when
-  extraction runs, omitted for `boilerplate: 'none'`).
+  extraction runs, omitted for `boilerplate: 'clean-only'`).
 - `Message` = `{ type: 'info' | 'warning' | 'error'; text: string }`.
 - `Metadata` (optional sidecar) = `{ title?, author?, url?, hostname?,
 description?, sitename?, date?, categories?, tags?, image?, pageType?, license? }`.
-- Runtime guards: `isBoilerplateMode`, `isCleaningLevel`, `isPageType`.
+- Runtime guards: `isBoilerplateMode`, `isPageType` (plus the `CleanConfig`
+  guards `isCleanConfig`/`cleanConfigError` above).
 
 Both enumerations are plain string-union / `as const`-array types, **not**
 TypeScript `enum`s (locked decision #4).
@@ -219,23 +246,25 @@ present when extraction runs.
   `dom.ts` is the metadata-scoped linkedom wrapper (`parseDocument`, `trim`,
   `TEXT_NODE`, and the node/element/document interfaces) — relocated from the former
   `core/dom.ts` at Phase INTEGRATE, trimmed to the metadata-used subset. _implemented (Phase 3)_
-- `src/cleaning/` — HTML cleaning. Entry: `cleanHtml(html, level, { minify?, hardened?, config? })`
-  / `cleanBuffer(buffer, level, opts)` → `Promise<{ html, messages }>` (async:
-  prettier/minifier are lazily imported). Pipeline: normalize (parse5) → sanitize
-  (sanitize-html + level preset or custom config; skipped for bare `correct`) →
-  re-normalize (if transformTags) → **security floor (UNCONDITIONAL)** → DOCTYPE →
-  format. The named-preset sanitize stage is skipped for `correct` (no allow-list),
-  but the **security floor runs on every path — every level (including `correct`)
-  and every custom `config`**: `enforceSecurityFloor` + `cleanStyledHtml` run as
+- `src/cleaning/` — HTML cleaning. Entry: `cleanHtml(html, options?)`
+  / `cleanBuffer(buffer, options?)` → `Promise<{ html, messages }>` (async:
+  prettier/minifier are lazily imported; options: `{ minify?, hardened?, config? }`).
+  `config.ts` holds the `CleanConfig` interface + the exported
+  `DEFAULT_CLEAN_CONFIG` (it replaces the former `presets/` directory). Pipeline:
+  normalize (parse5) → sanitize (sanitize-html + the default Trafilatura-aligned
+  config or a custom config; ALWAYS runs) → re-normalize (if transformTags) →
+  **security floor (UNCONDITIONAL)** → DOCTYPE → format. The **security floor
+  runs on every path — the default config and every custom `config`**:
+  `enforceSecurityFloor` + `cleanStyledHtml` run as
   the final pass, force-stripping `<script>` (tag + text), every `on*` handler,
   `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS (the
   CSS-URL allow-list is applied unconditionally, not only when a config permits
   inline `style`), while leaving every benign tag/attribute in place — closing the
   `{ "allowedAttributes": { "*": ["*"] } }` wildcard-config bypass. Optional
   DOMPurify/jsdom hardened backend behind the `Cleaner` seam. _implemented (Phase 6)_
-- `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → clean(level),
+- `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → clean(config),
   exposing the public `clean()`. Loads `@trafilaturacore/native` lazily (never for
-  `mode: 'none'`), starts the Rust extraction before the synchronous metadata
+  `mode: 'clean-only'`), starts the Rust extraction before the synchronous metadata
   parse so the threadpool work overlaps it, surfaces native `warnings` as
   `boilerplate: <warning>` messages, and degrades a native failure to
   whole-document cleaning with a warning. _implemented_
@@ -257,9 +286,8 @@ present when extraction runs.
   core (napi binding). It is the only extraction/classifier dependency; there is
   no ONNX runtime in this package anymore.
 - DOM parsing (metadata + cleaning): `linkedom` (primary) + `parse5` (WHATWG
-  normalization). `htmlparser2` is retained as a declared metadata/cleaning helper
-  dependency (knip flags it as not directly imported — it was already unused at the
-  pre-INTEGRATE HEAD, not a regression from the classifier removal).
+  normalization). (`htmlparser2` is no longer a declared dependency — it was
+  never directly imported.)
 - HTML cleaning: `sanitize-html` (default cleaner), `prettier` (format),
   `html-minifier-terser` (minify), `chardet` + `iconv-lite` (decode non-UTF-8
   buffers); optional `dompurify`/`jsdom` hardened backend. _added in Phase 6._

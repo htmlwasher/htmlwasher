@@ -321,7 +321,7 @@ none` styles, `hide-`/`-hide-`/`hide-print`/`hidden`/`hide`/`noprint`/`notloaded
   - Other notable fixes: single-pass entity decoding (metadata `unescapeHtml` + cleaning
     `decodeAttrEntities` double-decoded `&amp;lt;`); native warnings/fallback diagnostics now surface in
     `clean().messages`; native failure degrades to whole-document cleaning; the native binding is
-    lazy-loaded (`boilerplate: 'none'` never touches the FFI); native build/test scripts probe
+    lazy-loaded (`boilerplate: 'clean-only'` never touches the FFI); native build/test scripts probe
     `cargo --version` instead of `CARGO_HOME` (the old gate silently skipped rebuilds + cargo tests on
     standard rustup installs); corpus-tester security detectors are tag-anchored (no prose false
     positives); `.github/workflows/build-native.yml` authored (untested) for the missing 5-target +
@@ -525,7 +525,7 @@ bracket is not panic-safe (early return/panic between `149` and `446` leaks the 
 - **Known limitation:** when a fallback wins (JSON-LD `articleBody`, baseline rescue) markup is synthesized
   (bare `<p>`) — preservation is best-effort by construction; "original markup" always means "modulo doc-cleaning".
 - Supersedes doc 08 §1's "two independent safety passes": script stripping stays two-layered (hygiene + floor);
-  the `on*`/scheme/attribute redundancy on `boilerplate ≠ 'none'` paths collapses to ONE hardened TS pass.
+  the `on*`/scheme/attribute redundancy on `boilerplate ≠ 'clean-only'` paths collapses to ONE hardened TS pass.
 
 ## Classifier ground truth (Rust cascade, Python model, no ONNX)
 
@@ -666,6 +666,64 @@ The TS-side regression oracle now lives in `packages/trafilaturacore/test/valida
   the live-crawl-tester stub deps, and the root `vitest` devDep. Resolve at POLISH's full-repo review + a
   clean `npx knip` pass (remove or `knip.ignore`).
 
+## 2026-07-07 — cleaning levels removed; 'none' renamed 'clean-only'
+
+Alignment run per [`@/prompts/2026-7-7-align-levels-with-trafilatura/prompt.md`](prompts/2026-7-7-align-levels-with-trafilatura/prompt.md).
+Rationale: upstream Trafilatura has NO "cleaning level" concept — the five-level preset system
+was an htmlprocessing-server inheritance, not a Trafilatura behavior — so it was removed outright.
+
+- **Removed:** `CLEANING_LEVELS` (`minimal | standard | permissive | styled | correct`), the
+  `CleaningLevel` type, `DEFAULT_CLEANING_LEVEL`, `isCleaningLevel`, the `CleanOptions.level`
+  option, the CLI `-l/--level` flag, and the whole `src/cleaning/presets/` directory. The
+  `correct` normalize-only path is gone with them — the sanitize stage now ALWAYS runs.
+- **Replaced by:** the single exported `DEFAULT_CLEAN_CONFIG` (Trafilatura-aligned) in the new
+  `@/packages/trafilaturacore/src/cleaning/config.ts`, which also holds the `CleanConfig`
+  interface (moved from `presets/types.ts`; both re-exported from the package root via
+  `types.ts`). Derivation (from `~/r/trafilatura-sources`, Trafilatura 2.1.0):
+  - `allowedTags` = Trafilatura's HTML output vocabulary (`TEI_VALID_TAGS` rendered via
+    `HTML_CONVERSIONS`: p, h1–h6, ul/li, table/tr/td/th, blockquote, pre, br, img, a,
+    i/strong/u/var/sub/sup, del + html/head/meta/body scaffolding; title added for
+    whole-document cleaning) UNION rs-trafilatura's serializer whitelist additions (ol, code,
+    hr, dl/dt/dd, caption/colgroup/col, q, em/b/s, kbd/samp, figure/figcaption/picture/source).
+  - Trafilatura's `MANUALLY_CLEANED` list → `nonTextTags` (subtree discarded WITH content:
+    nav, aside, form, video, audio, time, svg, canvas, iframe, object, embed, button, input,
+    select, textarea, option, style, script, noscript, …) — minus the image-mode rescues
+    (figure/picture/source), minus head (scaffolding), minus header/footer (the Rust core
+    emits those inside article/main, so they are unwrapped instead).
+  - Trafilatura's `MANUALLY_STRIPPED` list → simply NOT allowed = tag unwrapped, content kept
+    (div, span, section, article, main, header, footer, abbr, cite, mark, small,
+    thead/tbody/tfoot, …). Note: the HTML5 re-normalizer (parse5) re-synthesizes a bare
+    `<tbody>` around rows, like a browser. `CUT_EMPTY_ELEMS` is NOT mirrored (no sanitize-html
+    equivalent; the Rust core prunes empties during extraction).
+  - Scoped `allowedAttributes` — a[href,title], img[src,alt,title,width,height],
+    td[colspan,rowspan], th[colspan,rowspan,scope], blockquote[cite], q[cite],
+    ol[start,type,reversed], code[class], col/colgroup[span], source[src,srcset,type,media],
+    html[lang], meta[charset,name,content] — plus `transformTags` (strike→del, tt→var,
+    dir→ul, listing→pre, xmp→pre, plaintext→pre).
+- **Renamed:** the `boilerplate` value `'none'` → `'clean-only'` — identical semantics (skip
+  boilerplate removal + classification entirely, never load the FFI binding, clean the whole
+  document; `pageType`/`confidence` omitted). `BOILERPLATE_MODES` is now
+  `['precision', 'balanced', 'recall', 'clean-only']`; precision/balanced/recall still mirror
+  Trafilatura's focus. The Rust core is untouched (its focus union stays
+  precision|balanced|recall; `'clean-only'` never crosses the FFI).
+- **API now:** `CleanOptions = { boilerplate?, config?, minify?, maxInputBytes?, url? }` — a
+  custom `config` REPLACES the default Trafilatura-aligned config. Internal signatures are
+  `cleanHtml(html, options?)` / `cleanBuffer(buffer, options?)` (the positional level param is
+  gone); the CLI surface is `-b/-c/-m/-u/--json/-o/-q` (no `-l`). Runtime guards:
+  `isBoilerplateMode`, `isPageType`, `isCleanConfig`/`cleanConfigError`. The security floor is
+  UNCHANGED and unconditional: `enforceSecurityFloor` + `cleanStyledHtml` run as the final
+  pass on EVERY path (default AND custom config).
+- **clean-corpus-tester:** COMBOS is now 5 label-keyed combos — `balanced`, `precision`,
+  `recall`, `clean-only` (each = the default config) + `balanced+styled-config` (a custom
+  config that adds `<style>` + class/style attrs so the CSS-URL allow-list stays exercised).
+  `ComboResult = { combo, boilerplate, pageType?, confidence?, htmlLength, title?, pass }`;
+  the old correct-superset assertion is replaced by `styled-config-superset`
+  (`balanced+styled-config` must keep ≥ distinct tag names as `balanced`); the reference
+  combo for the detected page type is `balanced`.
+- **Re-verified:** corpus tester 28 fixtures × 5 combos, page-type accuracy 100%, 0
+  hard/security failures, verdict PASS; adbar eval P 0.831 / R 0.840 / F1 0.835 (previous
+  docs said ≈0.83 — unchanged/slightly up).
+
 ---
 
 ## v1 record (historical — the all-TypeScript port, the regression oracle)
@@ -717,12 +775,13 @@ The TS-side regression oracle now lives in `packages/trafilaturacore/test/valida
   trained on, so the tester's 100% page-type accuracy is inflated. The unbiased
   number is the held-out **test-split accuracy 0.777** from training (Phase 4).
   The tester is an end-to-end smoke/regression check, not an accuracy benchmark.
-- The security floor holds at EVERY level, including `correct`: no
-  script/on\*/javascript: survives any level. `correct` is normalize-only for the
-  tag _allow-list_ — it applies no preset, so benign/deprecated tags and attributes
-  pass through unchanged (recorded as soft warnings, not failures) — but the
-  no-config path still runs `enforceSecurityFloor` + `cleanStyledHtml`, so
-  `<script>`/`on*`/dangerous-URL/dangerous-CSS are stripped even there.
+- The security floor holds on every path (default and custom config): no
+  script/on\*/javascript: survives any path. (Historical: the `correct` level —
+  removed 2026-07-07 — was normalize-only for the tag _allow-list_; it applied no
+  preset, so benign/deprecated tags and attributes passed through unchanged
+  (recorded as soft warnings, not failures) — but even that no-config path ran
+  `enforceSecurityFloor` + `cleanStyledHtml`, so
+  `<script>`/`on*`/dangerous-URL/dangerous-CSS were stripped there too.)
 - **`packages/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
   is `clean-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
   (an unimplemented network-fetch stub) is left untouched — deleting it would churn
@@ -872,7 +931,7 @@ re-serialize**.
 - **Block+inline tag whitelist** (generous, per brief §5 Phase 2): `p, div, section,
 article, main, h1-h6, blockquote, pre, code, strong, em, b, i, a, ul, ol, li, dl, dt, dd,
 table, thead, tbody, tfoot, tr, td, th, caption, colgroup, col, br`, plus images. The
-  cleaning **level** does the final tag narrowing — do NOT re-expose
+  cleaning **stage/config** does the final tag narrowing — do NOT re-expose
   `include_tables/links/images`.
 - **Attribute allow-list** — go `settings.go:79-116`: always drop
   `id, class, align, background, bgcolor, border, cellpadding, cellspacing, frame, hspace,
@@ -972,18 +1031,24 @@ html-minifier-terser when `minify`). Returns `{ html, messages }`.
   `PROCESSING_MODES`. **trafilaturacore uses exactly 5 levels** —
   `minimal | standard | permissive | styled | correct` — and **drops the four `*-reader`
   variants** (the Readability concern is handled by the boilerplate pillar; do not bundle
-  jsdom/@mozilla/readability).
+  jsdom/@mozilla/readability). (Superseded 2026-07-07: cleaning levels removed entirely —
+  see the dated v2 section above.)
 - `cleaning/presets/{minimal,standard,permissive,styled}.ts` — `CleanConfig` objects
   (`allowedTags, allowedAttributes, allowedClasses, selfClosing, nonTextTags, transformTags`),
-  copied from `htmlprocessing-server/src/presets/`. `standard` is the default.
+  copied from `htmlprocessing-server/src/presets/`. `standard` is the default. (Superseded
+  2026-07-07: `presets/` deleted — the single `DEFAULT_CLEAN_CONFIG` in `cleaning/config.ts`
+  replaces them.)
 - `cleaning/sanitize.ts` — wraps sanitize-html; runs `filterEventHandlers` (strip every `on*`
   attr) on `allowedAttributes` first. `correct` skips this stage entirely (normalize + DOCTYPE
-  - format only) but is still a security boundary.
+  - format only) but is still a security boundary. (Superseded 2026-07-07: the `correct` skip
+    path is gone — the sanitize stage always runs.)
 - Security at EVERY level: rely on sanitize-html defaults (`allowedSchemes
 [http,https,ftp,mailto,tel]` on `href/src/cite`) to strip `javascript:`/`data:`, plus
   `filterEventHandlers`. The **`styled` level must add an explicit CSS-URL allow-list** —
   sanitize-html does NOT scheme-filter `url()` inside `style` attrs or `<style>` blocks, so
   `url(javascript:|data:)`, `expression()`, `@import`, `-moz-binding` survive by default.
+  (Superseded 2026-07-07: no levels — the CSS-URL allow-list now runs unconditionally as
+  `cleanStyledHtml` on every path.)
 
 ### Orchestration → `@/packages/trafilaturacore/src/pipeline.ts` + `index.ts`
 
@@ -991,6 +1056,8 @@ html-minifier-terser when `minify`). Returns `{ html, messages }`.
 `boilerplate: 'balanced'`, `level: 'standard'`, `minify: false`. `boilerplate: 'none'`
 bypasses extraction (cleans the whole document). The two knobs are orthogonal; these three
 options are the **entire** user surface — no `includeComments/Tables/Images/Links`.
+(Superseded 2026-07-07: `level` is gone — `CleanOptions = { boilerplate?, config?, minify?,
+maxInputBytes?, url? }` — and `'none'` is renamed `'clean-only'`.)
 
 ## Parity gotchas (carry into the relevant phase)
 
@@ -1000,7 +1067,9 @@ options are the **entire** user surface — no `includeComments/Tables/Images/Li
   set / boilerplate-named nodes — getting unwrap-vs-drop wrong changes output substantially.
 - Match scikit-learn TF-IDF (`smooth_idf=True`, L2 norm), not the Rust crate's un-normalized path.
 - Reproduce the 500KB feature gate and the strict-`<` tree comparison + 0.0 missing-default.
-- `correct` mode and the `styled` CSS-URL gap are both security boundaries — test them.
+- The custom-config CSS-URL gap is a security boundary — test it (since 2026-07-07 the former
+  `correct`/`styled` levels are gone; `cleanStyledHtml` runs unconditionally, and a custom
+  config that re-allows `style` must stay covered).
 - prettier is the DEFAULT formatter in htmlprocessing-server (`shouldMinify` defaults false).
 - parse5 pin: source uses `^8`; trafilaturacore pins `^7.3.0` — serializer output can differ
   (whitespace/attr order) and break golden fixtures. **Bump trafilaturacore to parse5 `^8`** for

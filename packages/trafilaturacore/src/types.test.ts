@@ -1,32 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_CLEAN_CONFIG } from './cleaning/config.js';
 import {
   BOILERPLATE_MODES,
-  CLEANING_LEVELS,
   cleanConfigError,
   DEFAULT_BOILERPLATE_MODE,
-  DEFAULT_CLEANING_LEVEL,
   DEFAULT_MAX_INPUT_BYTES,
   isBoilerplateMode,
   isCleanConfig,
-  isCleaningLevel,
   isPageType,
   PAGE_TYPES,
 } from './types.js';
 
 describe('option unions', () => {
   it('exposes exactly the four boilerplate modes', () => {
-    expect([...BOILERPLATE_MODES]).toEqual(['precision', 'balanced', 'recall', 'none']);
-  });
-
-  it('exposes exactly the five cleaning levels (no *-reader variants)', () => {
-    expect([...CLEANING_LEVELS]).toEqual([
-      'minimal',
-      'standard',
-      'permissive',
-      'styled',
-      'correct',
-    ]);
+    expect([...BOILERPLATE_MODES]).toEqual(['precision', 'balanced', 'recall', 'clean-only']);
   });
 
   it('exposes the seven page types with collection (not category)', () => {
@@ -42,9 +30,8 @@ describe('option unions', () => {
     expect(PAGE_TYPES).not.toContain('category');
   });
 
-  it('defaults are balanced + standard', () => {
+  it('default mode is balanced', () => {
     expect(DEFAULT_BOILERPLATE_MODE).toBe('balanced');
-    expect(DEFAULT_CLEANING_LEVEL).toBe('standard');
   });
 
   it('DEFAULT_MAX_INPUT_BYTES is 10 MB (per context doc 08)', () => {
@@ -55,23 +42,24 @@ describe('option unions', () => {
 describe('runtime guards', () => {
   it('isBoilerplateMode accepts valid, rejects invalid', () => {
     expect(isBoilerplateMode('precision')).toBe(true);
-    expect(isBoilerplateMode('none')).toBe(true);
+    expect(isBoilerplateMode('clean-only')).toBe(true);
+    expect(isBoilerplateMode('none')).toBe(false); // renamed to 'clean-only'
     expect(isBoilerplateMode('aggressive')).toBe(false);
     expect(isBoilerplateMode(42)).toBe(false);
     expect(isBoilerplateMode(undefined)).toBe(false);
-  });
-
-  it('isCleaningLevel accepts valid, rejects invalid', () => {
-    expect(isCleaningLevel('styled')).toBe(true);
-    expect(isCleaningLevel('correct')).toBe(true);
-    expect(isCleaningLevel('minimal-reader')).toBe(false);
-    expect(isCleaningLevel(null)).toBe(false);
   });
 
   it('isPageType accepts collection, rejects category', () => {
     expect(isPageType('collection')).toBe(true);
     expect(isPageType('forum')).toBe(true);
     expect(isPageType('category')).toBe(false);
+  });
+});
+
+describe('DEFAULT_CLEAN_CONFIG (re-exported via types)', () => {
+  it('is itself a valid CleanConfig', () => {
+    expect(isCleanConfig(DEFAULT_CLEAN_CONFIG)).toBe(true);
+    expect(cleanConfigError(DEFAULT_CLEAN_CONFIG)).toBeNull();
   });
 });
 

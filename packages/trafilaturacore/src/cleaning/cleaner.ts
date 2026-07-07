@@ -3,26 +3,26 @@
 // The cleaner seam. Cleaning always runs HTML through a `Cleaner`, of which
 // there are two implementations behind one interface:
 //
-//   - `cleanHtmlBackend` (DEFAULT): sanitize-html driven by a `CleanConfig`
-//     preset. This is the byte-for-byte port of htmlprocessing-server behavior.
+//   - `cleanHtmlBackend` (DEFAULT): sanitize-html driven by a `CleanConfig`.
+//     This is the byte-for-byte port of htmlprocessing-server behavior.
 //   - `dompurifyBackend` (opt-in, `hardened: true`): DOMPurify over a jsdom window,
-//     using the same allow-list derived from the preset. DOMPurify + jsdom are
+//     using the same allow-list derived from the config. DOMPurify + jsdom are
 //     OPTIONAL dependencies and are imported lazily; if either is missing the
 //     caller falls back to the sanitize-html backend (handled in clean.ts).
 //
 // `filterEventHandlers` is shared defense-in-depth: every attribute whose
 // lowercased name starts with `on` is stripped from the allow-list before
-// sanitizing, regardless of backend or preset. Likewise `<script>` is force-
-// removed from `allowedTags` and kept in `nonTextTags`: the named presets never
-// list it, but a fully-custom config (CleanOptions.config) could, and the
-// security floor — "<script>/on*/javascript: stripped at EVERY level" — must
+// sanitizing, regardless of backend or config. Likewise `<script>` is force-
+// removed from `allowedTags` and kept in `nonTextTags`: the default config never
+// lists it, but a fully-custom config (CleanOptions.config) could, and the
+// security floor — "<script>/on*/javascript: always stripped" — must
 // hold for custom configs too.
 
 import sanitizeHtml from 'sanitize-html';
-import type { CleanConfig } from './presets/index.js';
+import type { CleanConfig } from './config.js';
 
 /**
- * Tags never allowed in cleaned output, regardless of preset or custom config —
+ * Tags never allowed in cleaned output, regardless of config —
  * the active-content / embedding vectors (doc 08's security floor). `<iframe>` is
  * here because `srcdoc` is inline HTML (not a URL and not an `on*` handler), so a
  * scheme filter can't neutralize `<iframe srcdoc="<script>…">` — the whole tag must
@@ -38,8 +38,8 @@ export interface Cleaner {
 
 /**
  * Strip every event-handler attribute (`on*`) from an allow-list. Pure helper,
- * exported for testing. Defense-in-depth: presets never list `on*` attributes,
- * but this guarantees it even if a future preset slips one in.
+ * exported for testing. Defense-in-depth: the default config never lists `on*`
+ * attributes, but this guarantees it even if a future config slips one in.
  */
 export function filterEventHandlers(attrs: Record<string, string[]>): Record<string, string[]> {
   const result: Record<string, string[]> = {};
@@ -49,7 +49,7 @@ export function filterEventHandlers(attrs: Record<string, string[]>): Record<str
   return result;
 }
 
-/** Translate a `CleanConfig` preset into sanitize-html's option shape. */
+/** Translate a `CleanConfig` into sanitize-html's option shape. */
 function toSanitizeHtmlOptions(config: CleanConfig): sanitizeHtml.IOptions {
   const options: sanitizeHtml.IOptions = {};
 
@@ -83,7 +83,7 @@ function toSanitizeHtmlOptions(config: CleanConfig): sanitizeHtml.IOptions {
       : [...config.nonTextTags, 'script'];
   }
 
-  // The `styled` preset knowingly allows `<style>`; sanitize-html warns loudly
+  // A custom config may knowingly allow `<style>`; sanitize-html warns loudly
   // about its inability to filter CSS. We acknowledge it (the cleaning pipeline
   // layers its own CSS cleaner on top — see css-cleaner.ts) to silence the
   // per-call console warning. This does NOT relax any tag/attribute filtering.
@@ -103,13 +103,11 @@ export const cleanHtmlBackend: Cleaner = {
 };
 
 /**
- * The mandatory security floor for the `correct` cleaning level (and any
- * normalize-only path with no sanitize preset/config). The brief makes security
- * "non-negotiable at EVERY level (including `correct`)". This config preserves ALL
+ * The mandatory security floor. Security is non-negotiable on EVERY cleaning
+ * path (default and custom config alike). This config preserves ALL
  * benign tags and attributes (no tag allow-list, no `transformTags` renames) so
  * arbitrary tags (`<custom-x>`), `data-*` attributes, and deprecated tags
- * (`<strike>`) pass through unchanged — keeping `correct` faithful to its
- * normalize-only intent for benign markup — while force-removing every
+ * (`<strike>`) pass through unchanged, while force-removing every
  * active-content / embedding / navigation vector:
  *   - `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>` are dropped
  *     (element + content) via `exclusiveFilter` + `nonTextTags` — `<iframe>` because
@@ -142,8 +140,13 @@ const SECURITY_FLOOR_OPTIONS: sanitizeHtml.IOptions = {
   exclusiveFilter: (frame) =>
     ALWAYS_FORBIDDEN_TAGS.has(frame.tag) ||
     // <meta http-equiv="refresh" content="0;url=…"> is an auto-navigation /
-    // open-redirect vector the scheme filter never sees (content is not a URL attr).
-    (frame.tag === 'meta' && frame.attribs['http-equiv'] !== undefined),
+    // open-redirect vector the scheme filter never sees (content is not a URL
+    // attr). Also match a refresh-shaped `content` on its own: a config-driven
+    // sanitize pass upstream of the floor may have already stripped
+    // `http-equiv` while keeping `content`, leaving the payload orphaned.
+    (frame.tag === 'meta' &&
+      (frame.attribs['http-equiv'] !== undefined ||
+        /^\s*\d+\s*;\s*url\s*=/i.test(frame.attribs.content ?? ''))),
   nonTextTags: ['script', 'iframe', 'object', 'embed', 'applet'],
   transformTags: {
     '*': (tagName, attribs) => {
@@ -167,7 +170,7 @@ const SECURITY_FLOOR_OPTIONS: sanitizeHtml.IOptions = {
  * `<script>`/`<iframe>`/`<object>`/`<embed>`/`<applet>`/`<base>`, `<meta http-equiv>`,
  * all `on*` handlers + `srcdoc`, and dangerous URL schemes, while preserving every
  * benign tag/attribute. Exported for testing. Run by `cleanHtml` as the unconditional
- * final pass on EVERY path (preset, custom config, `correct`). CSS in inline
+ * final pass on EVERY path (default and custom config). CSS in inline
  * `style`/`<style>` must still be cleaned separately (`cleanStyledHtml`).
  */
 export function enforceSecurityFloor(html: string): string {

@@ -1,10 +1,10 @@
 // Offline end-to-end corpus runner for trafilaturacore.
 //
 // Loads the WCXB-derived `corpus.json` manifest, reads each saved HTML fixture
-// from disk (NO network — local files only), and runs `clean()` across a matrix
-// of boilerplate x level combos. For every (fixture, combo) it records the
-// detected page type, confidence, cleaned-HTML length, and title, plus a set of
-// PASS/FAIL assertions.
+// from disk (NO network — local files only), and runs `clean()` across every
+// boilerplate mode (plus one custom-config combo). For every (fixture, combo)
+// it records the detected page type, confidence, cleaned-HTML length, and
+// title, plus a set of PASS/FAIL assertions.
 //
 // Assertions split into two tiers:
 //   - HARD (security + structural invariants): any failure fails the run.
@@ -16,7 +16,14 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type CleanResult, clean, type PageType } from 'trafilaturacore';
+import {
+  type BoilerplateMode,
+  type CleanConfig,
+  type CleanResult,
+  clean,
+  DEFAULT_CLEAN_CONFIG,
+  type PageType,
+} from 'trafilaturacore';
 import { findEventHandlerAttr, hasJavascriptUrl, hasScriptTag } from './security-detectors.js';
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -36,27 +43,41 @@ export const PAGE_TYPE_ACCURACY_FLOOR = 0.4;
  */
 export const SUBSTANTIAL_BODY_TEXT = 200;
 
-/** The (boilerplate, level) combos every fixture is run through. */
-export const COMBOS = [
-  { boilerplate: 'balanced', level: 'standard' },
-  { boilerplate: 'balanced', level: 'minimal' },
-  { boilerplate: 'none', level: 'correct' },
-  // Same full-document (`none`) input as `none`x`correct`, but the sanitizing
-  // `minimal` level — the baseline for the `correct-superset` assertion so that
-  // both sides share the SAME boilerplate input and differ only by level.
-  { boilerplate: 'none', level: 'minimal' },
-  { boilerplate: 'recall', level: 'permissive' },
-  // `precision` boilerplate (most aggressive extraction) and the `styled`
-  // sanitizing level (the only level that keeps inline style/class and the
-  // <style> tag) are otherwise never exercised end-to-end across real fixtures;
-  // `styled` is where a CSS-URL allow-list regression would surface.
-  { boilerplate: 'balanced', level: 'styled' },
-  { boilerplate: 'precision', level: 'minimal' },
-] as const;
+/**
+ * A custom cleaning config that additionally keeps class / inline style / the
+ * `<style>` tag — the one combo where a CSS-URL allow-list regression would
+ * surface across real fixtures (the default config drops all styling).
+ */
+const STYLED_CONFIG: CleanConfig = {
+  ...DEFAULT_CLEAN_CONFIG,
+  allowedTags: [...(DEFAULT_CLEAN_CONFIG.allowedTags ?? []), 'style'],
+  allowedAttributes: {
+    ...DEFAULT_CLEAN_CONFIG.allowedAttributes,
+    '*': ['class', 'style'],
+  },
+  nonTextTags: (DEFAULT_CLEAN_CONFIG.nonTextTags ?? []).filter((tag) => tag !== 'style'),
+};
+
+/**
+ * The combos every fixture is run through: each boilerplate mode with the
+ * default Trafilatura-aligned config, plus one custom-config combo
+ * (`balanced+styled-config`) that keeps styling so the CSS cleaner stays
+ * exercised end-to-end.
+ */
+export const COMBOS: readonly {
+  label: string;
+  boilerplate: BoilerplateMode;
+  config?: CleanConfig;
+}[] = [
+  { label: 'balanced', boilerplate: 'balanced' },
+  { label: 'precision', boilerplate: 'precision' },
+  { label: 'recall', boilerplate: 'recall' },
+  // Whole-document cleaning: no extraction, no classification, no FFI.
+  { label: 'clean-only', boilerplate: 'clean-only' },
+  { label: 'balanced+styled-config', boilerplate: 'balanced', config: STYLED_CONFIG },
+];
 
 type Combo = (typeof COMBOS)[number];
-type BoilerplateMode = Combo['boilerplate'];
-type CleaningLevel = Combo['level'];
 
 interface CorpusFixture {
   file: string;
@@ -82,8 +103,9 @@ export interface AssertionFailure {
 
 /** Per-(fixture, combo) result. */
 export interface ComboResult {
+  /** The combo label (mode name, or `balanced+styled-config`). */
+  combo: string;
   boilerplate: BoilerplateMode;
-  level: CleaningLevel;
   pageType?: PageType;
   confidence?: number;
   htmlLength: number;
@@ -97,7 +119,7 @@ export interface FixtureResult {
   file: string;
   expectedPageType: PageType;
   domain: string;
-  /** Detected page type (from the `balanced`x`standard` reference combo). */
+  /** Detected page type (from the `balanced` reference combo). */
   detectedPageType?: PageType;
   confidence?: number;
   /** Whether `detectedPageType` matches `expectedPageType`. */
@@ -182,7 +204,7 @@ function loadManifest(): CorpusManifest {
 /** Outcome of asserting one (fixture, combo): pass + how many security checks failed HARD. */
 interface AssertOutcome {
   pass: boolean;
-  /** Security failures counted against the run (all levels — the floor is unconditional). */
+  /** Security failures counted against the run (all combos — the floor is unconditional). */
   hardSecurityFailures: number;
 }
 
@@ -195,11 +217,11 @@ function assertCombo(
   fixture: CorpusFixture,
   combo: Combo,
   result: CleanResult,
-  minimalTagCount: number,
+  balancedTagCount: number,
   inputBodyTextLength: number,
   hardFailures: AssertionFailure[],
 ): AssertOutcome {
-  const comboLabel = `${combo.boilerplate}x${combo.level}`;
+  const comboLabel = combo.label;
   const html = result.html;
   let pass = true;
   let hardSecurityFailures = 0;
@@ -214,16 +236,16 @@ function assertCombo(
       detail,
     });
   };
-  // SECURITY is HARD at EVERY level. In v2 the TS cleaning floor is UNCONDITIONAL
+  // SECURITY is HARD for EVERY combo. In v2 the TS cleaning floor is UNCONDITIONAL
   // (context doc 09): `enforceSecurityFloor` + `cleanStyledHtml` run as the final
-  // pass on every level INCLUDING `correct`, so a surviving <script>/on*/javascript:
-  // URL is always a real failure — never a documented normalize-only exemption.
+  // pass on every path (default AND custom config), so a surviving
+  // <script>/on*/javascript: URL is always a real failure.
   const securityFail = (assertion: string, detail: string): void => {
     hardSecurityFailures += 1;
     fail(assertion, detail);
   };
 
-  // SECURITY (core invariant): no script tag survives at any level.
+  // SECURITY (core invariant): no script tag survives in any combo.
   if (hasScriptTag(html)) {
     securityFail('no-script', '<script> survived in cleaned output');
   }
@@ -250,17 +272,17 @@ function assertCombo(
     );
   }
 
-  // STRUCTURAL: `correct` (normalize-only) keeps at least as many distinct tag
-  // names as `minimal` on the SAME boilerplate input (both `none` — the whole
-  // document, no extraction), so the two differ only by cleaning level. This is
-  // the real invariant: normalize-only `correct` must not drop tags that the
-  // sanitizing `minimal` level keeps.
-  if (combo.boilerplate === 'none' && combo.level === 'correct') {
-    const correctTagCount = distinctTagNames(html).size;
-    if (correctTagCount < minimalTagCount) {
+  // STRUCTURAL: the styled-config combo's allow-list is a strict superset of
+  // the default config, and it runs on the SAME `balanced` extraction input —
+  // so it must keep at least as many distinct tag names as the default-config
+  // `balanced` combo. A custom config silently dropping tags the default keeps
+  // would surface here.
+  if (combo.label === 'balanced+styled-config') {
+    const styledTagCount = distinctTagNames(html).size;
+    if (styledTagCount < balancedTagCount) {
       fail(
-        'correct-superset',
-        `correct kept ${correctTagCount} distinct tags but minimal kept ${minimalTagCount}`,
+        'styled-config-superset',
+        `styled-config kept ${styledTagCount} distinct tags but the default config kept ${balancedTagCount}`,
       );
     }
   }
@@ -281,9 +303,9 @@ export async function runCorpus(): Promise<CorpusReport> {
     const html = readFileSync(resolve(FIXTURES_DIR, fixture.file), 'utf8');
     const inputBodyTextLength = bodyTextLength(html);
 
-    // Run all combos first so we know `minimal`'s tag count before asserting
-    // `correct`'s superset property. The combos are independent, so clean them
-    // concurrently (the Rust extraction runs on the libuv threadpool);
+    // Run all combos first so the `balanced` tag count is known before asserting
+    // the styled-config superset property. The combos are independent, so clean
+    // them concurrently (the Rust extraction runs on the libuv threadpool);
     // Promise.all preserves combo order, and the assertion/report fold below
     // iterates COMBOS in order, so the output stays deterministic. Fixtures
     // themselves stay sequential to bound memory and keep logs readable.
@@ -292,33 +314,32 @@ export async function runCorpus(): Promise<CorpusReport> {
         COMBOS.map(async (combo): Promise<[string, CleanResult]> => {
           const result = await clean(html, {
             boilerplate: combo.boilerplate,
-            level: combo.level,
+            config: combo.config,
             url: fixture.url,
           });
-          return [`${combo.boilerplate}x${combo.level}`, result];
+          return [combo.label, result];
         }),
       ),
     );
 
-    // Baseline for the `correct-superset` assertion: the `none`x`minimal` combo
-    // shares the SAME full-document input as `none`x`correct`, so the comparison
-    // isolates the level difference (sanitizing vs normalize-only) rather than a
-    // boilerplate-mode difference (full doc vs extracted subset).
-    const minimalResult = cleaned.get('nonexminimal');
-    const minimalTagCount =
-      minimalResult !== undefined ? distinctTagNames(minimalResult.html).size : 0;
+    // Baseline for the `styled-config-superset` assertion: the `balanced` combo
+    // shares the SAME extraction input as `balanced+styled-config`, so the
+    // comparison isolates the config difference (default vs styling-superset).
+    const balancedResult = cleaned.get('balanced');
+    const balancedTagCount =
+      balancedResult !== undefined ? distinctTagNames(balancedResult.html).size : 0;
 
     const comboResults: ComboResult[] = [];
     let hardPassCount = 0;
 
     for (const combo of COMBOS) {
-      const result = cleaned.get(`${combo.boilerplate}x${combo.level}`);
+      const result = cleaned.get(combo.label);
       if (result === undefined) continue;
       const { pass, hardSecurityFailures } = assertCombo(
         fixture,
         combo,
         result,
-        minimalTagCount,
+        balancedTagCount,
         inputBodyTextLength,
         hardFailures,
       );
@@ -326,8 +347,8 @@ export async function runCorpus(): Promise<CorpusReport> {
       if (pass) hardPassCount += 1;
 
       const comboResult: ComboResult = {
+        combo: combo.label,
         boilerplate: combo.boilerplate,
-        level: combo.level,
         htmlLength: result.html.length,
         pass,
       };
@@ -337,9 +358,9 @@ export async function runCorpus(): Promise<CorpusReport> {
       comboResults.push(comboResult);
     }
 
-    // Use the `balanced`x`standard` combo as the reference for the detected type
+    // Use the `balanced` combo as the reference for the detected type
     // (it both classifies and is the default mode).
-    const reference = cleaned.get('balancedxstandard');
+    const reference = balancedResult;
     const detectedPageType = reference?.pageType;
     const confidence = reference?.confidence;
     const pageTypeMatch = detectedPageType === fixture.expectedPageType;
@@ -352,7 +373,7 @@ export async function runCorpus(): Promise<CorpusReport> {
       });
       softFailures.push({
         fixture: fixture.file,
-        combo: 'balancedxstandard',
+        combo: 'balanced',
         tier: 'soft',
         assertion: 'page-type-match',
         detail: `expected ${fixture.expectedPageType}, detected ${detectedPageType ?? '<none>'}`,

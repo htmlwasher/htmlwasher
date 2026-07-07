@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
 import { cleanHtmlBackend, filterEventHandlers } from './cleaner.js';
-import { permissiveSetup } from './presets/permissive.js';
+import { DEFAULT_CLEAN_CONFIG } from './config.js';
 
 describe('filterEventHandlers', () => {
   it('strips every attribute whose name starts with on', () => {
@@ -20,13 +20,13 @@ describe('filterEventHandlers', () => {
 });
 
 describe('cleanHtmlBackend', () => {
-  it('applies the preset allow-list', () => {
+  it('applies the default allow-list', () => {
     const out = cleanHtmlBackend.clean(
-      '<section><div>Hi</div><script>x</script></section>',
-      permissiveSetup,
+      '<div><p>Hi</p></div><script>x</script>',
+      DEFAULT_CLEAN_CONFIG,
     );
-    expect(out).toContain('<section>');
-    expect(out).toContain('<div>');
+    expect(out).toContain('<p>Hi</p>');
+    expect(out).not.toContain('<div>'); // unwrapped, not allowed
     expect(out).not.toContain('<script>');
   });
 

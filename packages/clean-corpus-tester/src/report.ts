@@ -58,7 +58,7 @@ export function renderSummary(report: CorpusReport): string {
     `combos/fixture=${report.comboCount}`,
     `page-type accuracy=${accuracyPct}% (floor ${floorPct}%)`,
     `hard failures=${report.hardFailures.length}`,
-    `security failures(all levels)=${report.securityFailureCount}`,
+    `security failures(all combos)=${report.securityFailureCount}`,
     `page-type mismatches=${report.pageTypeMismatches.length}`,
     `soft warnings=${report.softFailures.length}`,
     `verdict=${report.ok ? 'PASS' : 'FAIL'}`,
@@ -107,7 +107,7 @@ export function renderMarkdown(report: CorpusReport): string {
   lines.push(`- Page-type accuracy: **${accuracyPct}%** (floor ${floorPct}%)`);
   lines.push(`- Hard-assertion failures: **${report.hardFailures.length}**`);
   lines.push(
-    `- Security-assertion failures (all levels, incl. \`correct\`): **${report.securityFailureCount}**`,
+    `- Security-assertion failures (all combos, incl. the styled config): **${report.securityFailureCount}**`,
   );
   lines.push(`- Page-type mismatches (soft): **${report.pageTypeMismatches.length}**`);
   lines.push(`- Soft warnings total: **${report.softFailures.length}**`);
@@ -143,7 +143,7 @@ export function renderMarkdown(report: CorpusReport): string {
     lines.push('## Soft warnings (documented, non-fatal)');
     lines.push('');
     lines.push(
-      'Non-fatal soft assertions recorded for visibility. Security is a HARD assertion at every cleaning level (including `correct`) — the v2 cleaning floor is unconditional (context doc 09), so no security check is ever downgraded to a soft warning.',
+      'Non-fatal soft assertions recorded for visibility. Security is a HARD assertion for every combo (default and custom config alike) — the v2 cleaning floor is unconditional (context doc 09), so no security check is ever downgraded to a soft warning.',
     );
     lines.push('');
     for (const f of otherSoft) {

@@ -11,9 +11,11 @@ combines two composable pillars:
 - **Boilerplate removal** — a [Trafilatura](https://github.com/adbar/trafilatura)-derived,
   page-type-aware main-content extractor. A pure-Rust GBDT page-type classifier
   (7 types) routes extraction through a per-type profile; the kept content is
-  re-serialized through a tag/attribute whitelist (never verbatim `outerHTML`).
+  emitted as preserve-markup HTML (original tags + attributes, script-free but
+  otherwise unsanitized) — the cleaning stage below owns all sanitization.
 - **HTML cleaning** — a [`sanitize-html`](https://www.npmjs.com/package/sanitize-html)-based
-  sanitize → normalize → format stage, exposed as five cleaning levels.
+  sanitize → normalize → format stage, driven by a single Trafilatura-aligned
+  default config (replaceable with a custom `CleanConfig`).
 
 It is a content-cleanup **library for Node.js**: not a scraper, not a browser
 automation framework.
@@ -22,10 +24,10 @@ automation framework.
 
 Alpha — implemented. The extraction core, metadata extractor, page-type
 classifier (a pure-Rust GBDT shipped as `model.xgb.json`), per-type profiles,
-and the five cleaning levels are all in place, exposed via a single `clean()`
-API. The classifier scores ~0.78 accuracy on the held-out WCXB test split;
-extraction scores F1 ≈ 0.79 on the adbar evaluation corpus. APIs may still
-change before a stable release.
+and the Trafilatura-aligned cleaning stage are all in place, exposed via a
+single `clean()` API. The classifier scores ~0.78 accuracy on the held-out WCXB
+test split; extraction scores F1 ≈ 0.835 on the adbar evaluation corpus. APIs
+may still change before a stable release.
 
 ## Usage
 
@@ -33,8 +35,7 @@ change before a stable release.
 import { clean } from 'trafilaturacore';
 
 const { html, metadata, pageType, confidence, messages } = await clean(pageHtml, {
-  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'none'
-  level: 'standard', //       'minimal' | 'standard' | 'permissive' | 'styled' | 'correct'
+  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'clean-only'
   minify: false,
   url: 'https://example.com/article', // optional context; never fetched
 });
@@ -45,17 +46,24 @@ author, date, sitename, tags, …), the detected `pageType` + `confidence` (when
 extraction runs), and diagnostic `messages`. It is `async` (the formatter loads
 lazily).
 
-The two knobs are orthogonal — any boilerplate mode combines with any cleaning
-level. They (plus `minify`) are the entire surface: there are deliberately no
-`includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
-cleaning `level` is the single tag-inclusion control; `boilerplate: 'none'` skips
-extraction and cleans the whole document.
+The two knobs are orthogonal — any boilerplate mode combines with the default or
+a custom cleaning config. They (plus `minify`) are the entire surface: there are
+deliberately no `includeComments`/`includeTables`/`includeImages`/`includeLinks`
+toggles. The sanitize stage always runs, driven by the exported
+`DEFAULT_CLEAN_CONFIG` — a single Trafilatura-aligned config derived from
+Trafilatura 2.1.0: its tag allow-list is Trafilatura's HTML output vocabulary
+union rs-trafilatura's serializer whitelist; Trafilatura's `MANUALLY_CLEANED`
+list maps to `nonTextTags` (subtree discarded with content: `nav`, `aside`,
+`form`, `iframe`, `script`, …); its `MANUALLY_STRIPPED` list is simply not
+allowed, so those tags are unwrapped with content kept (`div`, `span`,
+`section`, …). `boilerplate: 'clean-only'` skips extraction and classification
+entirely and cleans the whole document.
 
 ### Custom cleaning config
 
-Beyond the five named levels, you can pass a fully-custom `config` — a
-`CleanConfig` of plain JSON data (no JavaScript). When set it drives the
-sanitize stage and **takes precedence over `level`**:
+Instead of the default, you can pass a fully-custom `config` — a `CleanConfig`
+of plain JSON data (no JavaScript). When set it drives the sanitize stage and
+**replaces the default Trafilatura-aligned config**:
 
 ```ts
 import { clean, type CleanConfig } from 'trafilaturacore';
@@ -75,16 +83,13 @@ exported). The security floor always holds: `<script>` and `on*` handlers are
 stripped even if the config lists them, and a config that allows inline `style`
 still runs the CSS-URL allow-list.
 
-The security floor is enforced at **every** cleaning level — including `correct`:
-`<script>` (tag + text), every `on*` event handler, `javascript:`/`vbscript:`/
-untrusted `data:` URLs, and dangerous inline CSS (`url(javascript:)`,
-`expression()`, `@import`) are always stripped; the `styled` level (and any custom
-config that permits inline `style`) adds the CSS-URL allow-list on top. `correct`
-is the one **normalize-only** level for the tag _allow-list_ — it runs no preset,
-so it preserves all benign tags, attributes, and deprecated tags unchanged — but
-it still runs the mandatory security floor (`enforceSecurityFloor` +
-`cleanStyledHtml`), so it never leaks active content even though it never
-narrows benign markup.
+The security floor is enforced on **every** path — the default config and any
+custom config alike: `<script>` (tag + text), every `on*` event handler,
+`javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous inline CSS
+(`url(javascript:)`, `expression()`, `@import`) are always stripped
+(`enforceSecurityFloor` + `cleanStyledHtml` run as the final pass), and any
+custom config that permits inline `style` adds the CSS-URL allow-list on top —
+so no config can leak active content.
 
 ### Boundary validation and input cap
 
@@ -92,8 +97,8 @@ narrows benign markup.
 unchecked:
 
 - It throws a `TypeError` when `html` is not a string, when `options.boilerplate`
-  or `options.level` is provided but invalid, or when `options.config` is provided
-  but is not a valid `CleanConfig`.
+  is provided but invalid, or when `options.config` is provided but is not a
+  valid `CleanConfig`.
 - It accepts `maxInputBytes?: number` (default 10 MB UTF-8, the exported
   `DEFAULT_MAX_INPUT_BYTES`) and throws a `RangeError` when the input's UTF-8 byte
   length exceeds it — a resource bound. Pass a larger value to opt into bigger
@@ -111,8 +116,8 @@ npm install -g trafilaturacore        # or: npx trafilaturacore …
 ```
 
 ```sh
-# Clean a file with the default knobs (balanced + standard)
-trafilaturacore article.html -b balanced -l standard
+# Clean a file with the default knobs (balanced boilerplate mode)
+trafilaturacore article.html -b balanced
 
 # Pipe HTML in via stdin and minify the output
 cat page.html | trafilaturacore --minify
@@ -123,16 +128,15 @@ trafilaturacore page.html --json > out.json
 # Write cleaned HTML to a file instead of stdout (stays quiet on stdout)
 trafilaturacore page.html -o clean.html
 
-# Use a fully-custom cleaning config (JSON file; takes precedence over --level)
+# Use a fully-custom cleaning config (JSON file; replaces the default config)
 trafilaturacore page.html -c my-cleaning-config.json
 ```
 
 It reads a single file argument, or stdin when the argument is omitted or `-`.
 Cleaned HTML (or `--json`) goes to **stdout**; diagnostics and a
 `[pageType confidence]` line go to **stderr** (silence them with `-q, --quiet`).
-Options: `-b, --boilerplate <precision|balanced|recall|none>`,
-`-l, --level <minimal|standard|permissive|styled|correct>`,
-`-c, --config <file.json>` (a custom `CleanConfig`; precedence over `--level`),
+Options: `-b, --boilerplate <precision|balanced|recall|clean-only>`,
+`-c, --config <file.json>` (a custom `CleanConfig`; replaces the default config),
 `-m, --minify`, `-u, --url <url>` (never fetched), `-o, --output <file>`,
 `--json`, `-q, --quiet`. Invalid option values, an invalid/malformed config file,
 and a missing input file exit non-zero with a clear stderr message.

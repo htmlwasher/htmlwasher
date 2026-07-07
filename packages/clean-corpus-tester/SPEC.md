@@ -37,17 +37,16 @@ Saved real pages from the WCXB dataset. Read-only inputs.
 
 ## Combo matrix
 
-Every fixture is cleaned through these `boilerplate` x `level` combos:
+Every fixture is cleaned through these five label-keyed combos — each boilerplate mode with the
+default Trafilatura-aligned config, plus one custom-config combo:
 
-- `balanced` x `standard` — default path; the page-type **reference** combo
-- `balanced` x `minimal`
-- `none` x `correct` — no extraction; normalize-only cleaning
-- `none` x `minimal` — same full-document input as `none` x `correct`, sanitizing; the baseline
-  for the `correct` superset assertion (so both sides share the same boilerplate input)
-- `recall` x `permissive`
-- `balanced` x `styled` — exercises the `styled` sanitizing level (the only level that keeps inline
-  `style`/`class` and the `<style>` tag), where a CSS-URL allow-list regression would surface
-- `precision` x `minimal` — exercises the `precision` boilerplate mode end-to-end
+- `balanced` — default path; the page-type **reference** combo
+- `precision` — exercises the `precision` boilerplate mode end-to-end
+- `recall` — exercises the `recall` boilerplate mode end-to-end
+- `clean-only` — no extraction, no classification, no FFI; whole-document cleaning
+- `balanced+styled-config` — `balanced` boilerplate with a custom `CleanConfig` that adds the
+  `<style>` tag and `class`/`style` attributes to the default config, so the CSS-URL allow-list
+  stays exercised end-to-end (where a CSS-URL regression would surface)
 
 A fixture's combos run **concurrently** (`Promise.all` — each `clean()` is independent and the Rust
 extraction runs on the libuv threadpool); results are folded back in combo order, so failures and
@@ -57,11 +56,11 @@ report rows stay deterministic. Fixtures themselves run sequentially (bounded me
 
 ### Hard (any failure fails the run)
 
-- **Security (core invariant)** — at **every** cleaning level, **including `correct`**, the cleaned
+- **Security (core invariant)** — for **every** combo (default and custom config), the cleaned
   output contains no `<script>` tag, no `on<event>=` handler attribute, and no `javascript:` URL.
   This is a HARD assertion everywhere: the v2 `trafilaturacore` cleaning floor is unconditional (context
-  doc 09) — `enforceSecurityFloor` + `cleanStyledHtml` run as the final pass on every level
-  including `correct` — so a survival is always a real failure, never a normalize-only soft exemption.
+  doc 09) — `enforceSecurityFloor` + `cleanStyledHtml` run as the final pass on every path,
+  default and custom config alike — so a survival is always a real failure, with no exempt path.
   The handler and `javascript:` detectors are **tag-anchored** (`src/security-detectors.ts`): they
   extract opening-tag substrings first and match only inside them (`javascript:` additionally only
   in the URL-bearing attributes `href`/`src`/`action`/`formaction`/`xlink:href`/`data`), so escaped
@@ -71,15 +70,16 @@ report rows stay deterministic. Fixtures themselves run sequentially (bounded me
 - **Non-empty output** — cleaned HTML is non-empty, unless the input lacks substantial body text
   (< `SUBSTANTIAL_BODY_TEXT` = 200 chars of tag-stripped text — a JS-shell / near-empty page), in
   which case empty extraction output is legitimate.
-- **`correct` superset of `minimal` (same input)** — the normalize-only `none` x `correct` combo
-  preserves at least as many distinct tag names as the sanitizing `none` x `minimal` combo. Both run
-  `boilerplate: 'none'` (the whole document, no extraction) and differ only by cleaning level, so the
-  check truly validates that normalize-only `correct` does not drop tags the sanitizing `minimal`
-  level keeps — a same-input guarantee, not a cross-mode (full-doc vs extracted-subset) comparison.
+- **Styled-config superset (same input)** — the `balanced+styled-config` combo preserves at least
+  as many distinct tag names as the default-config `balanced` combo. Both run
+  `boilerplate: 'balanced'` (the same extraction input) and differ only by cleaning config — the
+  styled config's allow-list is a strict superset of the default — so the check truly validates
+  that a custom config does not silently drop tags the default config keeps — a same-input
+  guarantee, not a cross-mode (full-doc vs extracted-subset) comparison.
 
 ### Soft (recorded, non-fatal per fixture)
 
-- **Page-type plausibility** — detected (from the `balanced` x `standard` reference combo) vs.
+- **Page-type plausibility** — detected (from the `balanced` reference combo) vs.
   expected page type. A single mismatch is a warning. The run fails only if aggregate page-type
   accuracy across all fixtures drops below `PAGE_TYPE_ACCURACY_FLOOR` = `0.4`.
 
@@ -87,9 +87,11 @@ report rows stay deterministic. Fixtures themselves run sequentially (bounded me
 
 - `runCorpus(): Promise<CorpusReport>` — load `corpus.json` (resolved relative to the package dir),
   read every fixture, run the combo matrix, and produce the report. Fully offline + deterministic.
-- `COMBOS` — the `{ boilerplate, level }` combos (`as const`).
+- `COMBOS` — the label-keyed `{ label, boilerplate, config? }` combos (`balanced`, `precision`,
+  `recall`, `clean-only`, `balanced+styled-config`).
 - `PAGE_TYPE_ACCURACY_FLOOR` (`0.4`) and `SUBSTANTIAL_BODY_TEXT` (`200`) — the run thresholds.
-- Types: `CorpusReport`, `FixtureResult`, `ComboResult`, `AssertionFailure`.
+- Types: `CorpusReport`, `FixtureResult`, `ComboResult`
+  (`{ combo, boilerplate, pageType?, confidence?, htmlLength, title?, pass }`), `AssertionFailure`.
 - `src/security-detectors.ts` — the exported, unit-testable HARD security detectors:
   `hasScriptTag(html)`, `findEventHandlerAttr(html)` (returns the surviving attribute or
   `undefined`), `hasJavascriptUrl(html)`. Unit-tested standalone in

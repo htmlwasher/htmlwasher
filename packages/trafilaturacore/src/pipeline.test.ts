@@ -17,8 +17,8 @@ const PAGE = `<!doctype html><html><head><title>Real Title — Site</title>
 </body></html>`;
 
 describe('clean() orchestration', () => {
-  it('balanced + standard: extracts main content, strips boilerplate + scripts', async () => {
-    const { html, messages } = await clean(PAGE, { boilerplate: 'balanced', level: 'standard' });
+  it('balanced: extracts main content, strips boilerplate + scripts', async () => {
+    const { html, messages } = await clean(PAGE, { boilerplate: 'balanced' });
     expect(html).toContain('Real Title');
     expect(html).toContain('genuine article body');
     expect(html).not.toMatch(/<script/i);
@@ -35,41 +35,32 @@ describe('clean() orchestration', () => {
     expect(metadata?.sitename).toBe('Site');
   });
 
-  it("boilerplate 'none' cleans the whole document", async () => {
-    const { html } = await clean(PAGE, { boilerplate: 'none', level: 'standard' });
+  it("boilerplate 'clean-only' cleans the whole document", async () => {
+    const { html } = await clean(PAGE, { boilerplate: 'clean-only' });
     // whole-document clean keeps more than the article (but still strips scripts)
     expect(html).not.toMatch(/<script/i);
     expect(html).toContain('Real Title');
   });
 
-  it("level 'correct' preserves arbitrary tags (normalize-only)", async () => {
-    const { html } = await clean('<div><custom-x>hi</custom-x></div>', {
-      boilerplate: 'none',
-      level: 'correct',
-    });
-    expect(html).toContain('<custom-x>');
-  });
-
   it('minify produces collapsed output', async () => {
-    const pretty = await clean(PAGE, { boilerplate: 'none', minify: false });
-    const min = await clean(PAGE, { boilerplate: 'none', minify: true });
+    const pretty = await clean(PAGE, { boilerplate: 'clean-only', minify: false });
+    const min = await clean(PAGE, { boilerplate: 'clean-only', minify: true });
     expect(min.html.length).toBeLessThanOrEqual(pretty.html.length);
   });
 
-  it('a custom config drives the sanitize stage and wins over level', async () => {
-    const { html } = await clean('<div><p>Hi</p><span>x</span></div>', {
-      boilerplate: 'none',
-      level: 'permissive', // would keep <div>/<span>…
-      config: { allowedTags: ['p'] }, // …but the custom config keeps only <p>
+  it('a custom config drives the sanitize stage, replacing the default config', async () => {
+    const { html } = await clean('<ul><li>x</li></ul><p>Hi</p>', {
+      boilerplate: 'clean-only',
+      config: { allowedTags: ['p'] }, // the default would keep <ul>/<li> too
     });
     expect(html).toContain('<p>Hi</p>');
-    expect(html).not.toContain('<div');
-    expect(html).not.toContain('<span');
+    expect(html).not.toContain('<ul');
+    expect(html).not.toContain('<li');
   });
 
   it('throws a clear TypeError on an invalid custom config', async () => {
     await expect(
-      clean('<p>Hi</p>', { boilerplate: 'none', config: { bogus: true } as never }),
+      clean('<p>Hi</p>', { boilerplate: 'clean-only', config: { bogus: true } as never }),
     ).rejects.toThrow(/Invalid cleaning config: unknown field 'bogus'/);
   });
 
@@ -84,31 +75,25 @@ describe('clean() orchestration', () => {
     );
   });
 
-  it('throws a TypeError on an invalid cleaning level', async () => {
-    await expect(clean('<p>Hi</p>', { level: 'minimal-reader' as never })).rejects.toThrow(
-      /Invalid cleaning level: minimal-reader/,
-    );
-  });
-
   it('rejects input just over maxInputBytes with a RangeError', async () => {
     const html = 'a'.repeat(11);
-    await expect(clean(html, { boilerplate: 'none', maxInputBytes: 10 })).rejects.toThrow(
+    await expect(clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 })).rejects.toThrow(
       RangeError,
     );
-    await expect(clean(html, { boilerplate: 'none', maxInputBytes: 10 })).rejects.toThrow(
+    await expect(clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 })).rejects.toThrow(
       /exceeding the limit of 10 bytes/,
     );
   });
 
   it('accepts input exactly at maxInputBytes (just under the cap passes)', async () => {
     const html = 'a'.repeat(10);
-    const { html: out } = await clean(html, { boilerplate: 'none', maxInputBytes: 10 });
+    const { html: out } = await clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 });
     expect(typeof out).toBe('string');
   });
 
   it('measures the cap in UTF-8 bytes, not characters', async () => {
     // '€' is 3 UTF-8 bytes; two of them = 6 bytes > a 5-byte cap.
-    await expect(clean('€€', { boilerplate: 'none', maxInputBytes: 5 })).rejects.toThrow(
+    await expect(clean('€€', { boilerplate: 'clean-only', maxInputBytes: 5 })).rejects.toThrow(
       RangeError,
     );
   });
@@ -118,18 +103,16 @@ describe('clean() orchestration', () => {
     // count alone — no need to push a real 10 MB document through prettier (the
     // under-cap path is covered by every other small-doc test in this suite).
     const overLimit = `${'a'.repeat(DEFAULT_MAX_INPUT_BYTES)}a`;
-    await expect(clean(overLimit, { boilerplate: 'none' })).rejects.toThrow(RangeError);
-    await expect(clean(overLimit, { boilerplate: 'none' })).rejects.toThrow(
+    await expect(clean(overLimit, { boilerplate: 'clean-only' })).rejects.toThrow(RangeError);
+    await expect(clean(overLimit, { boilerplate: 'clean-only' })).rejects.toThrow(
       /exceeding the limit of/,
     );
   });
 
-  it('security floor holds through the public API on the none+correct path', async () => {
-    // The floor (script/on*/javascript: removal) must hold even on none+correct,
-    // which otherwise skips sanitization (normalize-only).
+  it('security floor holds through the public API on the clean-only path', async () => {
     const { html } = await clean(
       '<p onclick="x()">hi</p><script>alert(1)</script><a href="javascript:alert(2)">l</a>',
-      { boilerplate: 'none', level: 'correct' },
+      { boilerplate: 'clean-only' },
     );
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/onclick/i);
@@ -139,9 +122,8 @@ describe('clean() orchestration', () => {
 
   // doc 09 forward-guard: after Phase INTEGRATE the Rust core emits UNSANITIZED
   // preserve-markup HTML, so the cleaning floor is the ONLY thing between
-  // extracted-but-hostile content and the output. v1 exercised hostile input only
-  // on `none`-mode paths; assert the floor through the EXTRACTION path at every
-  // level too — active-content vectors live INSIDE the main article here.
+  // extracted-but-hostile content and the output. Assert the floor through the
+  // EXTRACTION path too — active-content vectors live INSIDE the main article here.
   const HOSTILE_MAIN = `<!doctype html><html><head><title>T</title></head><body>
     <nav><a href="/">home</a></nav>
     <main><article class="article-content">
@@ -153,16 +135,14 @@ describe('clean() orchestration', () => {
     </article></main>
   </body></html>`;
 
-  for (const level of ['minimal', 'standard', 'permissive', 'styled', 'correct'] as const) {
-    it(`security floor holds through clean() at boilerplate:balanced × ${level}`, async () => {
-      const { html } = await clean(HOSTILE_MAIN, { boilerplate: 'balanced', level });
-      const lower = html.toLowerCase();
-      expect(lower).not.toContain('<script');
-      expect(lower).not.toContain('xss-in-content');
-      expect(lower).not.toContain('onclick');
-      expect(lower).not.toContain('javascript:');
-    });
-  }
+  it('security floor holds through clean() at boilerplate:balanced (default config)', async () => {
+    const { html } = await clean(HOSTILE_MAIN, { boilerplate: 'balanced' });
+    const lower = html.toLowerCase();
+    expect(lower).not.toContain('<script');
+    expect(lower).not.toContain('xss-in-content');
+    expect(lower).not.toContain('onclick');
+    expect(lower).not.toContain('javascript:');
+  });
 
   it('closes the wildcard-config bypass end-to-end through clean() with extraction on', async () => {
     const { html } = await clean(HOSTILE_MAIN, {
@@ -179,10 +159,10 @@ describe('clean() orchestration', () => {
   });
 
   // doc-09 headline payoff: the Rust core emits preserve-markup HTML (class /
-  // inline style survive extraction), so at the `styled` cleaning level — which
-  // allows class + inline style — they now flow all the way through clean(). This
-  // was IMPOSSIBLE in v1, whose TS core stripped class/style/id before cleaning.
-  it('styled × balanced: class + inline style survive extraction through clean()', async () => {
+  // inline style survive extraction), so a custom config that allows class +
+  // inline style lets them flow all the way through clean(). This was
+  // IMPOSSIBLE in v1, whose TS core stripped class/style/id before cleaning.
+  it('custom config × balanced: class + inline style survive extraction through clean()', async () => {
     const STYLED_MAIN = `<!doctype html><html><head><title>Styled — Site</title></head><body>
       <nav><a href="/">Home</a></nav>
       <main><article class="article-content" style="color:navy">
@@ -192,7 +172,13 @@ describe('clean() orchestration', () => {
       </article></main>
       <footer class="site-footer">© 2026</footer>
     </body></html>`;
-    const { html } = await clean(STYLED_MAIN, { boilerplate: 'balanced', level: 'styled' });
+    const { html } = await clean(STYLED_MAIN, {
+      boilerplate: 'balanced',
+      config: {
+        allowedTags: ['article', 'h1', 'p', 'a'],
+        allowedAttributes: { '*': ['class', 'style'] },
+      },
+    });
     // The markup the v1 core would have stripped before cleaning now survives.
     expect(html).toContain('class="article-content"');
     expect(html).toContain('class="lead"');
@@ -225,8 +211,8 @@ describe('clean() orchestration', () => {
     expect(confidence).toBeLessThanOrEqual(1);
   });
 
-  it("omits pageType for boilerplate 'none' (no extraction, no classification)", async () => {
-    const { pageType, confidence } = await clean(PAGE, { boilerplate: 'none' });
+  it("omits pageType for boilerplate 'clean-only' (no extraction, no classification)", async () => {
+    const { pageType, confidence } = await clean(PAGE, { boilerplate: 'clean-only' });
     expect(pageType).toBeUndefined();
     expect(confidence).toBeUndefined();
   });
@@ -296,7 +282,7 @@ describe('clean() native-core diagnostics and degradation', () => {
     expect(result.pageType).toBeUndefined();
   });
 
-  it("boilerplate 'none' never loads the native binding (lazy FFI)", async () => {
+  it("boilerplate 'clean-only' never loads the native binding (lazy FFI)", async () => {
     vi.resetModules();
     const factory = vi.fn(() => {
       throw new Error('should never load');
@@ -304,8 +290,8 @@ describe('clean() native-core diagnostics and degradation', () => {
     vi.doMock('@trafilaturacore/native', factory);
     // The package (pipeline module) itself must load without the binding…
     const { clean: cleanMocked } = await import('./pipeline.js');
-    // …and a 'none'-mode clean must never trigger the import.
-    const { html, messages } = await cleanMocked(PAGE, { boilerplate: 'none' });
+    // …and a 'clean-only'-mode clean must never trigger the import.
+    const { html, messages } = await cleanMocked(PAGE, { boilerplate: 'clean-only' });
     expect(html).toContain('Real Title');
     expect(factory).not.toHaveBeenCalled();
     expect(messages.some((m) => m.text.startsWith('boilerplate removal failed'))).toBe(false);
@@ -354,7 +340,7 @@ describe('clean() warning builders narrow non-Error throws', () => {
       },
     }));
     const { clean: cleanMocked } = await import('./pipeline.js');
-    const { messages } = await cleanMocked(PAGE, { boilerplate: 'none' });
+    const { messages } = await cleanMocked(PAGE, { boilerplate: 'clean-only' });
     const warning = messages.find((m) => m.text.startsWith('metadata extraction failed'));
     expect(warning?.text).toContain('boom-not-an-error');
     expect(warning?.text).not.toContain('undefined');

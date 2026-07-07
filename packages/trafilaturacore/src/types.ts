@@ -1,44 +1,31 @@
 // Public type surface for trafilaturacore.
 //
-// The two orthogonal knobs (boilerplate-removal mode + HTML cleaning level) are
+// The knobs (boilerplate-removal mode + optional custom cleaning config) are
 // plain string-union / `as const`-array types, NOT TypeScript `enum`s — mirroring
 // htmlprocessing-server's `PROCESSING_MODES = [...] as const` pattern (locked
-// decision #4 in the build brief). The cleaning level resolves to a preset
-// `CleanConfig`; callers may instead pass a fully-custom `CleanConfig`
+// decision #4 in the build brief). Cleaning uses the single Trafilatura-aligned
+// `DEFAULT_CLEAN_CONFIG`; callers may instead pass a fully-custom `CleanConfig`
 // (pure JSON data — see {@link CleanOptions.config}).
 
-import type { CleanConfig } from './cleaning/presets/types.js';
+import type { CleanConfig } from './cleaning/config.js';
 
-export type { CleanConfig } from './cleaning/presets/types.js';
+export type { CleanConfig } from './cleaning/config.js';
+export { DEFAULT_CLEAN_CONFIG } from './cleaning/config.js';
 
 /**
  * Boilerplate-removal mode — gates the Trafilatura-derived main-content extraction.
  *
- * - `precision` → sets `favor_precision` (less noise, may miss content)
- * - `balanced`  → neither flag (neutral default)
- * - `recall`    → sets `favor_recall` (more content, may include noise)
- * - `none`      → skip boilerplate removal entirely (clean the whole document)
+ * - `precision`  → sets `favor_precision` (less noise, may miss content)
+ * - `balanced`   → neither flag (neutral default)
+ * - `recall`     → sets `favor_recall` (more content, may include noise)
+ * - `clean-only` → skip boilerplate removal entirely (clean the whole document)
  *
- * `none` is trafilaturacore's addition (contextractor has no `none`).
+ * `precision`/`balanced`/`recall` mirror Trafilatura's internal focus;
+ * `clean-only` is trafilaturacore's addition (upstream has no such mode).
  */
-export const BOILERPLATE_MODES = ['precision', 'balanced', 'recall', 'none'] as const;
+export const BOILERPLATE_MODES = ['precision', 'balanced', 'recall', 'clean-only'] as const;
 export type BoilerplateMode = (typeof BOILERPLATE_MODES)[number];
 export const DEFAULT_BOILERPLATE_MODE = 'balanced' satisfies BoilerplateMode;
-
-/**
- * HTML cleaning level — the single tag-inclusion control (it subsumes
- * images/tables/links). There are deliberately exactly these five; no `*-reader`
- * variants. `standard` is the default.
- *
- * - `minimal`    → strictest: scaffolding + headings/tables/lists/code + basic inline. No images.
- * - `standard`   → adds images, media, figures, rich inline. No div/span, no HTML5 structural, no styles.
- * - `permissive` → full HTML5 content incl. structural elements + div/span. Still no classes/IDs/styles.
- * - `styled`     → permissive + `class`/inline `style` + `<style>` CSS (with a CSS-URL allow-list).
- * - `correct`    → normalize-only: skip sanitization; parse5 well-forms + prettier reformats.
- */
-export const CLEANING_LEVELS = ['minimal', 'standard', 'permissive', 'styled', 'correct'] as const;
-export type CleaningLevel = (typeof CLEANING_LEVELS)[number];
-export const DEFAULT_CLEANING_LEVEL = 'standard' satisfies CleaningLevel;
 
 /**
  * Default upper bound on `clean()` input size, measured in UTF-8 bytes (10 MB).
@@ -98,20 +85,20 @@ export interface Metadata {
  * Options for {@link clean}. These knobs (plus the optional source-URL context)
  * are the entire user-facing surface — there are deliberately no
  * `includeComments` / `includeTables` / `includeImages` / `includeLinks`
- * toggles. The cleaning `level` (or a fully-custom `config`) is the single
- * tag-inclusion control; comments are decided by the classified page type.
+ * toggles. The Trafilatura-aligned `DEFAULT_CLEAN_CONFIG` (or a fully-custom
+ * `config`) is the single tag-inclusion control; comments are decided by the
+ * classified page type.
  */
 export interface CleanOptions {
   /** Boilerplate-removal mode. Default `'balanced'`. */
   boilerplate?: BoilerplateMode;
-  /** HTML cleaning level (named preset). Default `'standard'`. Ignored when `config` is set. */
-  level?: CleaningLevel;
   /**
    * Fully-custom cleaning config — a {@link CleanConfig} (pure JSON data). When
-   * set it drives the sanitize stage directly, taking precedence over the preset
-   * `level` would select. The security floor still applies (`<script>` and `on*`
-   * are always stripped; a config that allows inline `style` still gets the
-   * CSS-URL allow-list). Validated at the boundary — see {@link isCleanConfig}.
+   * set it drives the sanitize stage directly, replacing the default
+   * Trafilatura-aligned `DEFAULT_CLEAN_CONFIG`. The security floor still applies
+   * (`<script>` and `on*` are always stripped; a config that allows inline
+   * `style` still gets the CSS-URL allow-list). Validated at the boundary — see
+   * {@link isCleanConfig}.
    */
   config?: CleanConfig;
   /** Minify the output instead of prettier-formatting it. Default `false`. */
@@ -137,20 +124,15 @@ export interface CleanResult {
   html: string;
   messages: Message[];
   metadata?: Metadata;
-  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'none'`). */
+  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'clean-only'`). */
   pageType?: PageType;
-  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'none'`). */
+  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'clean-only'`). */
   confidence?: number;
 }
 
 /** Runtime guard: is `value` a valid {@link BoilerplateMode}? */
 export function isBoilerplateMode(value: unknown): value is BoilerplateMode {
   return typeof value === 'string' && (BOILERPLATE_MODES as readonly string[]).includes(value);
-}
-
-/** Runtime guard: is `value` a valid {@link CleaningLevel}? */
-export function isCleaningLevel(value: unknown): value is CleaningLevel {
-  return typeof value === 'string' && (CLEANING_LEVELS as readonly string[]).includes(value);
 }
 
 /** Runtime guard: is `value` a valid {@link PageType}? */
@@ -215,7 +197,7 @@ export function cleanConfigError(value: unknown): string | null {
 
 /**
  * Runtime guard: is `value` a valid {@link CleanConfig}? Mirrors
- * {@link isCleaningLevel} / {@link isBoilerplateMode}. Use
+ * {@link isBoilerplateMode} / {@link isPageType}. Use
  * {@link cleanConfigError} when you need the specific reason for a rejection.
  */
 export function isCleanConfig(value: unknown): value is CleanConfig {

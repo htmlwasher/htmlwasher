@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// CSS cleaner for the `styled` cleaning level.
+// CSS cleaner — part of the unconditional security floor.
 //
 // WHY THIS EXISTS: sanitize-html validates element attributes and URL schemes on
 // href/src/cite, but it does NOT inspect the CSS inside an inline `style="…"`
-// attribute or a `<style>…</style>` element. At the `styled` level we deliberately
+// attribute or a `<style>…</style>` element. A custom config may deliberately
 // preserve both, which reopens a class of CSS-borne injection vectors that
 // sanitize-html leaves untouched. This module closes that gap.
 //
@@ -14,8 +14,8 @@
 //     `vbscript:`, `data:` (including `data:image/*`; see note), `file:`, and any
 //     unknown scheme — is stripped (the whole declaration's `url(...)` token is
 //     replaced with a neutral placeholder). `data:` is denied by default because
-//     CSS `data:` URIs are a known SVG/script-smuggling vector and `styled` is not
-//     meant to inline binary payloads.
+//     CSS `data:` URIs are a known SVG/script-smuggling vector and cleaned output
+//     is not meant to inline binary payloads.
 //   - `expression(...)` (legacy IE dynamic CSS that executes JS): stripped.
 //   - `@import` (pulls in remote/arbitrary stylesheets, bypasses the URL policy):
 //     the whole at-rule is stripped.
@@ -147,7 +147,7 @@ function encodeAttrValue(value: string): string {
 
 /**
  * Apply {@link cleanCss} to every inline `style` attribute and every `<style>`
- * element body in an HTML string. Used only at the `styled` cleaning level.
+ * element body in an HTML string. Runs on every cleaning path (security floor).
  */
 export function cleanStyledHtml(html: string): string {
   let out = html.replace(

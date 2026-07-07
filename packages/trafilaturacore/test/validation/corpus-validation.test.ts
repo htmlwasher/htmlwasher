@@ -11,8 +11,9 @@
 // Scoring follows trafilatura's methodology: a `with` string found in the
 // extracted text is a true positive (else a false negative / recall miss); a
 // `without` string found is a false positive (precision miss). Precision/recall/
-// F1 are aggregated across all pages. Latest local run (balanced + minimal):
-// P≈0.75, R≈0.84, F1≈0.79 — in the same ballpark as upstream Trafilatura.
+// F1 are aggregated across all pages. Runs at balanced + the default
+// Trafilatura-aligned cleaning config (scoring strips tags, so the config
+// affects only nonTextTags-discarded subtrees).
 
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -50,7 +51,6 @@ describe.skipIf(!hasCorpus)('adbar eval corpus — extraction quality', () => {
       pages++;
       const { html } = await clean(readFileSync(path, 'utf8'), {
         boilerplate: 'balanced',
-        level: 'minimal',
       });
       const text = toText(html);
       for (const needle of entry.with) {

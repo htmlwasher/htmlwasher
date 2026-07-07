@@ -9,32 +9,35 @@ For the live, network-hitting equivalent see [`packages/live-crawl-tester`](../l
 ## What it does
 
 For each fixture in [`corpus.json`](./corpus.json) it reads the saved HTML from
-[`fixtures/<type>/<id>.html`](./fixtures) and runs `clean()` across a matrix of
-`boilerplate` x `level` combos, recording the detected page type, confidence, cleaned-HTML length,
+[`fixtures/<type>/<id>.html`](./fixtures) and runs `clean()` across a matrix of label-keyed
+combos, recording the detected page type, confidence, cleaned-HTML length,
 title, and PASS/FAIL for a set of assertions. It then writes `report.json` + `report.md` and exits
 non-zero if any **hard** assertion failed.
 
 ## The combo matrix
 
-Every fixture is cleaned through these four combos:
+Every fixture is cleaned through these five combos — each boilerplate mode with the default
+Trafilatura-aligned config, plus one custom-config combo:
 
-- `balanced` x `standard` (the default path; also the page-type reference)
-- `balanced` x `minimal`
-- `none` x `correct` (no extraction; normalize-only)
-- `recall` x `permissive`
+- `balanced` (the default path; also the page-type reference)
+- `precision`
+- `recall`
+- `clean-only` (no extraction, no classification; whole-document cleaning)
+- `balanced+styled-config` (`balanced` with a custom config that adds the `<style>` tag and
+  `class`/`style` attributes, keeping the CSS-URL allow-list exercised)
 
 ## What it asserts
 
 Hard assertions (any failure fails the run):
 
 - **Security (core invariant)** — no `<script>`, no `on<event>=` handler attribute, and no
-  `javascript:` URL survives at any **sanitizing** cleaning level (`minimal`, `standard`,
-  `permissive`, `styled`). The `correct` level is normalize-only and skips sanitization _by design_,
-  so survivals there are recorded as documented **soft** warnings, not failures.
+  `javascript:` URL survives for **every** combo (default and custom config). The security floor
+  is unconditional — there is no exempt path.
 - **Non-empty output** — cleaned HTML is non-empty, unless the input is a JS-shell / near-empty page
   with no substantial body text (then empty extraction output is legitimate).
-- **`correct` is a superset of `minimal`** — `correct` (normalize-only) keeps at least as many
-  distinct tag names as `minimal` on the same fixture.
+- **Styled-config superset** — `balanced+styled-config` keeps at least as many distinct tag names
+  as `balanced` on the same extraction input (its allow-list is a strict superset of the default
+  config).
 
 Soft assertions (recorded, never fail a single fixture):
 

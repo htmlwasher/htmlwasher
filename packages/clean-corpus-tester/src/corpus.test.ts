@@ -3,8 +3,9 @@
 // Runs trafilaturacore over every saved WCXB fixture, prints the summary table,
 // writes report.json + report.md, and asserts the run's hard invariants:
 //   - zero security failures (no <script>, no on*= handler, no javascript: URL
-//     survives at ANY cleaning level);
-//   - zero hard structural failures (non-empty output, correct >= minimal tags);
+//     survives in ANY combo);
+//   - zero hard structural failures (non-empty output, styled-config >= default
+//     tags);
 //   - page-type accuracy at or above the floor (classifier plausibility is soft
 //     per-fixture but enforced in aggregate).
 //
@@ -36,7 +37,7 @@ describe('trafilaturacore corpus (offline E2E)', () => {
     printReport(report);
     writeReports(report);
 
-    // Core security invariant: nothing dangerous survived any cleaning level.
+    // Core security invariant: nothing dangerous survived in any combo.
     expect(report.securityFailureCount, renderSummary(report)).toBe(0);
 
     // No hard structural assertion failed.
@@ -52,24 +53,27 @@ describe('trafilaturacore corpus (offline E2E)', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('exercises the precision boilerplate mode and the styled cleaning level', () => {
-    // Regression for validation-corpus-2: these two were never run across the
-    // corpus, so a CSS-URL-allow-list (styled) or precision-extraction
-    // regression could pass silently. The combo matrix must cover both.
-    const combos = COMBOS.map((c) => `${c.boilerplate}x${c.level}`);
-    expect(combos).toContain('precisionxminimal');
-    expect(combos).toContain('balancedxstyled');
+  it('exercises every boilerplate mode plus the styled custom config', () => {
+    // The matrix must cover all four modes (incl. the renamed clean-only) and
+    // the one custom-config combo where a CSS-URL-allow-list regression would
+    // surface across real fixtures.
+    const labels = COMBOS.map((c) => c.label);
+    expect(labels).toContain('balanced');
+    expect(labels).toContain('precision');
+    expect(labels).toContain('recall');
+    expect(labels).toContain('clean-only');
+    expect(labels).toContain('balanced+styled-config');
   });
 
-  it('runs the correct-superset baseline on the SAME boilerplate input (not vacuous)', () => {
-    // Regression for validation-corpus-0: the `correct-superset` assertion must
-    // compare `none`x`correct` against `none`x`minimal` (same full-document
-    // input), not against `balanced`x`minimal` (an extraction-stripped subset).
-    // If it ever reverts to the cross-input comparison, the assertion becomes
-    // near-vacuous (a full doc always supersets its own extracted subset).
-    const combos = COMBOS.map((c) => `${c.boilerplate}x${c.level}`);
-    expect(combos).toContain('nonexcorrect');
-    expect(combos).toContain('nonexminimal');
+  it('runs the styled-config superset baseline on the SAME boilerplate input (not vacuous)', () => {
+    // The `styled-config-superset` assertion compares `balanced+styled-config`
+    // against `balanced` — both must extract with the same boilerplate mode so
+    // the comparison isolates the config difference, not an extraction one.
+    const styled = COMBOS.find((c) => c.label === 'balanced+styled-config');
+    const reference = COMBOS.find((c) => c.label === 'balanced');
+    expect(styled?.boilerplate).toBe('balanced');
+    expect(reference?.boilerplate).toBe('balanced');
+    expect(reference?.config).toBeUndefined();
   });
 
   it('includes a non-English (Czech) fixture so classifier English-bias regressions surface', async () => {

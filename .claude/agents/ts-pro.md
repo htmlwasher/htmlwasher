@@ -1,6 +1,6 @@
 ---
 name: ts-pro
-description: Master TypeScript with strict type-checking, modern Node 22+ patterns, and production-ready practices. Expert in pnpm workspaces, Biome (lint + format), vitest, DOM libraries (linkedom/parse5), the napi-rs boundary into the native crate, and async patterns. Use PROACTIVELY for TypeScript development in this repo. <example>Context: User wants a new cleaning option in the library. user: 'Add a `level` option to the clean() API' assistant: 'I'll use the ts-pro agent to add the cleaning-level option in the trafilaturacore library and update its tests' <commentary>TypeScript library work in the trafilaturacore package is handled by the ts-pro agent.</commentary></example> <example>Context: User wants a new option threaded through to the native extractor. user: 'Add a `focus` option that pipeline.ts passes through to the native extract() call' assistant: 'I'll use the ts-pro agent to add the option to CleanOptions and thread it through pipeline.ts's call into @trafilaturacore/native' <commentary>Wiring new options across the napi boundary from pipeline.ts is TypeScript work; the Rust-side handling is rust-pro's job.</commentary></example>
+description: Master TypeScript with strict type-checking, modern Node 22+ patterns, and production-ready practices. Expert in pnpm workspaces, Biome (lint + format), vitest, DOM libraries (linkedom/parse5), the napi-rs boundary into the native crate, and async patterns. Use PROACTIVELY for TypeScript development in this repo. <example>Context: User wants the default cleaning config extended in the library. user: 'Allow `<details>`/`<summary>` tags in DEFAULT_CLEAN_CONFIG' assistant: 'I'll use the ts-pro agent to extend DEFAULT_CLEAN_CONFIG in the trafilaturacore library's src/cleaning/config.ts and update its tests' <commentary>TypeScript library work in the trafilaturacore package is handled by the ts-pro agent.</commentary></example> <example>Context: User wants a new option threaded through to the native extractor. user: 'Add a `focus` option that pipeline.ts passes through to the native extract() call' assistant: 'I'll use the ts-pro agent to add the option to CleanOptions and thread it through pipeline.ts's call into @trafilaturacore/native' <commentary>Wiring new options across the napi boundary from pipeline.ts is TypeScript work; the Rust-side handling is rust-pro's job.</commentary></example>
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
@@ -36,7 +36,7 @@ trafilaturacore is a faithful **TypeScript port of Trafilatura** with page-type-
 
 - `packages/trafilaturacore/` — the published library (npm package `trafilaturacore`, alpha):
   - `src/metadata/` — title/author/date/sitename/JSON-LD/OpenGraph metadata extraction
-  - `src/cleaning/` — the `sanitize-html`-based cleaning levels (presets + cleaner/normalize/format)
+  - `src/cleaning/` — the `sanitize-html`-based cleaning stage (the Trafilatura-aligned default config in `config.ts` + cleaner/normalize/format)
   - `src/pipeline.ts` — orchestration: the public async `clean()`, which calls the native crate over the napi boundary
   - `src/cli.ts` + `src/cli-program.ts` — the offline CLI
   - `test/` and `fixtures/` — co-located unit tests and golden HTML fixtures

@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Phase 6: HTML cleaning levels. A faithful port of htmlprocessing-server's
-// process-html.ts pipeline, retargeted onto trafilaturacore's five CleaningLevels
-// (minimal | standard | permissive | styled | correct — NO `*-reader` variants).
+// The HTML cleaning stage. A faithful port of htmlprocessing-server's
+// process-html.ts pipeline, retargeted onto the single Trafilatura-aligned
+// DEFAULT_CLEAN_CONFIG (see ./config.ts — upstream Trafilatura has no
+// "cleaning levels", so neither does trafilaturacore).
 //
 // Pipeline order:
 //   NORMALIZE      — parse5 well-forming (full doc vs fragment via isHtmlDocument)
-//   SANITIZE       — sanitize-html preset or custom config (skipped for bare `correct`)
-//   RE-NORMALIZE   — only when the preset/config defines transformTags
+//   SANITIZE       — sanitize-html with DEFAULT_CLEAN_CONFIG or a custom config
+//   RE-NORMALIZE   — only when the config defines transformTags
 //   SECURITY FLOOR — UNCONDITIONAL: enforceSecurityFloor + cleanStyledHtml on EVERY
-//                    path (preset, custom config, and `correct`)
+//                    path (default and custom config alike)
 //   DOCTYPE        — prepend `<!DOCTYPE html>` to full documents, post-floor
 //   FORMAT         — prettier by default; html-minifier-terser when `minify: true`
 //
 // Messages accumulate across stages. Formatting failure is non-fatal (warning +
-// unformatted output). `correct` is normalize-only for the tag ALLOW-LIST — it
-// applies no preset, so arbitrary/benign tags and attributes (and deprecated tags)
-// are preserved unchanged. But the security floor is non-negotiable and UNCONDITIONAL
-// at EVERY level and for EVERY config: the final pass always runs
+// unformatted output). The security floor is non-negotiable and UNCONDITIONAL
+// for EVERY config: the final pass always runs
 // `enforceSecurityFloor` + `cleanStyledHtml`, which force-strip `<script>`, all
 // `on*` handlers, `javascript:`/`vbscript:`/untrusted `data:` URLs, and dangerous
 // inline CSS, while leaving every benign tag/attribute in place. This is what makes
@@ -26,13 +25,12 @@
 // bypass a `{ allowedAttributes: { '*': ['*'] } }` custom config otherwise exploited.
 
 import { minify as minifyHtml } from 'html-minifier-terser';
-import type { CleaningLevel, Message } from '../types.js';
+import type { Message } from '../types.js';
 import { type Cleaner, cleanHtmlBackend, enforceSecurityFloor } from './cleaner.js';
+import { type CleanConfig, DEFAULT_CLEAN_CONFIG } from './config.js';
 import { cleanStyledHtml } from './css-cleaner.js';
 import { decodeBuffer } from './decode.js';
 import { isHtmlDocument, normalizeHtml } from './normalize.js';
-import { getCleanConfig } from './presets/index.js';
-import type { CleanConfig } from './presets/types.js';
 
 /** Options for {@link cleanHtml} / {@link cleanBuffer}. */
 export interface CleanOptions {
@@ -46,9 +44,7 @@ export interface CleanOptions {
   hardened?: boolean;
   /**
    * Fully-custom sanitize config. When set it drives the sanitize stage directly,
-   * taking precedence over the preset `level` would select — and it always runs
-   * the sanitize stage (so a custom config reaches the cleaner even when
-   * `level` is `correct`, which alone is normalize-only).
+   * replacing the Trafilatura-aligned {@link DEFAULT_CLEAN_CONFIG}.
    */
   config?: CleanConfig;
 }
@@ -60,17 +56,14 @@ export interface CleanOutput {
 }
 
 /**
- * Clean an HTML string at the given {@link CleaningLevel}.
+ * Clean an HTML string with the Trafilatura-aligned {@link DEFAULT_CLEAN_CONFIG}
+ * (or a fully-custom `options.config`).
  *
  * Async because prettier, html-minifier-terser, and the hardened DOMPurify backend
  * are imported lazily. Empty/whitespace input returns `''`; malformed HTML never
  * throws (parse5 well-forms it, and sanitize/format failures degrade gracefully).
  */
-export async function cleanHtml(
-  html: string,
-  level: CleaningLevel,
-  options: CleanOptions = {},
-): Promise<CleanOutput> {
+export async function cleanHtml(html: string, options: CleanOptions = {}): Promise<CleanOutput> {
   const shouldMinify = options.minify ?? false;
   const hardened = options.hardened ?? false;
   const messages: Message[] = [];
@@ -88,10 +81,9 @@ export async function cleanHtml(
     return { html: '', messages };
   }
 
-  // SANITIZE — a custom `config` always sanitizes (and wins over `level`);
-  // otherwise resolve the preset, which is `undefined` for `correct` (normalize-only).
-  const config = options.config ?? getCleanConfig(level);
-  if (config !== undefined) {
+  // SANITIZE — a custom `config` replaces the Trafilatura-aligned default.
+  const config = options.config ?? DEFAULT_CLEAN_CONFIG;
+  {
     const cleaner = await resolveCleaner(hardened, messages);
     try {
       currentHtml = cleaner.clean(currentHtml, config);
@@ -111,8 +103,8 @@ export async function cleanHtml(
     }
   }
 
-  // SECURITY FLOOR — UNCONDITIONAL final cleaning pass on EVERY path (preset, custom
-  // config, AND `correct` with no config). In v2 the TS cleaning stage is the SOLE
+  // SECURITY FLOOR — UNCONDITIONAL final cleaning pass on EVERY path (default AND
+  // custom config). In v2 the TS cleaning stage is the SOLE
   // sanitization authority (the Rust boilerplate core sanitizes nothing — context
   // doc 09), so the floor can never be gated. `enforceSecurityFloor` force-strips
   // `<script>`, every `on*` handler, and `javascript:`/`vbscript:`/untrusted `data:`
@@ -123,8 +115,8 @@ export async function cleanHtml(
   // the proven bypass where a custom `{ allowedAttributes: { '*': ['*'] } }` config
   // sails through sanitize-html still carrying `onclick` and a `javascript:` CSS URL
   // (doc 09, empirically verified). Both passes preserve benign markup and are
-  // idempotent no-ops on already-clean output, so layering them over the presets and
-  // `correct` costs safety, not fidelity.
+  // idempotent no-ops on already-clean output, so layering them over the sanitize
+  // stage costs safety, not fidelity.
   currentHtml = enforceSecurityFloor(currentHtml);
   currentHtml = cleanStyledHtml(currentHtml);
 
@@ -172,14 +164,13 @@ export async function cleanHtml(
  */
 export async function cleanBuffer(
   buffer: Uint8Array,
-  level: CleaningLevel,
   options: CleanOptions = {},
 ): Promise<CleanOutput> {
   const decoded = decodeBuffer(Buffer.from(buffer));
   if (decoded.html === undefined) {
     return { html: '', messages: decoded.messages };
   }
-  const result = await cleanHtml(decoded.html, level, options);
+  const result = await cleanHtml(decoded.html, options);
   return {
     html: result.html,
     messages: [...decoded.messages, ...result.messages],

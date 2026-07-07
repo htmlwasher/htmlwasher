@@ -3,80 +3,163 @@ import iconv from 'iconv-lite';
 import { describe, expect, it } from 'vitest';
 import { cleanBuffer, cleanHtml } from './clean.js';
 
-describe('cleanHtml — per-level tag allow-lists', () => {
-  it('minimal drops <img> and <div>, keeps text formatting', async () => {
+describe('cleanHtml — the Trafilatura-aligned default config', () => {
+  it('keeps the canonical content vocabulary (p, headings, lists, tables, quotes)', async () => {
     const { html } = await cleanHtml(
-      '<div><img src="x.png"><p>Hi <b>there</b></p></div>',
-      'minimal',
+      '<h2>T</h2><p>Hi</p><ul><li>a</li></ul><ol start="3"><li>b</li></ol>' +
+        '<blockquote>q</blockquote><pre>c</pre><table><tr><th>h</th><td>d</td></tr></table>',
     );
-    expect(html).not.toContain('<img');
+    for (const tag of ['<h2>', '<p>', '<ul>', '<ol start="3">', '<li>', '<blockquote>', '<pre>']) {
+      expect(html).toContain(tag);
+    }
+    expect(html).toContain('<table>');
+    expect(html).toContain('<th>');
+    expect(html).toContain('<td>');
+  });
+
+  it('keeps images with their Trafilatura attributes (src/alt/title/width/height)', async () => {
+    const { html } = await cleanHtml(
+      '<figure><img src="x.png" alt="a" title="t" width="10" height="20" data-lazy="y"><figcaption>cap</figcaption></figure>',
+    );
+    expect(html).toContain('<figure>');
+    expect(html).toContain('<figcaption>');
+    expect(html).toContain('src="x.png"');
+    expect(html).toContain('alt="a"');
+    expect(html).toContain('title="t"');
+    expect(html).not.toContain('data-lazy'); // not in the whitelist
+  });
+
+  it('keeps a[href|title] and drops other link attributes', async () => {
+    const { html } = await cleanHtml(
+      '<p><a href="https://x.example" title="t" target="_blank" rel="nofollow">l</a></p>',
+    );
+    expect(html).toContain('href="https://x.example"');
+    expect(html).toContain('title="t"');
+    expect(html).not.toContain('target=');
+    expect(html).not.toContain('rel=');
+  });
+
+  it('keeps inline formatting (i/em/strong/b/u/s/q/code/kbd/samp/var/sub/sup/del)', async () => {
+    const { html } = await cleanHtml(
+      '<p><i>i</i><em>e</em><strong>s</strong><b>b</b><u>u</u><s>x</s><q>q</q>' +
+        '<code>c</code><kbd>k</kbd><samp>m</samp><var>v</var><sub>1</sub><sup>2</sup><del>d</del></p>',
+    );
+    for (const tag of [
+      '<i>',
+      '<em>',
+      '<strong>',
+      '<b>',
+      '<u>',
+      '<s>',
+      '<q>',
+      '<code>',
+      '<kbd>',
+      '<samp>',
+      '<var>',
+      '<sub>',
+      '<sup>',
+      '<del>',
+    ]) {
+      expect(html).toContain(tag);
+    }
+  });
+
+  it('unwraps structural containers (div/span/section/article) keeping content — like MANUALLY_STRIPPED', async () => {
+    const { html } = await cleanHtml(
+      '<section><article><div><span>Hi</span> there</div></article></section>',
+    );
+    expect(html).not.toContain('<section');
+    expect(html).not.toContain('<article');
     expect(html).not.toContain('<div');
+    expect(html).not.toContain('<span');
+    expect(html).toContain('Hi');
+    expect(html).toContain('there');
+  });
+
+  it('unwraps thead/tfoot keeping rows (both upstreams strip row groups)', async () => {
+    // Note: the sanitize stage strips thead/tbody/tfoot, but the HTML5
+    // re-normalization (parse5) synthesizes a single <tbody> around bare <tr>
+    // rows — exactly what a browser does — so only thead/tfoot stay gone.
+    const { html } = await cleanHtml(
+      '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>d</td></tr></tbody>' +
+        '<tfoot><tr><td>f</td></tr></tfoot></table>',
+    );
+    expect(html).not.toContain('<thead');
+    expect(html).not.toContain('<tfoot');
+    expect(html).toContain('<tr>');
+    expect(html).toContain('<th>h</th>');
+    expect(html).toContain('<td>d</td>');
+    expect(html).toContain('<td>f</td>');
+  });
+
+  it('unwraps inline semantics Trafilatura strips (abbr/cite/mark/small)', async () => {
+    const { html } = await cleanHtml(
+      '<p><abbr title="x">a</abbr><cite>c</cite><mark>m</mark><small>s</small></p>',
+    );
+    for (const tag of ['<abbr', '<cite', '<mark', '<small']) {
+      expect(html).not.toContain(tag);
+    }
+    for (const text of ['a', 'c', 'm', 's']) {
+      expect(html).toContain(text);
+    }
+  });
+
+  it('discards MANUALLY_CLEANED subtrees with their content (nav/aside/form/video/time)', async () => {
+    const { html } = await cleanHtml(
+      '<nav>menu</nav><aside>side</aside><form><input value="x">field</form>' +
+        '<video><source src="v.mp4">fallback</video><p>Published <time>2026-01-05</time>keep</p>',
+    );
+    for (const gone of ['menu', 'side', 'field', 'fallback', '2026-01-05']) {
+      expect(html).not.toContain(gone);
+    }
+    expect(html).toContain('keep');
     expect(html).toContain('<p>');
-    expect(html).toContain('<b>there</b>');
   });
 
-  it('standard keeps <img> but drops <div>', async () => {
-    const { html } = await cleanHtml('<div><img src="x.png" alt="a"><p>Hi</p></div>', 'standard');
-    expect(html).toContain('<img');
-    expect(html).not.toContain('<div');
-    expect(html).toContain('<p>Hi</p>');
-  });
-
-  it('permissive keeps <div> and <section>', async () => {
-    const { html } = await cleanHtml('<section><div>Hi</div></section>', 'permissive');
-    expect(html).toContain('<section>');
-    expect(html).toContain('<div>');
-  });
-
-  it('permissive drops class/style attributes (no styling below styled)', async () => {
-    const { html } = await cleanHtml('<div class="c" style="color:red">Hi</div>', 'permissive');
+  it('discards <style> content entirely and drops class/style attributes', async () => {
+    const { html } = await cleanHtml(
+      '<style>.a{color:red}</style><p class="c" style="color:blue">Hi</p>',
+    );
+    expect(html).not.toContain('<style');
+    expect(html).not.toContain('color:red');
     expect(html).not.toContain('class=');
     expect(html).not.toContain('style=');
+    expect(html).toContain('Hi');
   });
 
-  it('styled keeps class, inline style, and <style> CSS', async () => {
-    const { html } = await cleanHtml(
-      '<style>.a{color:red}</style><div class="c" style="color:blue">Hi</div>',
-      'styled',
-    );
-    expect(html).toContain('<style>');
-    expect(html).toContain('color: red');
-    expect(html).toContain('class="c"');
-    expect(html).toContain('style="color: blue"');
+  it('transforms deprecated tags into the canonical set (strike→del, tt→var, xmp→pre)', async () => {
+    const { html } = await cleanHtml('<strike>s</strike><tt>t</tt><xmp>x</xmp>');
+    expect(html).toContain('<del>s</del>');
+    expect(html).toContain('<var>t</var>');
+    expect(html).toContain('<pre>');
+    expect(html).not.toContain('<strike');
+    expect(html).not.toContain('<tt');
+    expect(html).not.toContain('<xmp');
   });
 
-  it('correct preserves arbitrary/unknown tags (normalize-only)', async () => {
-    const { html } = await cleanHtml('<custom-x data-y="1">Hi</custom-x>', 'correct');
-    expect(html).toContain('<custom-x');
-    expect(html).toContain('data-y="1"');
+  it('drops unknown/custom tags but keeps their text', async () => {
+    const { html } = await cleanHtml('<custom-x data-y="1">Hi</custom-x>');
+    expect(html).not.toContain('<custom-x');
+    expect(html).not.toContain('data-y');
     expect(html).toContain('Hi');
   });
 });
 
 describe('cleanHtml — custom config (CleanOptions.config)', () => {
-  it('uses the custom config and ignores the preset level', async () => {
-    // A custom allow-list of just <p>: even at `permissive` (which keeps <div>),
-    // the custom config wins and the <div> is unwrapped.
-    const { html } = await cleanHtml('<div><p>Hi</p><span>x</span></div>', 'permissive', {
+  it('replaces the default config entirely', async () => {
+    // A custom allow-list of just <p>: even tags the default keeps (<ul>) are
+    // unwrapped under the custom config.
+    const { html } = await cleanHtml('<ul><li>x</li></ul><p>Hi</p>', {
       config: { allowedTags: ['p'] },
     });
     expect(html).toContain('<p>Hi</p>');
-    expect(html).not.toContain('<div');
-    expect(html).not.toContain('<span');
-  });
-
-  it('a custom config sanitizes even when level is `correct` (normalize-only as a preset)', async () => {
-    const { html } = await cleanHtml('<p>keep</p><b>drop-tag</b>', 'correct', {
-      config: { allowedTags: ['p'] },
-    });
-    expect(html).toContain('<p>keep</p>');
-    expect(html).not.toContain('<b>');
+    expect(html).not.toContain('<ul');
+    expect(html).not.toContain('<li');
   });
 
   it('enforces the security floor even if the custom config allows <script> / on*', async () => {
     const { html } = await cleanHtml(
       '<p onclick="x()">Hi</p><script>alert(1)</script><a href="javascript:alert(1)">l</a>',
-      'standard',
       {
         config: {
           allowedTags: ['p', 'a', 'script'],
@@ -91,12 +174,26 @@ describe('cleanHtml — custom config (CleanOptions.config)', () => {
   });
 
   it('runs the CSS-URL allow-list when a custom config permits inline style', async () => {
-    const { html } = await cleanHtml(
-      '<div style="background:url(javascript:alert(1))">Hi</div>',
-      'standard',
-      { config: { allowedTags: ['div'], allowedAttributes: { '*': ['style'] } } },
-    );
+    const { html } = await cleanHtml('<div style="background:url(javascript:alert(1))">Hi</div>', {
+      config: { allowedTags: ['div'], allowedAttributes: { '*': ['style'] } },
+    });
     expect(html.toLowerCase()).not.toContain('javascript:');
+  });
+
+  it('a custom config may keep class, inline style, and <style> CSS (cleaned)', async () => {
+    const { html } = await cleanHtml(
+      '<style>.a{color:red}</style><div class="c" style="color:blue">Hi</div>',
+      {
+        config: {
+          allowedTags: ['div', 'style'],
+          allowedAttributes: { '*': ['class', 'style'] },
+        },
+      },
+    );
+    expect(html).toContain('<style>');
+    expect(html).toContain('color: red');
+    expect(html).toContain('class="c"');
+    expect(html).toContain('style="color: blue"');
   });
 
   // --- doc 09: the wildcard-config bypass regression guard ---
@@ -110,7 +207,6 @@ describe('cleanHtml — custom config (CleanOptions.config)', () => {
     const { html } = await cleanHtml(
       '<p onclick="steal()" style="background:url(javascript:alert(1))">Hi</p>' +
         '<script>alert(2)</script><a href="javascript:evil()">l</a>',
-      'standard',
       { config: { allowedTags: ['p', 'a', 'script'], allowedAttributes: { '*': ['*'] } } },
     );
     const lower = html.toLowerCase();
@@ -123,11 +219,10 @@ describe('cleanHtml — custom config (CleanOptions.config)', () => {
     expect(html).toContain('Hi');
   });
 
-  it('closes the wildcard bypass at `correct` too (no preset, wildcard attrs, dangerous CSS)', async () => {
+  it('closes the wildcard bypass with no allowedTags (wildcard attrs, dangerous CSS)', async () => {
     const { html } = await cleanHtml(
       '<div onmouseover="x()"><p style="width:expression(alert(1))">hi</p>' +
         '<a href="vbscript:msgbox(1)">l</a></div>',
-      'correct',
       { config: { allowedAttributes: { '*': ['*'] } } },
     );
     const lower = html.toLowerCase();
@@ -138,37 +233,42 @@ describe('cleanHtml — custom config (CleanOptions.config)', () => {
   });
 });
 
-describe('cleanHtml — security at EVERY level (incl. styled and correct)', () => {
-  const levels = ['minimal', 'standard', 'permissive', 'styled', 'correct'] as const;
+describe('cleanHtml — the security floor on every path', () => {
+  const paths: { name: string; options: Parameters<typeof cleanHtml>[1] }[] = [
+    { name: 'default config', options: {} },
+    {
+      name: 'custom config',
+      options: { config: { allowedTags: ['p', 'a', 'div', 'meta'] } },
+    },
+  ];
 
-  for (const level of levels) {
-    it(`${level}: removes <script>`, async () => {
-      const { html } = await cleanHtml('<p>Hi</p><script>alert(1)</script>', level);
+  for (const { name, options } of paths) {
+    it(`${name}: removes <script>`, async () => {
+      const { html } = await cleanHtml('<p>Hi</p><script>alert(1)</script>', options);
       expect(html.toLowerCase()).not.toContain('<script');
     });
 
-    it(`${level}: removes on* event handlers`, async () => {
-      const { html } = await cleanHtml('<p onclick="alert(1)">Hi</p>', level);
+    it(`${name}: removes on* event handlers`, async () => {
+      const { html } = await cleanHtml('<p onclick="alert(1)">Hi</p>', options);
       expect(html.toLowerCase()).not.toContain('onclick');
     });
 
-    it(`${level}: removes javascript: hrefs`, async () => {
-      const { html } = await cleanHtml('<a href="javascript:alert(1)">x</a>', level);
+    it(`${name}: removes javascript: hrefs`, async () => {
+      const { html } = await cleanHtml('<a href="javascript:alert(1)">x</a>', options);
       expect(html.toLowerCase()).not.toContain('javascript:');
     });
 
-    it(`${level}: removes data: hrefs`, async () => {
-      const { html } = await cleanHtml('<a href="data:text/html,evil">x</a>', level);
+    it(`${name}: removes data: hrefs`, async () => {
+      const { html } = await cleanHtml('<a href="data:text/html,evil">x</a>', options);
       expect(html.toLowerCase()).not.toContain('data:text/html');
     });
 
-    // Regression (POLISH review): the floor is allow-all-tags, so these embedding /
-    // navigation vectors slipped through before — `srcdoc` is inline HTML (not a URL,
-    // not an on* handler), so scheme filtering never neutralized `<iframe srcdoc>`.
-    it(`${level}: drops <iframe srcdoc> (nested-document XSS)`, async () => {
+    // `srcdoc` is inline HTML (not a URL, not an on* handler), so scheme filtering
+    // alone never neutralizes `<iframe srcdoc>` — the whole tag must go.
+    it(`${name}: drops <iframe srcdoc> (nested-document XSS)`, async () => {
       const { html } = await cleanHtml(
         '<iframe srcdoc="<script>alert(1)</script>">x</iframe>',
-        level,
+        options,
       );
       const lower = html.toLowerCase();
       expect(lower).not.toContain('<iframe');
@@ -176,21 +276,22 @@ describe('cleanHtml — security at EVERY level (incl. styled and correct)', () 
       expect(lower).not.toContain('alert(1)');
     });
 
-    it(`${level}: neutralizes <meta http-equiv="refresh"> auto-navigation`, async () => {
+    it(`${name}: neutralizes <meta http-equiv="refresh"> auto-navigation`, async () => {
       const { html } = await cleanHtml(
         '<meta http-equiv="refresh" content="0;url=https://evil.example">',
-        level,
+        options,
       );
-      // The vector is `http-equiv="refresh"`; stripping `http-equiv` disarms it (a bare
-      // `<meta content="…">` with no http-equiv/name is inert). `correct` drops the whole
-      // meta; the presets strip `http-equiv` and keep the harmless residue.
       expect(html.toLowerCase()).not.toContain('http-equiv');
+      // The refresh payload must die too, even when the config-driven sanitize
+      // pass stripped `http-equiv` first but kept `content` (the floor also
+      // matches a refresh-shaped content attribute on its own).
+      expect(html.toLowerCase()).not.toContain('evil.example');
     });
 
-    it(`${level}: drops <object>/<embed>/<base>`, async () => {
+    it(`${name}: drops <object>/<embed>/<base>`, async () => {
       const { html } = await cleanHtml(
         '<object data="x.swf"></object><embed src="y"><base href="https://evil/">',
-        level,
+        options,
       );
       const lower = html.toLowerCase();
       expect(lower).not.toContain('<object');
@@ -198,106 +299,39 @@ describe('cleanHtml — security at EVERY level (incl. styled and correct)', () 
       expect(lower).not.toContain('<base');
     });
   }
-
-  it('styled: strips url(javascript:) from an inline style', async () => {
-    const { html } = await cleanHtml(
-      '<div style="background:url(javascript:alert(1))">x</div>',
-      'styled',
-    );
-    expect(html.toLowerCase()).not.toContain('javascript:');
-  });
-
-  it('styled: strips expression() from an inline style', async () => {
-    const { html } = await cleanHtml('<div style="width:expression(alert(1))">x</div>', 'styled');
-    expect(html.toLowerCase()).not.toContain('expression(');
-  });
-
-  it('styled: strips @import and url(javascript:) from a <style> body', async () => {
-    const { html } = await cleanHtml(
-      '<style>@import url(http://evil/x.css);.a{background:url(javascript:alert(1))}</style>',
-      'styled',
-    );
-    expect(html.toLowerCase()).not.toContain('@import');
-    expect(html.toLowerCase()).not.toContain('javascript:');
-  });
-
-  it('correct: does not INTRODUCE script/handlers/javascript: (it only well-forms)', async () => {
-    // correct is the caller's trust boundary: it preserves existing markup but
-    // adds nothing executable of its own. A clean fragment stays clean.
-    const { html } = await cleanHtml('<p>Hi <b>there</b></p>', 'correct');
-    expect(html.toLowerCase()).not.toContain('<script');
-    expect(html.toLowerCase()).not.toContain('onclick');
-    expect(html.toLowerCase()).not.toContain('javascript:');
-    expect(html).toContain('<b>there</b>');
-  });
-
-  it('correct: does NOT transform deprecated tags (no sanitize stage runs)', async () => {
-    const { html } = await cleanHtml('<strike>old</strike>', 'correct');
-    // standard would transform <strike> → <del>; correct must leave it as-is.
-    expect(html).toContain('<strike>');
-    expect(html).not.toContain('<del>');
-  });
-
-  it('correct: security floor strips <script>/on*/javascript: yet preserves benign markup', async () => {
-    const { html } = await cleanHtml(
-      '<custom-x data-y="1"><strike>keep</strike><p onclick="alert(1)">hi</p><script>alert(2)</script><a href="javascript:alert(3)">l</a><a href="https://ok.com">ok</a></custom-x>',
-      'correct',
-    );
-    // Floor removes the three active-content vectors...
-    expect(html.toLowerCase()).not.toContain('<script');
-    expect(html).not.toContain('alert(2)');
-    expect(html.toLowerCase()).not.toContain('onclick');
-    expect(html.toLowerCase()).not.toContain('javascript:');
-    // ...while preserving all benign tags/attributes (normalize-only intent).
-    expect(html).toContain('<custom-x');
-    expect(html).toContain('data-y="1"');
-    expect(html).toContain('<strike>');
-    expect(html).toContain('https://ok.com');
-  });
-
-  it('correct: security floor strips dangerous inline CSS (url(javascript:))', async () => {
-    const { html } = await cleanHtml(
-      '<div style="background:url(javascript:alert(1))">x</div>',
-      'correct',
-    );
-    expect(html.toLowerCase()).not.toContain('javascript:');
-    expect(html).toContain('<div'); // tag preserved, only the CSS URL neutralized
-  });
 });
 
 describe('cleanHtml — formatting', () => {
   it('prettier-formats by default', async () => {
-    const { html } = await cleanHtml('<p>Hi</p><p>Bye</p>', 'standard');
+    const { html } = await cleanHtml('<p>Hi</p><p>Bye</p>');
     expect(html).toBe('<p>Hi</p>\n<p>Bye</p>\n');
   });
 
   it('minify:true collapses whitespace', async () => {
-    const { html } = await cleanHtml('<div>    <p>Hi</p>    </div>', 'permissive', {
-      minify: true,
-    });
-    expect(html).toBe('<div><p>Hi</p></div>');
+    const { html } = await cleanHtml('<ul>    <li>Hi</li>    </ul>', { minify: true });
+    expect(html).toBe('<ul><li>Hi</li></ul>');
   });
 
   it('prepends a DOCTYPE to full documents', async () => {
     const { html } = await cleanHtml(
       '<html><head><title>T</title></head><body><p>Hi</p></body></html>',
-      'standard',
     );
     expect(html.trimStart().toLowerCase().startsWith('<!doctype html>')).toBe(true);
+    expect(html).toContain('<title>T</title>');
   });
 });
 
 describe('cleanHtml — edge cases', () => {
   it('returns "" for empty input', async () => {
-    expect((await cleanHtml('', 'standard')).html).toBe('');
+    expect((await cleanHtml('')).html).toBe('');
   });
 
   it('returns "" for whitespace-only input', async () => {
-    expect((await cleanHtml('   \n  ', 'standard')).html).toBe('');
+    expect((await cleanHtml('   \n  ')).html).toBe('');
   });
 
   it('does not throw on malformed HTML', async () => {
-    const { html } = await cleanHtml('<p><b>unclosed <div>broken', 'permissive');
+    const { html } = await cleanHtml('<p><b>unclosed <div>broken');
     expect(html).toBeTruthy();
     expect(html).toContain('broken');
   });
@@ -306,20 +340,20 @@ describe('cleanHtml — edge cases', () => {
 describe('cleanBuffer', () => {
   it('decodes a UTF-8 buffer and cleans it', async () => {
     const buf = Buffer.from('<div><p>Café</p></div>', 'utf-8');
-    const { html } = await cleanBuffer(buf, 'standard');
+    const { html } = await cleanBuffer(buf);
     expect(html).toContain('Café');
-    expect(html).not.toContain('<div'); // standard drops div
+    expect(html).not.toContain('<div'); // the default config unwraps div
   });
 
   it('decodes a non-UTF-8 (latin1) buffer, prepends decode diagnostics', async () => {
     const buf = iconv.encode('<p>Café déjà vu — naïve façade</p>', 'latin1');
-    const { html, messages } = await cleanBuffer(buf, 'standard');
+    const { html, messages } = await cleanBuffer(buf);
     expect(html).toContain('<p>');
     expect(messages.some((m) => m.type === 'info')).toBe(true);
   });
 
   it('returns "" for an empty buffer', async () => {
-    expect((await cleanBuffer(new Uint8Array(0), 'standard')).html).toBe('');
+    expect((await cleanBuffer(new Uint8Array(0))).html).toBe('');
   });
 });
 
@@ -327,7 +361,6 @@ describe('cleanHtml — hardened (DOMPurify) backend', () => {
   it('removes <script> and on* handlers via the hardened backend', async () => {
     const { html, messages } = await cleanHtml(
       '<p>Hi</p><script>alert(1)</script><div onclick="x">y</div>',
-      'permissive',
       { hardened: true },
     );
     expect(html.toLowerCase()).not.toContain('<script');
@@ -338,9 +371,7 @@ describe('cleanHtml — hardened (DOMPurify) backend', () => {
   });
 
   it('removes javascript: hrefs via the hardened backend', async () => {
-    const { html } = await cleanHtml('<a href="javascript:alert(1)">x</a>', 'standard', {
-      hardened: true,
-    });
+    const { html } = await cleanHtml('<a href="javascript:alert(1)">x</a>', { hardened: true });
     expect(html.toLowerCase()).not.toContain('javascript:');
   });
 });

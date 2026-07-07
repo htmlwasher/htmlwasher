@@ -207,7 +207,7 @@ This section starts lean and accumulates as reviews surface durable, repo-specif
 - A native/classifier failure must never reject `clean()`: `pipeline.ts` degrades to whole-document cleaning with a warning (and surfaces native `warnings` in `messages`)
 
 ### Native packaging invariants
-- `pipeline.ts` lazy-loads `@trafilaturacore/native` — never reintroduce an eager top-level import (it breaks `boilerplate:'none'`, metadata-only use, and the CLI on platforms without a loadable prebuild)
+- `pipeline.ts` lazy-loads `@trafilaturacore/native` — never reintroduce an eager top-level import (it breaks `boilerplate:'clean-only'`, metadata-only use, and the CLI on platforms without a loadable prebuild)
 - The native package's self-skipping build/test scripts probe the toolchain via `spawnSync('cargo', ['--version'])` — NEVER via `CARGO_HOME` (rustup does not export it; the old gate silently skipped rebuilds and `cargo test` on standard installs). `npm_config_rebuild_native=1` stays as the force override
 - Any `native/src/**.rs` behavior change must rebuild AND refresh the committed host prebuild (`npm/darwin-arm64/*.node`) in the same change; the other targets come from `.github/workflows/build-native.yml`
 - `trafilaturacore` (public) depends on the private `@trafilaturacore/native` via `workspace:*` — publishing is blocked by a `prepublishOnly` guard until the alpha tarball-bundling plan lands; do not remove the guard without implementing that plan

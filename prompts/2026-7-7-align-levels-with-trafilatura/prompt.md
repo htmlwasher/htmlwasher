@@ -21,3 +21,10 @@ update @/README.md
 when done, commit and push
 then run this slash command `/bench:improve`
 then again commit and push
+
+## Outcome
+
+- Implemented 2026-07-07. `CLEANING_LEVELS`/`CleaningLevel`, `DEFAULT_CLEANING_LEVEL`, `isCleaningLevel`, the `level` option, the CLI `-l/--level` flag, and `src/cleaning/presets/` are gone; the sanitize stage now always runs (the `correct` normalize-only path is retired), with the security floor unchanged and unconditional on every path.
+- Rename decision: `none` → `clean-only` (identical semantics: skip boilerplate removal + classification entirely, never load the FFI binding, clean the whole document; `pageType`/`confidence` omitted).
+- The presets are replaced by the exported `DEFAULT_CLEAN_CONFIG` in the new `@/packages/trafilaturacore/src/cleaning/config.ts` (alongside the `CleanConfig` interface) — derived from Trafilatura 2.1.0: `TEI_VALID_TAGS` rendered via `HTML_CONVERSIONS` union rs-trafilatura's serializer whitelist as `allowedTags`, `MANUALLY_CLEANED` → `nonTextTags`, `MANUALLY_STRIPPED` → simply not allowed (unwrapped, content kept); a custom `config` replaces it wholesale.
+- All tests green: adbar eval precision 0.831 / recall 0.840 / F1 0.835; clean-corpus-tester 28 fixtures × 5 combos, page-type accuracy 100%, 0 hard/security failures — verdict PASS.

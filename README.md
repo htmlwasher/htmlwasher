@@ -12,7 +12,7 @@ extraction core with a pure-Rust page-type classifier. The published library is
 trafilaturacore composes two orthogonal pillars behind a single `clean()` API:
 **boilerplate removal** (main-content extraction, routed through a per-type
 profile by a 7-class classifier, kept as a whitelisted HTML subtree) and
-**HTML cleaning** (`sanitize-html`-based cleanup at five levels). It returns
+**HTML cleaning** (`sanitize-html`-based, Trafilatura-aligned cleanup). It returns
 cleaned HTML plus an optional metadata sidecar (title, author, date, sitename,
 tags) and the detected page type. It never converts to Markdown/XML/text and
 never touches the network: a content-cleanup **library for Node.js**, not a
@@ -22,9 +22,9 @@ scraper or browser-automation framework.
 
 Alpha — implemented (built in phases per `@/prompts/2026-6-24-init/prompt.md`).
 The extraction core, metadata extractor, trained pure-Rust GBDT classifier,
-per-type profiles, and the five cleaning levels are all in place and exercised
-by the test suite (260+ tests). The classifier scores ~0.78 on the held-out
-WCXB test split; extraction scores F1 ≈ 0.79 on the adbar evaluation corpus.
+per-type profiles, and the Trafilatura-aligned cleaning stage are all in place
+and exercised by the test suite (260+ tests). The classifier scores ~0.78 on the
+held-out WCXB test split; extraction scores F1 0.835 on the adbar evaluation corpus.
 APIs may still change before a stable release.
 
 ## Repo layout
@@ -33,7 +33,7 @@ This is a pnpm + turbo monorepo.
 
 - `@/packages/trafilaturacore/` — the TypeScript library (the npm package
   `trafilaturacore`). Strict TypeScript, Node 22+. Holds metadata extraction and the
-  HTML-cleaning levels; the core extraction algorithm, the page-type classifier
+  Trafilatura-aligned HTML-cleaning stage; the core extraction algorithm, the page-type classifier
   (a 189-feature extractor evaluated by a pure-Rust GBDT, no ONNX), and
   per-page-type profiles live in the `@trafilaturacore/native` Rust crate
   (`@/packages/trafilaturacore/native/`, reached via napi-rs). Exposed both as the
@@ -45,9 +45,9 @@ This is a pnpm + turbo monorepo.
   run offline, is not a pnpm workspace package, and is not shipped at runtime.
 - `@/packages/clean-corpus-tester/` — a separate **offline** TypeScript workspace
   package: runs trafilaturacore end-to-end over saved WCXB HTML fixtures (≥3 per page
-  type × 7 types) across boilerplate × cleaning-level combos, asserting the
+  type × 7 types) across boilerplate-mode combos, asserting the
   security invariants + page-type plausibility and emitting a report. No network
-  (`pnpm test:corpus`).
+  (part of root `pnpm test`; standalone: `pnpm -C packages/clean-corpus-tester run test:corpus`).
 - `@/packages/live-crawl-tester/` — a separate scaffold stub for a future live-site
   fetcher; not part of the trafilaturacore pipeline (trafilaturacore itself never fetches).
 - `~/r/trafilatura-sources/` — six read-only reference repositories (rs-trafilatura,
@@ -76,8 +76,7 @@ Use it as a **library**:
 ```ts
 import { clean } from 'trafilaturacore';
 const { html, metadata, pageType } = await clean(pageHtml, {
-  boilerplate: 'balanced', // precision | balanced | recall | none
-  level: 'standard', //      minimal | standard | permissive | styled | correct
+  boilerplate: 'balanced', // precision | balanced | recall | clean-only
   minify: false, //          set true to minify instead of pretty-print
 });
 ```
@@ -85,7 +84,7 @@ const { html, metadata, pageType } = await clean(pageHtml, {
 …or as a **CLI** (offline — reads a file or stdin, writes cleaned HTML to stdout):
 
 ```bash
-trafilaturacore article.html -b balanced -l standard      # file in → stdout
+trafilaturacore article.html -b balanced                  # file in → stdout
 cat page.html | trafilaturacore --minify                  # stdin → minified stdout
 trafilaturacore page.html --json > out.json               # full result (html + metadata + pageType)
 ```
