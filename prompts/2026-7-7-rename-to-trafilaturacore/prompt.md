@@ -23,3 +23,7 @@ repo name, already renamed  `htmlwasher` to `trafilatura`, `htmlwasher-external-
 package name, subfolders (except repo foolder) `htmlwasher` to `trafilaturacore` (without dash),
 display name `HTML Washer` to `Trafilatura Core`,
 the npm package will be naned `trafilaturacore`
+
+
+the replacement must be done in all the promts, init promts, history promts etc, everywhere (except old commits, no rename in old commits, other branches etc, also except this rename promt `/Users/miroslavsekera/r/trafilatura/prompts/2026-7-7-rename-to-trafilaturacore/prompt.md`)
+When done, compile both repos from scratch
