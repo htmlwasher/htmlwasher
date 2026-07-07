@@ -8,7 +8,7 @@ Review the `training/` Python project and auto-fix what can be safely resolved. 
 
 ## Scope
 
-`training/` ONLY. It is an offline, uv-managed Python project (Python 3.12+) that trains an XGBoost model from the public WCXB dataset and exports `model.onnx` + `tfidf-vocab.json`. It is NOT a pnpm workspace member and NOT shipped at runtime, so `pnpm`, `turbo`, and `biome` never touch it — its checks run separately. Do NOT duplicate the pnpm build-and-test work that `/autonomous:maintenance:test:local` owns.
+`training/` ONLY. It is an offline, uv-managed Python project (Python 3.12+) that trains an XGBoost model from the public WCXB dataset and exports `model.xgb.json` + `tfidf-vocab.json`. It is NOT a pnpm workspace member and NOT shipped at runtime, so `pnpm`, `turbo`, and `biome` never touch it — its checks run separately. Do NOT duplicate the pnpm build-and-test work that `/autonomous:maintenance:test:local` owns.
 
 Sync the uv environment before the test step:
 
@@ -30,7 +30,7 @@ Apply all auto-fixable ruff lint and format issues (config in `training/pyprojec
 Check each training module for correctness:
 - Feature extraction — features computed for the classifier match what the TypeScript classifier feature hot-path expects (column order and names align with `tfidf-vocab.json`).
 - Model training — the XGBoost training step is deterministic where it should be (fixed seeds) and reads the WCXB dataset paths correctly.
-- ONNX export — `skl2onnx`/`onnxmltools` export produces a `model.onnx` whose input/output signature matches what `onnxruntime-node`/`onnxruntime-web` load on the TypeScript side.
+- Model export — `Booster.save_model` produces `model.xgb.json` (the XGBoost native JSON dump) + `tfidf-vocab.json` into `packages/htmlwasher/native/artifacts/`, and the export round-trips (reload into a fresh `Booster`, assert argmax match). No ONNX/`skl2onnx`/`onnxmltools`/`onnxruntime` — the Rust crate evaluates the JSON dump with a pure-Rust GBDT.
 - Vocab export — `tfidf-vocab.json` is written in the format the TS classifier reads.
 
 ## Step FIX: Fix Issues

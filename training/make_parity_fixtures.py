@@ -1,67 +1,96 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Generate TS↔Python parity fixtures from small WCXB dev pages.
+"""Generate the Rust↔Python classifier parity fixture for the native crate.
 
-Picks small (<60 KB) dev HTML pages spread across all 7 page types, copies each
-to ``htmlwasher/fixtures/classifier/<id>.html``, and writes
-``parity.json``: a list of records the TypeScript parity test re-extracts and
-compares against (numeric vector, TF-IDF vector, and argmax class).
+Reads every committed HTML fixture under
+``packages/htmlwasher/fixtures/classifier/*.html`` and emits ONE self-consistent
+JSON at ``packages/htmlwasher/native/tests/fixtures/classifier-parity.json`` that
+the Cargo parity test consumes. For each fixture we record, computed with the
+exact feature/tfidf/scaler code the model was trained with:
 
-The TF-IDF vector is computed by transforming each fixture's ``title_meta_text``
-through the trained, locked vectorizer (read back from ``tfidf-vocab.json`` is
-not needed here — we re-fit-then-transform to mirror exactly what train.py
-produced, but to keep this script standalone we load the shipped vocab/idf and
-apply sklearn's transform math directly so the fixtures match the runtime).
+- ``numeric`` — the 89 RAW (unscaled) numeric features from ``extract_features``.
+- ``tfidf`` — the 100 RAW, L2-normalized TF-IDF features (sklearn transform math).
+- ``argmax`` / ``page_type`` / ``probs`` — from the trained ``model.xgb.json``
+  Booster run on the assembled 189-vector ``[scaled_numeric ++ tfidf]``.
 
-PARITY CAVEATS the TS side must honor:
+The Rust side re-extracts raw numeric + tfidf (compares to ``numeric``/``tfidf``
+within 1e-6), applies the StandardScaler baked into ``tfidf-vocab.json``, feeds
+the 189-vector to its pure-Rust GBDT evaluator, and asserts argmax == ``argmax``
+(100%) with ``probs`` within tolerance.
 
-- URL is ``https://{domain}/`` only (WCXB ships no full URL), so URL-derived
-  features f[0..14] and f[72] see only the bare domain.
+The per-fixture ``url`` and ground-truth ``page_type`` are read from the v1
+``parity.json`` manifest (the dataset ships only a domain), so this script runs
+fully offline without the WCXB download. The v1 ``parity.json`` and the shipped
+ONNX artifacts are left untouched — this only writes the new crate fixture.
+
+PARITY CAVEATS the Rust side must honor:
+
+- ``url`` is domain-only for WCXB pages, so URL-derived features f[0..14] and
+  f[72] see only the bare domain — use the same per-fixture ``url``.
 - TF-IDF token_pattern / ngram_range / lowercase are recorded in
-  ``tfidf-vocab.json``; the TS tokenizer must match them exactly.
-- Every ``.len()`` is a UTF-8 byte length (not JS UTF-16 ``.length``).
+  ``tfidf-vocab.json``; the Rust tokenizer must match them exactly.
+- Every ``.len()`` is a UTF-8 byte length (not a code-point count).
 """
 
 from __future__ import annotations
 
 import json
 import re
-import shutil
-from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import xgboost as xgb
 
-from download_wcxb import CLASS_LABELS, build_index
-from extract_features import extract_numeric_features, title_meta_text
+from download_wcxb import CLASS_LABELS
+from extract_features import N_NUMERIC, extract_numeric_features, title_meta_text
 
 HERE = Path(__file__).parent
-VOCAB_PATH = HERE / "tfidf-vocab.json"
-FIXTURE_DIR = HERE.parent / "htmlwasher" / "fixtures" / "classifier"
-PARITY_JSON = FIXTURE_DIR / "parity.json"
+REPO_ROOT = HERE.parent
+ARTIFACTS_DIR = REPO_ROOT / "packages" / "htmlwasher" / "native" / "artifacts"
+MODEL_PATH = ARTIFACTS_DIR / "model.xgb.json"
+VOCAB_PATH = ARTIFACTS_DIR / "tfidf-vocab.json"
 
-MAX_BYTES = 60_000
-PER_TYPE = 2  # aim for ~2 small pages per type (~14 total across 7 types)
+FIXTURE_SRC_DIR = REPO_ROOT / "packages" / "htmlwasher" / "fixtures" / "classifier"
+V1_MANIFEST = FIXTURE_SRC_DIR / "parity.json"
+
+FIXTURE_OUT_DIR = REPO_ROOT / "packages" / "htmlwasher" / "native" / "tests" / "fixtures"
+PARITY_OUT = FIXTURE_OUT_DIR / "classifier-parity.json"
+
+N_TFIDF = 100
+N_CLASSES = len(CLASS_LABELS)
 
 
-def _load_vocab() -> dict:
-    with VOCAB_PATH.open(encoding="utf-8") as fh:
-        return json.load(fh)
+def _load_json_object(path: Path) -> dict[str, Any]:
+    """Load a JSON file expected to contain a top-level object."""
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise TypeError(f"{path} must contain a JSON object, got {type(data).__name__}")
+    return data
 
 
-def _tfidf_vector(text: str, vocab: dict) -> list[float]:
-    """Reproduce sklearn's TfidfVectorizer.transform for one document.
+def _load_json_array(path: Path) -> list[dict[str, Any]]:
+    """Load a JSON file expected to contain a top-level array of objects."""
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, list):
+        raise TypeError(f"{path} must contain a JSON array, got {type(data).__name__}")
+    return data
+
+
+def _tfidf_vector(text: str, vocab: dict[str, Any]) -> list[float]:
+    """Reproduce sklearn's ``TfidfVectorizer.transform`` for one document.
 
     Steps: lowercase -> tokenize with the locked token_pattern -> raw term
     counts -> multiply by shipped idf -> L2-normalize the full N_TFIDF vector.
-    This is the exact contract the TS runtime implements.
+    This is the exact contract the Rust runtime implements.
     """
-    n_tfidf = vocab["nTfidf"]
     vocabulary = vocab["vocabulary"]
     idf = vocab["idf"]
     pattern = re.compile(vocab["tokenPattern"])
 
     work = text.lower() if vocab["lowercase"] else text
-    counts = np.zeros(n_tfidf, dtype=np.float64)
+    counts = np.zeros(vocab["nTfidf"], dtype=np.float64)
     for token in pattern.findall(work):
         idx = vocabulary.get(token)
         if idx is not None:
@@ -74,114 +103,69 @@ def _tfidf_vector(text: str, vocab: dict) -> list[float]:
     return [float(v) for v in weighted]
 
 
-def _scaled_numeric(numeric: list[float], vocab: dict) -> list[float]:
-    """Apply StandardScaler stats from tfidf-vocab.json (scale<=0 -> 0.0)."""
+def _scaled_numeric(numeric: list[float], vocab: dict[str, Any]) -> list[float]:
+    """Apply the baked StandardScaler stats (``scale<=0 -> 0.0``)."""
     mean = vocab["numericMean"]
     scale = vocab["numericScale"]
-    out = []
-    for i, raw in enumerate(numeric):
-        out.append((raw - mean[i]) / scale[i] if scale[i] > 0 else 0.0)
-    return out
+    return [(raw - mean[i]) / scale[i] if scale[i] > 0 else 0.0 for i, raw in enumerate(numeric)]
 
 
-def _onnx_argmax(features_189: list[float]) -> int:
-    """Run the exported ONNX model on the assembled 189-vector -> argmax class."""
-    import onnxruntime as ort
-
-    sess = ort.InferenceSession(str(HERE / "model.onnx"), providers=["CPUExecutionProvider"])
-    input_name = sess.get_inputs()[0].name
-    out = sess.run(None, {input_name: np.asarray([features_189], dtype=np.float32)})
-    # out[0] is the predicted label; the model's class order is CLASS_LABELS.
-    return int(np.asarray(out[0]).ravel()[0])
-
-
-# Hand-rolled parity fixture (not from WCXB). It carries a <template> element so the
-# regenerated parity.json captures the lexbor/linkedom <template>-exclusion contract:
-# selectolax (lexbor) does NOT read the template's body text, so neither must the TS
-# extractor. Already-checked-in HTML at htmlwasher/fixtures/classifier/<file>.
-TEMPLATE_FIXTURE = {
-    "file": "4853.html",
-    "url": "https://shop.example.com/product/acme-widget",
-    "pageType": "product",
-}
-
-
-def _record_for_fixture(file: str, url: str, page_type: str, vocab: dict) -> dict:
-    """Build a parity record for an already-present fixture file (no copy)."""
-    html = (FIXTURE_DIR / file).read_text(encoding="utf-8", errors="replace")
-    numeric = extract_numeric_features(html, url)
-    text = title_meta_text(html)
-    tfidf = _tfidf_vector(text, vocab)
-    scaled = _scaled_numeric(numeric, vocab)
-    argmax = _onnx_argmax(scaled + tfidf)
-    return {
-        "file": file,
-        "url": url,
-        "pageType": page_type,
-        "numeric": numeric,
-        "tfidf": tfidf,
-        "argmax": argmax,
-        "argmaxLabel": CLASS_LABELS[argmax],
-    }
+def _fixture_url_types() -> dict[str, tuple[str, str]]:
+    """Map ``file -> (url, page_type)`` from the committed v1 parity manifest."""
+    manifest = _load_json_array(V1_MANIFEST)
+    return {r["file"]: (r["url"], r["pageType"]) for r in manifest}
 
 
 def main() -> None:
-    vocab = _load_vocab()
-    pages = build_index()
-    dev = [p for p in pages if p.split == "dev"]
+    vocab = _load_json_object(VOCAB_PATH)
+    url_types = _fixture_url_types()
 
-    # Group small dev pages by type.
-    by_type: dict[str, list] = defaultdict(list)
-    for page in dev:
-        size = page.html_path.stat().st_size
-        if size <= MAX_BYTES:
-            by_type[page.page_type].append((size, page))
+    booster = xgb.Booster()
+    booster.load_model(str(MODEL_PATH))
 
-    FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
-    records = []
-    for page_type in CLASS_LABELS:
-        candidates = sorted(by_type.get(page_type, []), key=lambda sp: sp[0])
-        for _size, page in candidates[:PER_TYPE]:
-            html = page.html_path.read_text(encoding="utf-8", errors="replace")
-            numeric = extract_numeric_features(html, page.url)
-            text = title_meta_text(html)
-            tfidf = _tfidf_vector(text, vocab)
+    fixtures = []
+    for html_path in sorted(FIXTURE_SRC_DIR.glob("*.html")):
+        file = html_path.name
+        if file not in url_types:
+            raise KeyError(f"{file} has no url/page_type entry in {V1_MANIFEST}")
+        # Only the url is needed for feature extraction; page_type here would be
+        # the ground-truth label — we instead record the model's PREDICTED label.
+        url = url_types[file][0]
 
-            scaled = _scaled_numeric(numeric, vocab)
-            assembled = scaled + tfidf
-            argmax = _onnx_argmax(assembled)
+        html = html_path.read_text(encoding="utf-8", errors="replace")
+        numeric = extract_numeric_features(html, url)
+        tfidf = _tfidf_vector(title_meta_text(html), vocab)
+        assembled = _scaled_numeric(numeric, vocab) + tfidf
 
-            dest_name = f"{page.page_id}.html"
-            shutil.copy2(page.html_path, FIXTURE_DIR / dest_name)
-            records.append(
-                {
-                    "file": dest_name,
-                    "url": page.url,
-                    "pageType": page.page_type,
-                    "numeric": numeric,
-                    "tfidf": tfidf,
-                    "argmax": argmax,
-                    "argmaxLabel": CLASS_LABELS[argmax],
-                }
-            )
-
-    # Append the hand-rolled <template> parity fixture (already on disk).
-    records.append(
-        _record_for_fixture(
-            TEMPLATE_FIXTURE["file"],
-            TEMPLATE_FIXTURE["url"],
-            TEMPLATE_FIXTURE["pageType"],
-            vocab,
+        probs = booster.predict(xgb.DMatrix(np.asarray([assembled], dtype=np.float32)))[0]
+        argmax = int(np.argmax(probs))
+        fixtures.append(
+            {
+                "file": file,
+                "url": url,
+                "numeric": numeric,
+                "tfidf": tfidf,
+                "argmax": argmax,
+                "page_type": CLASS_LABELS[argmax],
+                "probs": [float(p) for p in probs],
+            }
         )
-    )
 
-    PARITY_JSON.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Wrote {len(records)} parity fixtures to {FIXTURE_DIR}")
-    print(f"  parity manifest: {PARITY_JSON}")
-    by_t = defaultdict(int)
-    for r in records:
-        by_t[r["pageType"]] += 1
-    print(f"  per type: {dict(by_t)}")
+    payload = {
+        "model": MODEL_PATH.name,
+        "n_numeric": N_NUMERIC,
+        "n_tfidf": N_TFIDF,
+        "n_classes": N_CLASSES,
+        "class_labels": CLASS_LABELS,
+        "fixtures": fixtures,
+    }
+    FIXTURE_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    PARITY_OUT.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Wrote {len(fixtures)} parity fixtures to {PARITY_OUT}")
+    by_pred: dict[str, int] = {}
+    for fx in fixtures:
+        by_pred[fx["page_type"]] = by_pred.get(fx["page_type"], 0) + 1
+    print(f"  predicted-type histogram: {by_pred}")
 
 
 if __name__ == "__main__":

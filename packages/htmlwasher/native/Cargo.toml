@@ -1,0 +1,58 @@
+# htmlwasher-native — the Rust boilerplate-removal + page-type extraction core.
+#
+# Phase CRATE: a simplified fork of rs-trafilatura's LIVE extraction path, ported
+# through the tested v1 TypeScript core (packages/htmlwasher/src/core/*) with the
+# v2 doc-09 divergences applied (preserve-markup serializer, explicit threaded
+# comments-are-content state, no attribute stripping).
+#
+# Plain lib crate for now — cdylib / napi bindings arrive at Phase BIND.
+#
+# DEVIATION (documented): the brief lists `html-cleaning = "0.3"` for bucket-B
+# doc-cleaning, but html-cleaning 0.3.0 pins `dom_query = "0.24"`, whose `Document`
+# type is incompatible with the mandated `dom_query = "0.28"` used for the DOM here
+# (two dom_query trees, non-interoperable APIs). The bucket-B cleaning is therefore
+# ported directly from the tested v1 `clean.ts` into `html_processing.rs` + `tags.rs`
+# with explicit tag tables — faithful and license-clean. Revisit if a html-cleaning
+# release tracks dom_query 0.28.
+[package]
+name = "htmlwasher-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Boilerplate removal, page-type cascade, and extraction profiles for htmlwasher (Rust core)."
+
+[lib]
+# cdylib for the napi binding (Phase BIND); lib kept so `cargo test`/`cargo clippy`
+# still exercise the pure-Rust core as a normal rlib.
+crate-type = ["cdylib", "lib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+dom_query = "0.28"
+tendril = "0.5"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+html-escape = "0.2"
+# napi is OPTIONAL + behind the `napi` feature (default OFF): `cargo test`/`cargo build`/
+# `cargo clippy` build the pure-Rust lib with no Node-API symbols (so all test binaries
+# link), while `napi build --features napi` (the prebuild) pulls in the addon surface.
+napi = { version = "3", default-features = false, features = ["napi9", "async"], optional = true }
+napi-derive = { version = "3", optional = true }
+
+[features]
+# Enabled only for the napi addon build (produces the committed `.node` prebuilds).
+napi = ["dep:napi", "dep:napi-derive"]
+
+# napi-build is versioned independently of napi/napi-derive; 2.x is current for napi v3.
+[build-dependencies]
+napi-build = "2"
+
+[dev-dependencies]

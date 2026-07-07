@@ -2,7 +2,7 @@
 
 Authoritative spec for the htmlwasher page-type classifier, extracted from the
 Rust references. It is the contract for BOTH the offline Python training extractor
-(`training/`) and the TypeScript runtime extractor (`htmlwasher/src/classifier/`).
+(`training/`) and the TypeScript runtime extractor (`packages/htmlwasher/src/classifier/`).
 Both sides MUST produce byte-identical feature vectors so the trained model
 behaves the same at train and inference time.
 
@@ -351,30 +351,32 @@ features before concatenating the unscaled TF-IDF block.
 
 ## Tree inference
 
-`Tree::evaluate(features)` (model.rs):
+`Tree::eval(features)` (`packages/htmlwasher/native/src/page_type/gbdt.rs`):
 
-- Start at node 0. A node with `feature < 0` is a LEAF; return its `threshold`
-  (the leaf value).
-- Internal node: `feature_val = features.get(feature_idx).unwrap_or(0.0)`
-  (out-of-range index → `0.0`). **Missing/absent feature defaults to 0.0.**
-- Split comparison: `if feature_val < threshold` go LEFT, else go RIGHT. So the
-  comparison operator is strict `<` for the LEFT branch; `>=` goes RIGHT. Equality
-  goes RIGHT. The port's ONNX/tree runtime must use the SAME `< → left` convention,
-  and default missing features to 0.0.
+- Start at node 0. A node with `left_children[node] == -1` is a LEAF; return its
+  `split_conditions[node]` value (the leaf weight).
+- Internal node: `feature_val = features.get(split_indices[node])`, compared in
+  **float32** (`(v as f32) < (thr as f32)`) to match XGBoost's own float32 split
+  evaluation. Strict `<` goes LEFT, `>=` goes RIGHT (equality goes RIGHT).
+- Missing feature (absent, NaN, or out-of-range index) does NOT default to `0.0` —
+  it routes via the node's own `default_left` flag instead. This is inert on the
+  dense 189-element feature vector the port always builds (every index 0..188 is
+  always present), but is the accurate behavior of the shipped evaluator.
 - Loop is bounded by node count; cycles/corrupt refs return 0.0.
 
-`Model::predict(features)` (model.rs):
+`Gbdt::predict(features)` (`packages/htmlwasher/native/src/page_type/gbdt.rs`):
 
-- `class_scores = [0.0; 7]`. For tree i (0-indexed), `class_idx = i % n_classes`;
-  add `tree.evaluate(features)` to `class_scores[class_idx]`. This is XGBoost
-  multi-class layout: round r, class c → tree index `r * n_classes + c`.
-- Softmax over the 7 class scores: subtract max, exp, normalize by sum.
+- `margins = [0.0; 7]`. For tree i (0-indexed), `class_idx = tree_info[i]`
+  (round-robin `i % n_classes` by construction — round r, class c → tree index
+  `r * n_classes + c`); add `tree.eval(features)` to `margins[class_idx]`.
+- Softmax over the 7 class margins: subtract max, exp, normalize by sum.
 - Argmax → `(best_idx, best_prob)`. `best_prob` is the returned confidence in [0,1].
 - `class_idx` → `class_labels[class_idx]` → `PageType::parse(...)`, defaulting to
-  `Article` if the label is unknown.
+  `Article` if the label is unknown (`model.rs::label_page_type`).
 
-When the port exports to ONNX via standard XGBoost, this softmax+argmax is the model's
-native multi-class output — match it. Confidence = max softmax probability.
+There is no ONNX export or ONNX runtime in the shipped port — inference is the
+pure-Rust GBDT evaluator above, reading the XGBoost native JSON dump
+(`model.xgb.json`) directly. Confidence = max softmax probability.
 
 ## PageType ordering (integer label → type)
 

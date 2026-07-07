@@ -16,8 +16,8 @@ Update the affected `SPEC.md` when:
 ## Spec locations
 
 - `SPEC.md` — system-level overview, architecture, stack, build, CI
-- `htmlwasher/SPEC.md` — the `htmlwasher` library's public API and extraction/classification behavior
-- `tools/htmlwasher/live-crawl-tester/SPEC.md` — the live-site E2E fetcher (polite fetcher, cache, extraction over real URLs)
+- `packages/htmlwasher/SPEC.md` — the `htmlwasher` library's public API and extraction/classification behavior
+- `packages/live-crawl-tester/SPEC.md` — the live-site E2E fetcher (polite fetcher, cache, extraction over real URLs)
 - `training/SPEC.md` — the offline Python training project (XGBoost → ONNX export)
 
 ## How to update

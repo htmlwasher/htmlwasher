@@ -1,0 +1,145 @@
+# build-native.yml — rebuilds the committed @htmlwasher/native prebuilds for the five native
+# targets + the wasm32-wasip1-threads fallback (brief Phase BIND deliverable).
+#
+# NOTE: authored-untested — this workflow has not had a CI run yet.
+#
+# Based on the napi-rs/package-template CI (checkout@v7, setup-node@v6,
+# dtolnay/rust-toolchain@stable, cache@v6, upload-artifact@v7, download-artifact@v8;
+# linux-gnu targets cross-compile via `--use-napi-cross`, the WASI target's SDK is fetched by
+# @napi-rs/cli itself into ~/.napi-rs). This is NOT an npm publish pipeline: the final job
+# opens a PR refreshing the committed npm/<target>/ prebuilds — it never pushes to main.
+name: Build native prebuilds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/htmlwasher/native/**'
+      - '!packages/htmlwasher/native/npm/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEBUG: 'napi:*'
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+  CARGO_INCREMENTAL: '1'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            build: pnpm exec napi build --platform --release --features napi --target x86_64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: pnpm exec napi build --platform --release --features napi --target aarch64-apple-darwin
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: pnpm exec napi build --platform --release --features napi --target x86_64-unknown-linux-gnu --use-napi-cross
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build: pnpm exec napi build --platform --release --features napi --target aarch64-unknown-linux-gnu --use-napi-cross
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: pnpm exec napi build --platform --release --features napi --target x86_64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: wasm32-wasip1-threads
+            build: pnpm exec napi build --platform --release --features napi --target wasm32-wasip1-threads
+    name: build - ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.settings.target }}
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.napi-rs
+            target/
+          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
+      - name: Install dependencies
+        # pnpm-lock.yaml is gitignored by repo convention — plain install, never frozen.
+        run: pnpm install
+      - name: Build
+        run: ${{ matrix.settings.build }}
+        working-directory: packages/htmlwasher/native
+        shell: bash
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: |
+            packages/htmlwasher/native/htmlwasher-native.*.node
+            packages/htmlwasher/native/htmlwasher-native.*.wasm
+          if-no-files-found: error
+
+  refresh-prebuilds:
+    name: Refresh committed prebuilds (PR)
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: pnpm install
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: packages/htmlwasher/native/ci-artifacts
+      - name: Move artifacts into npm/<target>/
+        run: pnpm exec napi artifacts --output-dir ci-artifacts --npm-dir npm --build-output-dir .
+        working-directory: packages/htmlwasher/native
+      - name: List refreshed prebuilds
+        run: ls -R packages/htmlwasher/native/npm
+      - name: Open a PR with the refreshed prebuilds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add packages/htmlwasher/native/npm
+          if git diff --cached --quiet; then
+            echo "Prebuilds unchanged; nothing to refresh."
+            exit 0
+          fi
+          branch="ci/native-prebuilds-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -m "chore(native): refresh committed prebuilds from CI"
+          git push origin "$branch"
+          gh pr create \
+            --title "chore(native): refresh committed prebuilds" \
+            --body "Automated refresh of the committed \`packages/htmlwasher/native/npm/<target>/\` prebuilds (five native targets + wasm32-wasip1-threads) built by the build-native workflow run ${{ github.run_id }}."

@@ -17,13 +17,13 @@ No test update needed when:
 - Only types or type signatures change with no logic change (TypeScript-only refactors)
 - A private helper is extracted and callers already have tests that exercise the code path
 - Changes are limited to comments, formatting, or documentation files
-- Generated artifacts are produced by a build/export script (`*.d.ts`, the trained `model.onnx` / `tfidf-vocab.json` exported from `training/`)
+- Generated artifacts are produced by a build/export script (`*.d.ts`, the trained `model.xgb.json` / `tfidf-vocab.json` exported from `training/`)
 
 ## Test locations
 
 ### TypeScript
 
-`*.test.ts` co-located next to source (e.g., `htmlwasher/src/core/extract.test.ts` for `extract.ts`); vitest preferred, or `node:test` for zero-dep scripts. Golden-fixture tests for `htmlwasher` use HTML fixtures under `htmlwasher/fixtures/` and live in `htmlwasher/test/`. Run `pnpm test` from the repo root (turbo). Packages without tests need `vitest run --passWithNoTests` in their `test` script, otherwise the recursive `pnpm test` fails.
+`*.test.ts` co-located next to source (e.g., `packages/htmlwasher/src/core/extract.test.ts` for `extract.ts`); vitest preferred, or `node:test` for zero-dep scripts. Golden-fixture tests for `htmlwasher` use HTML fixtures under `packages/htmlwasher/fixtures/` and live in `packages/htmlwasher/test/`. Run `pnpm test` from the repo root (turbo). Packages without tests need `vitest run --passWithNoTests` in their `test` script, otherwise the recursive `pnpm test` fails.
 
 ### Python
 

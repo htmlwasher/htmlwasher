@@ -4,8 +4,8 @@ htmlwasher page-type classifier.
 
 This module is the Python half of the feature contract documented in
 ``training/FEATURES.md``. It MUST produce byte-identical feature vectors to the
-TypeScript runtime extractor in ``htmlwasher/src/classifier/features/`` so the
-ONNX model behaves the same at train and inference time.
+runtime extractor (the Rust ``page_type`` feature code) so the trained model
+behaves the same at train and inference time.
 
 Authoritative behaviour mirrored from the Rust references:
 
