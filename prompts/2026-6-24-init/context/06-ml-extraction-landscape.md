@@ -1,9 +1,9 @@
 # Open-Source ML Extraction: 2026 Field Guide
 
-> Research context document for the htmlwasher TypeScript port.
+> Research context document for the trafilaturacore TypeScript port.
 > Saved 2026-06-24. Source: deep technical research session.
 >
-> **What's in this doc:** Survey of the open-source ML extraction landscape across (1) HTML main-content extraction (MinerU-HTML, ReaderLM, NuExtract), (2) schema-guided web extraction (Instructor/Outlines + local LLMs), and (3) document understanding (Docling, MinerU 2.5, VLMs). Self-hostable options on CPU or single GPU. **For htmlwasher:** this is *adjacent* context. The port itself is heuristic + XGBoost (Phase 4), not a neural extractor. Keep this doc for: (1) understanding why we *don't* go neural for the classifier, (2) future "neural fallback" features (e.g. routing low-confidence pages to MinerU-HTML), (3) the licensing-trap table (ReaderLM-v2 CC-BY-NC, Marker GPL, etc.) when evaluating any neural addition.
+> **What's in this doc:** Survey of the open-source ML extraction landscape across (1) HTML main-content extraction (MinerU-HTML, ReaderLM, NuExtract), (2) schema-guided web extraction (Instructor/Outlines + local LLMs), and (3) document understanding (Docling, MinerU 2.5, VLMs). Self-hostable options on CPU or single GPU. **For trafilaturacore:** this is *adjacent* context. The port itself is heuristic + XGBoost (Phase 4), not a neural extractor. Keep this doc for: (1) understanding why we *don't* go neural for the classifier, (2) future "neural fallback" features (e.g. routing low-confidence pages to MinerU-HTML), (3) the licensing-trap table (ReaderLM-v2 CC-BY-NC, Marker GPL, etc.) when evaluating any neural addition.
 
 ---
 

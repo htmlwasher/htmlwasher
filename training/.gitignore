@@ -12,5 +12,5 @@ __pycache__/
 uv.lock
 
 # train.py now writes model.xgb.json + tfidf-vocab.json directly into
-# packages/htmlwasher/native/artifacts/ (committed, include_str!-ed by the crate);
+# packages/trafilaturacore/native/artifacts/ (committed, include_str!-ed by the crate);
 # there are no training-local artifact copies to ignore.

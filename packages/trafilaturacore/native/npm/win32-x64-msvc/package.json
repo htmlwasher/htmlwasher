@@ -1,0 +1,15 @@
+{
+  "name": "@trafilaturacore/native-win32-x64-msvc",
+  "version": "0.0.0",
+  "private": true,
+  "main": "trafilaturacore-native.win32-x64-msvc.node",
+  "files": [
+    "trafilaturacore-native.win32-x64-msvc.node"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

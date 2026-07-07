@@ -1,4 +1,4 @@
-# htmlwasher — model training (offline)
+# trafilaturacore — model training (offline)
 
 > Status: IMPLEMENTED. The offline pipeline trains the page-type classifier
 > (Phase 4 / Phase CLASSIFY of `@/prompts/2026-6-24-init/prompt.md`) and exports
@@ -6,9 +6,9 @@
 > `@/training/SPEC.md` for the full design and `@/training/FEATURES.md` for the
 > authoritative feature contract.
 
-This is the **offline** training project for htmlwasher's page-type
+This is the **offline** training project for trafilaturacore's page-type
 classifier. It trains a standard XGBoost model from the public WCXB dataset and
-exports two artifacts into `@/packages/htmlwasher/native/artifacts/`:
+exports two artifacts into `@/packages/trafilaturacore/native/artifacts/`:
 
 - `model.xgb.json` — the XGBoost native JSON dump (trees + `tree_info`
   round-robin class layout + `default_left` + `base_score`). Evaluated at runtime
@@ -33,12 +33,12 @@ exports two artifacts into `@/packages/htmlwasher/native/artifacts/`:
   rate-limit-resilient, idempotent.
 - `extract_features.py` — compute the **89 numeric** features (+ the
   `title_meta` TF-IDF input) with byte-for-byte **parity** to the TypeScript
-  extractor in `@/packages/htmlwasher/src/classifier/features/`.
+  extractor in `@/packages/trafilaturacore/src/classifier/features/`.
 - `train.py` — train an `XGBClassifier`, evaluate on the held-out TEST split,
   export `model.xgb.json` (native JSON dump) + `tfidf-vocab.json` into
-  `@/packages/htmlwasher/native/artifacts/`, and round-trip-verify the dump.
+  `@/packages/trafilaturacore/native/artifacts/`, and round-trip-verify the dump.
 - `make_parity_fixtures.py` — emit the Rust↔Python parity fixture
-  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`.
+  `@/packages/trafilaturacore/native/tests/fixtures/classifier-parity.json`.
 
 ## Usage
 
@@ -65,14 +65,14 @@ The **WCXB** (Web Content Extraction Benchmark) dataset is licensed
 
 Reproduce the full attribution/NOTICE block required by the upstream and
 reference licenses (see the repository root `NOTICE` and
-`@/packages/htmlwasher/README.md`).
+`@/packages/trafilaturacore/README.md`).
 
 ## What is committed vs. not
 
 - **Committed:** the trained artifacts `model.xgb.json` + `tfidf-vocab.json` (in
-  `@/packages/htmlwasher/native/artifacts/`), the parity fixture
-  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`, and this
-  skeleton. (The v1 `@/packages/htmlwasher/src/classifier/model/model.onnx` +
+  `@/packages/trafilaturacore/native/artifacts/`), the parity fixture
+  `@/packages/trafilaturacore/native/tests/fixtures/classifier-parity.json`, and this
+  skeleton. (The v1 `@/packages/trafilaturacore/src/classifier/model/model.onnx` +
   `tfidf-vocab.json` also stay committed until Phase INTEGRATE — this pipeline no
   longer writes them.)
 - **Never committed:** the WCXB dataset, downloaded data, the `.venv`, and any

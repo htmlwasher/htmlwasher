@@ -23,7 +23,7 @@ No test update needed when:
 
 ### TypeScript
 
-`*.test.ts` co-located next to source (e.g., `packages/htmlwasher/src/core/extract.test.ts` for `extract.ts`); vitest preferred, or `node:test` for zero-dep scripts. Golden-fixture tests for `htmlwasher` use HTML fixtures under `packages/htmlwasher/fixtures/` and live in `packages/htmlwasher/test/`. Run `pnpm test` from the repo root (turbo). Packages without tests need `vitest run --passWithNoTests` in their `test` script, otherwise the recursive `pnpm test` fails.
+`*.test.ts` co-located next to source (e.g., `packages/trafilaturacore/src/core/extract.test.ts` for `extract.ts`); vitest preferred, or `node:test` for zero-dep scripts. Golden-fixture tests for `trafilaturacore` use HTML fixtures under `packages/trafilaturacore/fixtures/` and live in `packages/trafilaturacore/test/`. Run `pnpm test` from the repo root (turbo). Packages without tests need `vitest run --passWithNoTests` in their `test` script, otherwise the recursive `pnpm test` fails.
 
 ### Python
 

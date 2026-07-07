@@ -2,8 +2,8 @@
 """Generate the Rust↔Python classifier parity fixture for the native crate.
 
 Reads every committed HTML fixture under
-``packages/htmlwasher/fixtures/classifier/*.html`` and emits ONE self-consistent
-JSON at ``packages/htmlwasher/native/tests/fixtures/classifier-parity.json`` that
+``packages/trafilaturacore/fixtures/classifier/*.html`` and emits ONE self-consistent
+JSON at ``packages/trafilaturacore/native/tests/fixtures/classifier-parity.json`` that
 the Cargo parity test consumes. For each fixture we record, computed with the
 exact feature/tfidf/scaler code the model was trained with:
 
@@ -46,14 +46,14 @@ from extract_features import N_NUMERIC, extract_numeric_features, title_meta_tex
 
 HERE = Path(__file__).parent
 REPO_ROOT = HERE.parent
-ARTIFACTS_DIR = REPO_ROOT / "packages" / "htmlwasher" / "native" / "artifacts"
+ARTIFACTS_DIR = REPO_ROOT / "packages" / "trafilaturacore" / "native" / "artifacts"
 MODEL_PATH = ARTIFACTS_DIR / "model.xgb.json"
 VOCAB_PATH = ARTIFACTS_DIR / "tfidf-vocab.json"
 
-FIXTURE_SRC_DIR = REPO_ROOT / "packages" / "htmlwasher" / "fixtures" / "classifier"
+FIXTURE_SRC_DIR = REPO_ROOT / "packages" / "trafilaturacore" / "fixtures" / "classifier"
 V1_MANIFEST = FIXTURE_SRC_DIR / "parity.json"
 
-FIXTURE_OUT_DIR = REPO_ROOT / "packages" / "htmlwasher" / "native" / "tests" / "fixtures"
+FIXTURE_OUT_DIR = REPO_ROOT / "packages" / "trafilaturacore" / "native" / "tests" / "fixtures"
 PARITY_OUT = FIXTURE_OUT_DIR / "classifier-parity.json"
 
 N_TFIDF = 100

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Deterministic 89-feature numeric extractor + TF-IDF input text for the
-htmlwasher page-type classifier.
+trafilaturacore page-type classifier.
 
 This module is the Python half of the feature contract documented in
 ``training/FEATURES.md``. It MUST produce byte-identical feature vectors to the

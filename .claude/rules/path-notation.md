@@ -5,19 +5,19 @@ Use the `@/` prefix for all repo-root-relative paths in prompts, commands, rules
 ## Format
 
 - `@/.claude/commands/sync/spec.md`
-- `@/packages/htmlwasher/src/core/extract.ts`
+- `@/packages/trafilaturacore/src/core/extract.ts`
 - `@/packages/live-crawl-tester/src/index.ts`
 - `@/training/SPEC.md`
 - `@/prompts/2026-6-24-init/prompt.md`
 
 ## Prohibited
 
-- `/Users/miroslavsekera/r/htmlwasher/.claude/commands/sync/spec.md`
+- `/Users/miroslavsekera/r/trafilatura/.claude/commands/sync/spec.md`
 - Any path starting with `/Users/`, `/home/`, or other absolute prefixes
 
 ## Cross-repo references
 
-`@/` only addresses paths inside this repo. For a path in a sibling repo (e.g. a reference repo under `~/r/<repo>`), use a descriptive, home-relative reference (`~/r/<repo>/...`) rather than a hardcoded `/Users/<name>/` path. In runnable bash blocks, write any in-repo destination relative to the repo root (`./htmlwasher`) and any cross-repo source home-relative (`~/r/<repo>/...`) so no username is baked in. (Note: the read-only reference repos live OUTSIDE this repo at `~/r/htmlwasher-sources/` — they are a sibling directory, not in-repo, so address them home-relative as `~/r/htmlwasher-sources/...`, never `@/sources/...`.)
+`@/` only addresses paths inside this repo. For a path in a sibling repo (e.g. a reference repo under `~/r/<repo>`), use a descriptive, home-relative reference (`~/r/<repo>/...`) rather than a hardcoded `/Users/<name>/` path. In runnable bash blocks, write any in-repo destination relative to the repo root (`./trafilaturacore`) and any cross-repo source home-relative (`~/r/<repo>/...`) so no username is baked in. (Note: the read-only reference repos live OUTSIDE this repo at `~/r/trafilatura-sources/` — they are a sibling directory, not in-repo, so address them home-relative as `~/r/trafilatura-sources/...`, never `@/sources/...`.)
 
 ## Exempt
 

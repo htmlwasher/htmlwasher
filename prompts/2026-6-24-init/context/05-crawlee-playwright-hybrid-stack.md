@@ -1,9 +1,9 @@
 # Crawlee + Playwright + Trafilatura: Hybrid Stack Strategic Analysis
 
-> Research context document for the htmlwasher TypeScript port.
+> Research context document for the trafilaturacore TypeScript port.
 > Saved 2026-06-24. Source: deep technical research session.
 >
-> **What's in this doc:** Evaluation of the Crawlee + Playwright + Trafilatura hybrid stack as a production scraper architecture, compared to Crawl4AI, Firecrawl, and the Apify platform. **Out of scope for the htmlwasher port itself** — the port is a library, not a production scraper. Keep this doc for: (1) future Contextractor-server architecture decisions, (2) understanding why EU residency and bundle size matter, (3) the Apify Store dual-channel monetization angle.
+> **What's in this doc:** Evaluation of the Crawlee + Playwright + Trafilatura hybrid stack as a production scraper architecture, compared to Crawl4AI, Firecrawl, and the Apify platform. **Out of scope for the trafilaturacore port itself** — the port is a library, not a production scraper. Keep this doc for: (1) future Contextractor-server architecture decisions, (2) understanding why EU residency and bundle size matter, (3) the Apify Store dual-channel monetization angle.
 
 ---
 

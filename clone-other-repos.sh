@@ -3,7 +3,7 @@
 # clone-other-repos.sh
 # =============================================================================
 # Clones the SOURCE repositories used as references for building a TypeScript
-# fork/port of rs-trafilatura ("htmlwasher").
+# fork/port of rs-trafilatura ("trafilaturacore").
 #
 # WHY THIS SCRIPT EXISTS
 # -----------------------------------------------------------------------------
@@ -23,7 +23,7 @@
 #     Murrough-Foley/rs-trafilatura  (DIVERGENT Rust fork: + ML page-typing)
 #            |  '-- Murrough-Foley/web-page-classifier (the XGBoost classifier)
 #            v
-#     htmlwasher   (OUR TypeScript fork, built under r/htmlwasher/)
+#     trafilaturacore   (OUR TypeScript fork, built under r/trafilatura/)
 #
 # AUTHORITY HIERARCHY when sources disagree:
 #   1. rs-trafilatura + web-page-classifier define *WHAT* to build
@@ -68,21 +68,21 @@
 # IMPORTANT: repos are cloned into a dedicated SOURCES directory that lives
 # OUTSIDE this repository, as a SIBLING of it (never a subfolder of the product
 # repo):
-#   ~/r/htmlwasher-sources/        (i.e. ../htmlwasher-sources relative to this script)
+#   ~/r/trafilatura-sources/        (i.e. ../trafilatura-sources relative to this script)
 # This keeps the six reference repos completely out of the product repo (which
-# holds the clone script, prompts/, tools/, and the htmlwasher library). They
+# holds the clone script, prompts/, tools/, and the trafilaturacore library). They
 # are NOT cloned inside the repo and NOT into the current working directory.
 # =============================================================================
 
 set -euo pipefail
 
 # --- Where to clone -----------------------------------------------------------
-# All reference repos go into a "htmlwasher-sources/" directory that is a SIBLING
+# All reference repos go into a "trafilatura-sources/" directory that is a SIBLING
 # of this repo (OUTSIDE it), never a subfolder of the product repo. Derived
 # script-relative so no username is baked in and it follows the script if moved:
-# it resolves to "<dir-of-this-script>/../htmlwasher-sources".
+# it resolves to "<dir-of-this-script>/../trafilatura-sources".
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/htmlwasher-sources"
+BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/trafilatura-sources"
 
 # Candidate "development" branch names, in order of preference.
 PREFERRED_BRANCHES=("dev" "develop" "development" "next")

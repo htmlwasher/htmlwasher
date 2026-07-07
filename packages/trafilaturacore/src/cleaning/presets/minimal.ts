@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: Apache-2.0
+// Ported VERBATIM from htmlprocessing-server presets/minimal.ts (Apache-2.0).
+// Do not diverge from the reference tag/attribute sets — parity is load-bearing.
+
+import type { CleanConfig } from './types.js';
+
+export const minimalSetup: CleanConfig = {
+  allowedTags: [
+    'html',
+    'head',
+    'meta',
+    'title',
+    'body',
+    'p',
+    'a',
+    'strong',
+    'em',
+    'b',
+    'i',
+    's',
+    'br',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'code',
+    'pre',
+    'ul',
+    'ol',
+    'li',
+    'del',
+    'abbr',
+  ],
+  allowedAttributes: {
+    html: ['lang'],
+    meta: ['charset', 'name', 'content'],
+    a: ['href'],
+    td: ['colspan', 'rowspan'],
+    th: ['colspan', 'rowspan'],
+    abbr: ['title'],
+  },
+  selfClosing: ['img', 'br', 'hr', 'meta'],
+  nonTextTags: ['style', 'script', 'textarea', 'option'],
+  transformTags: {
+    strike: 'del',
+    tt: 'code',
+    acronym: 'abbr',
+    dir: 'ul',
+    listing: 'pre',
+    xmp: 'pre',
+    plaintext: 'pre',
+  },
+};

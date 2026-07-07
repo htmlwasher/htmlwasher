@@ -1,0 +1,60 @@
+{
+  "name": "trafilaturacore",
+  "version": "0.0.0-alpha.0",
+  "private": false,
+  "type": "module",
+  "description": "TypeScript port of Trafilatura with page-type-aware extraction and an ONNX page-type classifier (alpha).",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "trafilaturacore": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "node -e \"console.error('trafilaturacore cannot be published yet: @trafilaturacore/native is a private workspace dep; implement the alpha tarball-bundling plan (see PORTING-NOTES.md) first.'); process.exit(1);\"",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trafilaturacore/native": "workspace:*",
+    "chardet": "^2.1.0",
+    "commander": "^14.0.0",
+    "html-minifier-terser": "^7.2.0",
+    "iconv-lite": "^0.6.3",
+    "linkedom": "^0.18.12",
+    "parse5": "^8.0.0",
+    "prettier": "^3.8.4",
+    "sanitize-html": "^2.17.2"
+  },
+  "optionalDependencies": {
+    "dompurify": "^3.2.4",
+    "jsdom": "^25.0.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "@types/html-minifier-terser": "^7.0.2",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^26.0.0",
+    "@types/sanitize-html": "^2.16.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

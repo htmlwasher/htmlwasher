@@ -1,6 +1,6 @@
 # Is `rs-trafilatura` Really "The Best" Trafilatura Derivative? A Skeptical Verdict
 
-> Research context document for the htmlwasher TypeScript port.
+> Research context document for the trafilaturacore TypeScript port.
 > Saved 2026-06-24. Source: deep, skeptical research session.
 
 ## TL;DR

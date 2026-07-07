@@ -1,6 +1,6 @@
 # The Best Fork or Port of Trafilatura (June 2026): Evaluation & Recommendations
 
-> Research context document for the htmlwasher TypeScript port.
+> Research context document for the trafilaturacore TypeScript port.
 > Saved 2026-06-24. Source: deep research session.
 
 ## TL;DR

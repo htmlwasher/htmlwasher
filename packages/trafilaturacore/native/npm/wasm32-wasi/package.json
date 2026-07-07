@@ -1,0 +1,15 @@
+{
+  "name": "@trafilaturacore/native-wasm32-wasi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "trafilaturacore-native.wasm32-wasi.wasm",
+  "files": [
+    "trafilaturacore-native.wasm32-wasi.wasm",
+    "wasi-worker.mjs",
+    "wasi-worker-browser.mjs"
+  ],
+  "dependencies": {
+    "@napi-rs/wasm-runtime": "^1.1.6"
+  }
+}

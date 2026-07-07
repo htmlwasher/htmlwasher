@@ -264,23 +264,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "htmlwasher-native"
-version = "0.0.0-alpha.0"
-dependencies = [
- "dom_query",
- "html-escape",
- "napi",
- "napi-build",
- "napi-derive",
- "regex",
- "serde",
- "serde_json",
- "tendril",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -887,6 +870,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
 dependencies = [
  "pin-project-lite",
+]
+
+[[package]]
+name = "trafilaturacore-native"
+version = "0.0.0-alpha.0"
+dependencies = [
+ "dom_query",
+ "html-escape",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "regex",
+ "serde",
+ "serde_json",
+ "tendril",
+ "thiserror",
+ "url",
 ]
 
 [[package]]

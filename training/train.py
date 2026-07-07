@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Train the htmlwasher page-type classifier and export runtime artifacts.
+"""Train the trafilaturacore page-type classifier and export runtime artifacts.
 
 Pipeline (offline, CPU-only, seconds-to-minutes at this scale):
 
@@ -18,7 +18,7 @@ Pipeline (offline, CPU-only, seconds-to-minutes at this scale):
 8. Evaluate on the held-out TEST split; print accuracy + per-class P/R/F1 +
    confusion matrix.
 
-Artifacts are written into ``packages/htmlwasher/native/artifacts/`` where a
+Artifacts are written into ``packages/trafilaturacore/native/artifacts/`` where a
 pure-Rust GBDT evaluator (no onnxruntime) consumes them at inference time.
 """
 
@@ -44,7 +44,7 @@ from download_wcxb import CLASS_LABELS, LabeledPage, build_index, download
 from extract_features import N_NUMERIC, extract_numeric_features, title_meta_text
 
 HERE = Path(__file__).parent
-ARTIFACTS_DIR = HERE.parent / "packages" / "htmlwasher" / "native" / "artifacts"
+ARTIFACTS_DIR = HERE.parent / "packages" / "trafilaturacore" / "native" / "artifacts"
 MODEL_OUT = ARTIFACTS_DIR / "model.xgb.json"
 VOCAB_OUT = ARTIFACTS_DIR / "tfidf-vocab.json"
 
@@ -116,7 +116,7 @@ def main() -> None:
     if vocab_size != N_TFIDF:
         raise ValueError(
             f"TF-IDF vocabulary has {vocab_size} terms, expected exactly {N_TFIDF}. "
-            "packages/htmlwasher/native/src/page_type/model.rs rejects a tfidf-vocab.json "
+            "packages/trafilaturacore/native/src/page_type/model.rs rejects a tfidf-vocab.json "
             f"whose vocabulary length != {N_TFIDF}, which would disable the classifier at "
             "load time. Retrain on a larger/more diverse WCXB split so "
             f"TfidfVectorizer(max_features={N_TFIDF}) actually yields {N_TFIDF} terms."

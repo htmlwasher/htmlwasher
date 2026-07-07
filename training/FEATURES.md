@@ -1,18 +1,18 @@
 # Page-Type Classifier — Feature & Inference Spec
 
-Authoritative spec for the htmlwasher page-type classifier, extracted from the
+Authoritative spec for the trafilaturacore page-type classifier, extracted from the
 Rust references. It is the contract for BOTH the offline Python training extractor
-(`training/`) and the TypeScript runtime extractor (`packages/htmlwasher/src/classifier/`).
+(`training/`) and the TypeScript runtime extractor (`packages/trafilaturacore/src/classifier/`).
 Both sides MUST produce byte-identical feature vectors so the trained model
 behaves the same at train and inference time.
 
 Sources read (read-only):
 
-- `~/r/htmlwasher-sources/web-page-classifier/src/lib.rs` — `N_NUMERIC_FEATURES = 89`, `classify_ml`, `PageType` enum, `N_QUALITY_FEATURES = 27`.
-- `~/r/htmlwasher-sources/web-page-classifier/src/model.rs` — `scale_features`, `compute_tfidf`, `predict`, `Tree::evaluate`.
-- `~/r/htmlwasher-sources/rs-trafilatura/src/page_type/ml.rs` — `extract_ml_features` (fills `f[0..89]`).
-- `~/r/htmlwasher-sources/rs-trafilatura/src/page_type/mod.rs` — `classify_url`, `extract_html_signals`, `refine_with_html_signals`, `HtmlSignals`, URL constant lists, `extract_domain_path`, `contains_any`.
-- `~/r/htmlwasher-sources/rs-trafilatura/src/extract.rs` (~50-92) — the 3-stage cascade and `title_meta` construction.
+- `~/r/trafilatura-sources/web-page-classifier/src/lib.rs` — `N_NUMERIC_FEATURES = 89`, `classify_ml`, `PageType` enum, `N_QUALITY_FEATURES = 27`.
+- `~/r/trafilatura-sources/web-page-classifier/src/model.rs` — `scale_features`, `compute_tfidf`, `predict`, `Tree::evaluate`.
+- `~/r/trafilatura-sources/rs-trafilatura/src/page_type/ml.rs` — `extract_ml_features` (fills `f[0..89]`).
+- `~/r/trafilatura-sources/rs-trafilatura/src/page_type/mod.rs` — `classify_url`, `extract_html_signals`, `refine_with_html_signals`, `HtmlSignals`, URL constant lists, `extract_domain_path`, `contains_any`.
+- `~/r/trafilatura-sources/rs-trafilatura/src/extract.rs` (~50-92) — the 3-stage cascade and `title_meta` construction.
 
 ## Critical counts and invariants
 
@@ -310,7 +310,7 @@ body text.
   normalization and uses a plain `count/n_words` TF — it is an APPROXIMATION of
   sklearn, not an exact reproduction.
 
-### What htmlwasher SHIPS (the contract to standardize on)
+### What trafilaturacore SHIPS (the contract to standardize on)
 
 The port does NOT reverse rs-trafilatura's embedded model. It TRAINS a fresh model
 with scikit-learn and ships the vocab + idf as `training/.../tfidf-vocab.json`. Use:
@@ -351,7 +351,7 @@ features before concatenating the unscaled TF-IDF block.
 
 ## Tree inference
 
-`Tree::eval(features)` (`packages/htmlwasher/native/src/page_type/gbdt.rs`):
+`Tree::eval(features)` (`packages/trafilaturacore/native/src/page_type/gbdt.rs`):
 
 - Start at node 0. A node with `left_children[node] == -1` is a LEAF; return its
   `split_conditions[node]` value (the leaf weight).
@@ -364,7 +364,7 @@ features before concatenating the unscaled TF-IDF block.
   always present), but is the accurate behavior of the shipped evaluator.
 - Loop is bounded by node count; cycles/corrupt refs return 0.0.
 
-`Gbdt::predict(features)` (`packages/htmlwasher/native/src/page_type/gbdt.rs`):
+`Gbdt::predict(features)` (`packages/trafilaturacore/native/src/page_type/gbdt.rs`):
 
 - `margins = [0.0; 7]`. For tree i (0-indexed), `class_idx = tree_info[i]`
   (round-robin `i % n_classes` by construction — round r, class c → tree index
@@ -391,7 +391,7 @@ enum order is NOT necessarily the model's label order. The model emits a class i
 `class_labels[idx]` is a string; that string is parsed to a `PageType`. So the
 authoritative source of the index→type mapping is the shipped label list.
 
-For the htmlwasher trained model, the Python trainer MUST persist the exact
+For the trafilaturacore trained model, the Python trainer MUST persist the exact
 `class_labels` order (the order sklearn/XGBoost assigned to the encoded labels) and
 ship it; the TS runtime MUST map `argmax → class_labels[idx] → page type` using that
 shipped list. Do NOT hardcode an assumed order. Recommended: store `class_labels` in

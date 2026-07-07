@@ -13,7 +13,7 @@ You are a git worktree specialist. Create a new worktree for the user.
 
 - **Branch name**: lowercase `$ARGUMENTS`, replace spaces with `-` (e.g. `fix login bug` → `fix-login-bug`)
 - **Worktree directory name**: take the branch name, replace `/` with `-` (e.g. `feature/classifier` → `feature-classifier`)
-- **Worktree path**: `../htmlwasher-worktrees/<worktree-directory-name>` (sibling to the repo root)
+- **Worktree path**: `../trafilaturacore-worktrees/<worktree-directory-name>` (sibling to the repo root)
 
 ## Workflow
 

@@ -1,11 +1,11 @@
 ---
 name: typescript
-description: TypeScript development guidelines for this workspace. Use when writing or modifying TypeScript in the `htmlwasher/` library or any `tools/*` package.
+description: TypeScript development guidelines for this workspace. Use when writing or modifying TypeScript in the `trafilaturacore/` library or any `tools/*` package.
 ---
 
 # TypeScript Guidelines
 
-Standards for the TypeScript that ships the product: the `htmlwasher` extraction library and the `packages/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
+Standards for the TypeScript that ships the product: the `trafilaturacore` extraction library and the `packages/live-crawl-tester/` E2E fetcher. pnpm + Turborepo monorepo, Node 22+, strict TypeScript, `module`/`moduleResolution` = `NodeNext`.
 
 ## Type system
 
@@ -13,7 +13,7 @@ Root `tsconfig.json` is `"strict": true` with `noUncheckedIndexedAccess`, `noImp
 
 ## Bundling: keep emitted ESM un-bundled
 
-Packages build with plain `tsc -p tsconfig.json` (`module: NodeNext`, `type: module`), emitting un-bundled ESM. **Keep it that way.** The `@htmlwasher/native` napi loader (`index.js`) resolves its prebuilt `.node` binary at runtime via `require`/`__dirname`, so it breaks under esbuild / ncc / SEA single-file bundling. The model artifacts (`model.xgb.json`, `tfidf-vocab.json`) are baked INTO the Rust crate via `include_str!`, so they ship inside the `.node` — nothing to co-locate on the TS side.
+Packages build with plain `tsc -p tsconfig.json` (`module: NodeNext`, `type: module`), emitting un-bundled ESM. **Keep it that way.** The `@trafilaturacore/native` napi loader (`index.js`) resolves its prebuilt `.node` binary at runtime via `require`/`__dirname`, so it breaks under esbuild / ncc / SEA single-file bundling. The model artifacts (`model.xgb.json`, `tfidf-vocab.json`) are baked INTO the Rust crate via `include_str!`, so they ship inside the `.node` — nothing to co-locate on the TS side.
 
 ## Lint & format — Biome only
 
@@ -21,7 +21,7 @@ Biome handles both lint and format (not ESLint or Prettier) for JS/TS/JSON. `pnp
 
 ## Testing — vitest
 
-`*.test.ts` next to source; vitest preferred (`node:test` for zero-dep scripts). HTML fixture tests for the extraction library live in `packages/htmlwasher/test/` with fixtures under `packages/htmlwasher/fixtures/`. AAA pattern, light mocking, dependency injection over heavy mocks. Run `pnpm test` from the repo root.
+`*.test.ts` next to source; vitest preferred (`node:test` for zero-dep scripts). HTML fixture tests for the extraction library live in `packages/trafilaturacore/test/` with fixtures under `packages/trafilaturacore/fixtures/`. AAA pattern, light mocking, dependency injection over heavy mocks. Run `pnpm test` from the repo root.
 
 - **`vitest run` exits 1 with zero `*.test.ts` files** — packages without tests need `vitest run --passWithNoTests` in their `test` script, or the recursive `pnpm test` fails.
 

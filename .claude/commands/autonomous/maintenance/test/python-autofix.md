@@ -30,7 +30,7 @@ Apply all auto-fixable ruff lint and format issues (config in `training/pyprojec
 Check each training module for correctness:
 - Feature extraction — features computed for the classifier match what the TypeScript classifier feature hot-path expects (column order and names align with `tfidf-vocab.json`).
 - Model training — the XGBoost training step is deterministic where it should be (fixed seeds) and reads the WCXB dataset paths correctly.
-- Model export — `Booster.save_model` produces `model.xgb.json` (the XGBoost native JSON dump) + `tfidf-vocab.json` into `packages/htmlwasher/native/artifacts/`, and the export round-trips (reload into a fresh `Booster`, assert argmax match). No ONNX/`skl2onnx`/`onnxmltools`/`onnxruntime` — the Rust crate evaluates the JSON dump with a pure-Rust GBDT.
+- Model export — `Booster.save_model` produces `model.xgb.json` (the XGBoost native JSON dump) + `tfidf-vocab.json` into `packages/trafilaturacore/native/artifacts/`, and the export round-trips (reload into a fresh `Booster`, assert argmax match). No ONNX/`skl2onnx`/`onnxmltools`/`onnxruntime` — the Rust crate evaluates the JSON dump with a pure-Rust GBDT.
 - Vocab export — `tfidf-vocab.json` is written in the format the TS classifier reads.
 
 ## Step FIX: Fix Issues

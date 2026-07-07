@@ -3,13 +3,13 @@
 > Status: IMPLEMENTED. `download_wcxb.py`, `extract_features.py`, `train.py`, and
 > `make_parity_fixtures.py` exist and run end-to-end; `model.xgb.json` +
 > `tfidf-vocab.json` are exported into the Rust crate's `artifacts/` dir, and
-> `packages/htmlwasher/native/tests/fixtures/classifier-parity.json` holds the
+> `packages/trafilaturacore/native/tests/fixtures/classifier-parity.json` holds the
 > Rust↔Python parity fixtures. Authority: `@/prompts/2026-6-24-init/prompt.md`
 > (Phase 4 / Phase CLASSIFY) and the feature contract in `@/training/FEATURES.md`.
 
 ## Purpose
 
-Train htmlwasher's page-type classifier offline and export the two runtime
+Train trafilaturacore's page-type classifier offline and export the two runtime
 artifacts consumed by the Rust extraction core (v2):
 
 - `model.xgb.json` — the XGBoost native JSON dump (trees + `tree_info`
@@ -18,12 +18,12 @@ artifacts consumed by the Rust extraction core (v2):
 - `tfidf-vocab.json` — locked TF-IDF vocabulary + IDF weights + the baked
   StandardScaler `mean`/`scale`.
 
-Both are written to `@/packages/htmlwasher/native/artifacts/` (`include_str!`-ed
+Both are written to `@/packages/trafilaturacore/native/artifacts/` (`include_str!`-ed
 by the crate) and are committed to the repository, alongside the parity fixture
-at `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`. This
+at `@/packages/trafilaturacore/native/tests/fixtures/classifier-parity.json`. This
 project is offline-only, not a pnpm workspace member, and not shipped at runtime.
 
-> **v1 note:** the shipped `@/packages/htmlwasher/src/classifier/model/model.onnx`
+> **v1 note:** the shipped `@/packages/trafilaturacore/src/classifier/model/model.onnx`
 > + `tfidf-vocab.json` remain committed and untouched so the v1 TypeScript suite
 > stays green until Phase INTEGRATE. This pipeline no longer writes them.
 
@@ -67,7 +67,7 @@ The pipeline is a four-stage flow, one script per stage.
   not) and **segfaults** when `.attributes` is read off iterated children on some
   deep trees.
 - **Parity requirement:** these features MUST match the TypeScript extractor in
-  `@/packages/htmlwasher/src/classifier/features/` exactly. Validated by the TS↔Python
+  `@/packages/trafilaturacore/src/classifier/features/` exactly. Validated by the TS↔Python
   parity fixtures (target ≥99% exact match; compare the **argmax class**, not raw
   probabilities).
 - **`title_meta_text` is a documented simplification:** `<title>` element text +
@@ -114,23 +114,23 @@ The pipeline is a four-stage flow, one script per stage.
   + `numericScale` (89 each, the StandardScaler stats), `classLabels` (7),
   `nNumeric` (89), `nTfidf` (100), `tokenPattern`, `ngramRange`, `lowercase`.
 - Both `model.xgb.json` + `tfidf-vocab.json` are written directly into
-  `@/packages/htmlwasher/native/artifacts/` (the only committed copies; no
+  `@/packages/trafilaturacore/native/artifacts/` (the only committed copies; no
   `training/`-local copies).
 
 ### Stage PARITY — `make_parity_fixtures.py`
 
 - Reads every committed HTML fixture under
-  `@/packages/htmlwasher/fixtures/classifier/*.html` (with each fixture's `url` +
+  `@/packages/trafilaturacore/fixtures/classifier/*.html` (with each fixture's `url` +
   ground-truth type from the v1 `parity.json` manifest, so it runs offline
   without the dataset), loads `model.xgb.json` + `tfidf-vocab.json`, and writes
-  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`:
+  `@/packages/trafilaturacore/native/tests/fixtures/classifier-parity.json`:
   `{model, n_numeric:89, n_tfidf:100, n_classes:7, class_labels, fixtures:[{file,
   url, numeric[89] (RAW), tfidf[100] (RAW L2-normed), argmax, page_type,
   probs[7]}]}`. `argmax`/`probs` come from running the Booster on the assembled
   189-vector `[scaled_numeric ++ tfidf]`. The Cargo parity test re-extracts from
   the same HTML, applies the baked scaler, feeds its pure-Rust GBDT evaluator,
   and asserts numeric/tfidf ≤1e-6 and argmax 100%.
-- The v1 `@/packages/htmlwasher/fixtures/classifier/parity.json` (consumed by the
+- The v1 `@/packages/trafilaturacore/fixtures/classifier/parity.json` (consumed by the
   v1 TS parity suite) is left untouched.
 
 ## Determinism and validation

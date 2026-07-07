@@ -30,7 +30,7 @@ Apply auto-fixable vulnerabilities (`--fix` adds `package.json` overrides forcin
 
 Do NOT automatically update:
 - Major versions (breaking changes)
-- Direct dependencies that affect the public API of `htmlwasher`
+- Direct dependencies that affect the public API of `trafilaturacore`
 
 ## Step PYTHON: Audit Training Dependencies
 

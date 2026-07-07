@@ -1,4 +1,4 @@
-# Tooling config only for the offline htmlwasher training pipeline.
+# Tooling config only for the offline trafilaturacore training pipeline.
 #
 # This project is OFFLINE-ONLY: it trains the page-type classifier and is never
 # packaged for distribution, never shipped at runtime, and is not a pnpm
@@ -6,9 +6,9 @@
 # requirements.txt and resolved on demand via uv.
 
 [project]
-name = "htmlwasher-training"
+name = "trafilaturacore-training"
 version = "0.0.0"
-description = "Offline training pipeline for the htmlwasher page-type classifier (not packaged, not shipped)."
+description = "Offline training pipeline for the trafilaturacore page-type classifier (not packaged, not shipped)."
 requires-python = ">=3.12"
 
 [tool.ruff]

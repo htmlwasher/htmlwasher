@@ -39,11 +39,11 @@ api_surface_changed=false
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
-    */packages/htmlwasher/src/*)
-      required_specs+=$'\n'"packages/htmlwasher/SPEC.md"
+    */packages/trafilaturacore/src/*)
+      required_specs+=$'\n'"packages/trafilaturacore/SPEC.md"
       [[ "$f" == */index.ts ]] && api_surface_changed=true ;;
-    */packages/htmlwasher/native/src/*)
-      required_specs+=$'\n'"packages/htmlwasher/native/SPEC.md" ;;
+    */packages/trafilaturacore/native/src/*)
+      required_specs+=$'\n'"packages/trafilaturacore/native/SPEC.md" ;;
     */packages/live-crawl-tester/src/*)
       required_specs+=$'\n'"packages/live-crawl-tester/SPEC.md" ;;
     */training/*.py)

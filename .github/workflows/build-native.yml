@@ -1,4 +1,4 @@
-# build-native.yml — rebuilds the committed @htmlwasher/native prebuilds for the five native
+# build-native.yml — rebuilds the committed @trafilaturacore/native prebuilds for the five native
 # targets + the wasm32-wasip1-threads fallback (brief Phase BIND deliverable).
 #
 # NOTE: authored-untested — this workflow has not had a CI run yet.
@@ -16,8 +16,8 @@ on:
     branches:
       - main
     paths:
-      - 'packages/htmlwasher/native/**'
-      - '!packages/htmlwasher/native/npm/**'
+      - 'packages/trafilaturacore/native/**'
+      - '!packages/trafilaturacore/native/npm/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
 
@@ -86,15 +86,15 @@ jobs:
         run: pnpm install
       - name: Build
         run: ${{ matrix.settings.build }}
-        working-directory: packages/htmlwasher/native
+        working-directory: packages/trafilaturacore/native
         shell: bash
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
           path: |
-            packages/htmlwasher/native/htmlwasher-native.*.node
-            packages/htmlwasher/native/htmlwasher-native.*.wasm
+            packages/trafilaturacore/native/trafilaturacore-native.*.node
+            packages/trafilaturacore/native/trafilaturacore-native.*.wasm
           if-no-files-found: error
 
   refresh-prebuilds:
@@ -119,17 +119,17 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
-          path: packages/htmlwasher/native/ci-artifacts
+          path: packages/trafilaturacore/native/ci-artifacts
       - name: Move artifacts into npm/<target>/
         run: pnpm exec napi artifacts --output-dir ci-artifacts --npm-dir npm --build-output-dir .
-        working-directory: packages/htmlwasher/native
+        working-directory: packages/trafilaturacore/native
       - name: List refreshed prebuilds
-        run: ls -R packages/htmlwasher/native/npm
+        run: ls -R packages/trafilaturacore/native/npm
       - name: Open a PR with the refreshed prebuilds
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add packages/htmlwasher/native/npm
+          git add packages/trafilaturacore/native/npm
           if git diff --cached --quiet; then
             echo "Prebuilds unchanged; nothing to refresh."
             exit 0
@@ -142,4 +142,4 @@ jobs:
           git push origin "$branch"
           gh pr create \
             --title "chore(native): refresh committed prebuilds" \
-            --body "Automated refresh of the committed \`packages/htmlwasher/native/npm/<target>/\` prebuilds (five native targets + wasm32-wasip1-threads) built by the build-native workflow run ${{ github.run_id }}."
+            --body "Automated refresh of the committed \`packages/trafilaturacore/native/npm/<target>/\` prebuilds (five native targets + wasm32-wasip1-threads) built by the build-native workflow run ${{ github.run_id }}."

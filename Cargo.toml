@@ -1,4 +1,4 @@
-# Root Rust workspace for htmlwasher's native extraction core.
+# Root Rust workspace for trafilaturacore's native extraction core.
 # Mirrors ~/r/contextractor's workspace, tightened per the v2 brief: unsafe_code
 # denied for our code (see the [workspace.lints.rust] rationale below — napi-derive
 # codegen needs `unsafe` behind a local #[allow], which `forbid` would reject), and
@@ -6,14 +6,14 @@
 # convention does NOT extend to Cargo).
 [workspace]
 resolver = "2"
-members = ["packages/htmlwasher/native"]
+members = ["packages/trafilaturacore/native"]
 
 [workspace.package]
 version = "0.0.0-alpha.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/glueo/htmlwasher"
+repository = "https://github.com/glueo/trafilatura"
 
 [workspace.lints.rust]
 # `deny` (not `forbid`): our own code never writes `unsafe` (deny is a hard error),

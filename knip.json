@@ -5,7 +5,7 @@
     "sources/**",
     "training/**",
     "**/fixtures/**",
-    "packages/htmlwasher/native/index.js"
+    "packages/trafilaturacore/native/index.js"
   ],
   "ignoreDependencies": [
     "cspell",
@@ -14,13 +14,13 @@
     "@cspell/dict-git",
     "@cspell/dict-rust"
   ],
-  "ignoreWorkspaces": ["packages/htmlwasher/native/npm/*"],
+  "ignoreWorkspaces": ["packages/trafilaturacore/native/npm/*"],
   "workspaces": {
-    "packages/htmlwasher": {
+    "packages/trafilaturacore": {
       "entry": "src/index.ts",
       "project": "src/**"
     },
-    "packages/htmlwasher/native": {
+    "packages/trafilaturacore/native": {
       "entry": "test/**/*.test.ts",
       "project": "test/**"
     },

@@ -32,7 +32,7 @@ fi
 # TypeScript source files in the TS package roots (not test files, not declaration files).
 ts_source=$(printf '%s\n' "$edited" | \
   grep -E '/src/.+\.ts$' | \
-  grep -E '/packages/(htmlwasher|live-crawl-tester)/src/' | \
+  grep -E '/packages/(trafilaturacore|live-crawl-tester)/src/' | \
   grep -v '\.test\.ts$' | \
   grep -v '\.d\.ts$' || true)
 
@@ -41,19 +41,19 @@ ts_tests=$(printf '%s\n' "$edited" | grep '\.test\.ts$' || true)
 
 # Check 1: source changed without test updates.
 if [[ -n "$ts_source" && -z "$ts_tests" ]]; then
-  files=$(printf '%s\n' "$ts_source" | sed -E 's|.*/packages/(htmlwasher\|live-crawl-tester)/|packages/\1/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
+  files=$(printf '%s\n' "$ts_source" | sed -E 's|.*/packages/(trafilaturacore\|live-crawl-tester)/|packages/\1/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
   msg="Source changed without test updates ($files). Add or update the corresponding *.test.ts file in the same response. See .claude/rules/test-maintenance.md."
   printf '{"decision":"block","reason":"%s"}' "$msg"
   exit 0
 fi
 
-# Rust source files in the native crate (packages/htmlwasher/native/src/**).
+# Rust source files in the native crate (packages/trafilaturacore/native/src/**).
 rs_source=$(printf '%s\n' "$edited" | \
-  grep -E '/packages/htmlwasher/native/src/.+\.rs$' || true)
+  grep -E '/packages/trafilaturacore/native/src/.+\.rs$' || true)
 
 # A Rust test change: an edited file under native/tests/, or an edited native/src file
 # that itself carries a #[cfg(test)] mod (inline unit tests edited alongside the code).
-rs_tests=$(printf '%s\n' "$edited" | grep -E '/packages/htmlwasher/native/tests/.+\.rs$' || true)
+rs_tests=$(printf '%s\n' "$edited" | grep -E '/packages/trafilaturacore/native/tests/.+\.rs$' || true)
 if [[ -n "$rs_source" && -z "$rs_tests" ]]; then
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
@@ -66,8 +66,8 @@ fi
 
 # Check 2: Rust source changed without Rust test updates.
 if [[ -n "$rs_source" && -z "$rs_tests" ]]; then
-  files=$(printf '%s\n' "$rs_source" | sed -E 's|.*/packages/htmlwasher/native/|packages/htmlwasher/native/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
-  msg="Rust source changed without test updates ($files). Add or update a #[cfg(test)] mod or a packages/htmlwasher/native/tests/ test in the same response. See .claude/rules/test-maintenance.md."
+  files=$(printf '%s\n' "$rs_source" | sed -E 's|.*/packages/trafilaturacore/native/|packages/trafilaturacore/native/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
+  msg="Rust source changed without test updates ($files). Add or update a #[cfg(test)] mod or a packages/trafilaturacore/native/tests/ test in the same response. See .claude/rules/test-maintenance.md."
   printf '{"decision":"block","reason":"%s"}' "$msg"
   exit 0
 fi

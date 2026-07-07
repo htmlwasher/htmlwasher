@@ -20,13 +20,13 @@ import pytest
 from download_wcxb import CLASS_LABELS
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ARTIFACTS_DIR = REPO_ROOT / "packages" / "htmlwasher" / "native" / "artifacts"
+ARTIFACTS_DIR = REPO_ROOT / "packages" / "trafilaturacore" / "native" / "artifacts"
 MODEL_PATH = ARTIFACTS_DIR / "model.xgb.json"
 VOCAB_PATH = ARTIFACTS_DIR / "tfidf-vocab.json"
 PARITY_PATH = (
     REPO_ROOT
     / "packages"
-    / "htmlwasher"
+    / "trafilaturacore"
     / "native"
     / "tests"
     / "fixtures"

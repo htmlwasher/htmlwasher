@@ -1,4 +1,4 @@
-# Offline training dependencies for htmlwasher's page-type classifier.
+# Offline training dependencies for trafilaturacore's page-type classifier.
 #
 # These are NOT installed by this listing. They are downloaded on demand via uv
 # (e.g. `uv pip install -r requirements.txt` inside training/.venv, or `uvx <tool>`),
@@ -9,7 +9,7 @@
 # The WCXB dataset itself is NOT listed and NOT committed: it is fetched at
 # runtime from Hugging Face / Zenodo by download_wcxb.py (see README.md) and is
 # .gitignored. Only the trained artifacts (model.xgb.json + tfidf-vocab.json) are
-# committed, under @/packages/htmlwasher/native/artifacts/.
+# committed, under @/packages/trafilaturacore/native/artifacts/.
 #
 # Pins are conservative lower bounds; uv resolves the latest compatible release.
 

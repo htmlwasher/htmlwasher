@@ -23,8 +23,8 @@ Use `str | None`, not `Optional[str]`. Use builtin `dict`/`list`, not `typing.Di
 `training/` is an **offline** Python project that trains the page-type classifier and exports the artifacts the TypeScript library ships. It loads no Node, builds no wheel, and is never imported at runtime. The pipeline:
 
 - `download_wcxb.py` — fetch the public **WCXB** dataset (CC-BY-4.0; attribution required) from Hugging Face `murrough-foley/web-content-extraction-benchmark` (or the Zenodo DOI). Datasets are large — `.gitignore` them, download on demand, never commit them.
-- `extract_features.py` — compute the **189 features** (89 numeric DOM/URL signals + 100 TF-IDF) exactly as `web-page-classifier` defines them. This must agree byte-for-byte with the Rust extractor in `@/packages/htmlwasher/native/src/page_type/features.rs`, verified by `@/packages/htmlwasher/native/tests/classifier_parity.rs`.
-- `train.py` — train an `XGBClassifier` (`multi:softprob`, 7 classes, SMOTE oversampling), export the XGBoost native JSON dump via `Booster.save_model('model.xgb.json')`, and emit `tfidf-vocab.json` (vocabulary + IDF weights). Write both directly into `@/packages/htmlwasher/native/artifacts/`. Training is CPU-only — seconds-to-minutes at this scale; **no GPU**.
+- `extract_features.py` — compute the **189 features** (89 numeric DOM/URL signals + 100 TF-IDF) exactly as `web-page-classifier` defines them. This must agree byte-for-byte with the Rust extractor in `@/packages/trafilaturacore/native/src/page_type/features.rs`, verified by `@/packages/trafilaturacore/native/tests/classifier_parity.rs`.
+- `train.py` — train an `XGBClassifier` (`multi:softprob`, 7 classes, SMOTE oversampling), export the XGBoost native JSON dump via `Booster.save_model('model.xgb.json')`, and emit `tfidf-vocab.json` (vocabulary + IDF weights). Write both directly into `@/packages/trafilaturacore/native/artifacts/`. Training is CPU-only — seconds-to-minutes at this scale; **no GPU**.
 
 The 7 page types are `article | forum | product | collection | listing | documentation | service`.
 

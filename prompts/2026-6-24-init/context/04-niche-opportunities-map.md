@@ -1,6 +1,6 @@
 # Contextractor's Architectural Wedge Against Crawl4AI: Niche Map and 2026 Priorities
 
-> Research context document for the htmlwasher TypeScript port.
+> Research context document for the trafilaturacore TypeScript port.
 > Saved 2026-06-24. Source: deep technical research session.
 >
 > **What's in this doc:** The full opportunity map (extraction-quality, performance, and use-case niches) where a Trafilatura-based stack beats Crawl4AI. Not directly prescriptive for the TS port, but explains *why* the port targets specific deployment surfaces (Lambda, WARC, MCP, EU residency) and which page-type wins to prioritize (forums, multilingual, news). Use it to frame the README positioning and to choose test fixtures.

@@ -61,19 +61,19 @@ Determine domain per file:
 
 | Path pattern | Domain |
 |---|---|
-| `packages/htmlwasher/src/core/**/*.ts` | TypeScript (extraction core) |
-| `packages/htmlwasher/src/metadata/**/*.ts` | TypeScript (metadata) |
-| `packages/htmlwasher/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
-| `packages/htmlwasher/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
-| `packages/htmlwasher/src/**/*.ts` | TypeScript (library) |
+| `packages/trafilaturacore/src/core/**/*.ts` | TypeScript (extraction core) |
+| `packages/trafilaturacore/src/metadata/**/*.ts` | TypeScript (metadata) |
+| `packages/trafilaturacore/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
+| `packages/trafilaturacore/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
+| `packages/trafilaturacore/src/**/*.ts` | TypeScript (library) |
 | `packages/live-crawl-tester/src/**/*.ts` | TypeScript (live-crawl tester) |
 | `training/**/*.py` | Python (offline training) |
 
 ## Step RESEARCH
 
 For each non-trivial pattern or API usage in the change set:
-- **Repo grep**: search `htmlwasher/`, `tools/`, and `training/` for existing usage — establishes convention vs. new introduction
-- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`packages/htmlwasher/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
+- **Repo grep**: search `trafilaturacore/`, `tools/`, and `training/` for existing usage — establishes convention vs. new introduction
+- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`packages/trafilaturacore/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
 - **Web fetch**: for unfamiliar library APIs (napi-rs, dom_query, linkedom, parse5, sanitize-html), fetch their official docs
 - **Security**: WebSearch for CVEs or OWASP issues on security-adjacent patterns (untrusted HTML parsing, input handling)
 
@@ -90,7 +90,7 @@ Collect the output findings. These are the baseline from the multi-agent review.
 
 ## Step AUGMENT
 
-Apply the htmlwasher-specific checks below for each domain in the change set, in addition to the native review findings from Step REVIEW. Merge all findings into a single list before Step FIX.
+Apply the trafilaturacore-specific checks below for each domain in the change set, in addition to the native review findings from Step REVIEW. Merge all findings into a single list before Step FIX.
 
 Treat the additions and the `user-entry-log/` entries read in Step AMEND as authoritative spec: any code or prompt content contradicting the latest applicable entry is a `confident-fix` finding, and an addition not actually implemented in code (Step IMPLEMENT) is a `confident-fix` finding — implement it.
 
@@ -111,8 +111,8 @@ Classify each finding:
 - `import type` for all type-only imports — check re-exports specifically
 - No floating promises — every async call is awaited or explicitly handed off
 - No `console.log` in production library paths — the library must not emit to stdout/stderr by default
-- DOM parsing stays behind the established interface — `linkedom` + `parse5` for the TS side (metadata + washing); extraction/classification parse in the Rust crate (`dom_query`/html5ever); do not introduce a new parser on either side
-- Page-type classification is a pure-Rust GBDT over the XGBoost JSON dump (`model.xgb.json`) inside the `@htmlwasher/native` crate — there is NO ONNX/onnxruntime; the feature extractor, GBDT evaluator, and profiles live in the Rust crate, not TS
+- DOM parsing stays behind the established interface — `linkedom` + `parse5` for the TS side (metadata + cleaning); extraction/classification parse in the Rust crate (`dom_query`/html5ever); do not introduce a new parser on either side
+- Page-type classification is a pure-Rust GBDT over the XGBoost JSON dump (`model.xgb.json`) inside the `@trafilaturacore/native` crate — there is NO ONNX/onnxruntime; the feature extractor, GBDT evaluator, and profiles live in the Rust crate, not TS
 
 ### Python checks (training/)
 
@@ -173,7 +173,7 @@ Use Edit tool directly on the prompt files.
 - List prompts: `find prompts/ -name "*.md" -maxdepth 3 2>/dev/null | head -10`
 - Match: compare branch name keywords and recent commit messages against prompt directory names; pick the best match
 - If matched: read the prompt, then update it to mark completed steps as `[DONE]`, update the "Current State" section if one exists, and add any new patterns or constraints discovered during this review
-- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`packages/htmlwasher/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
+- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`packages/trafilaturacore/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
 
 **Tertiary — fix this command.** Extract repo-specific patterns (not generic best-practices) and integrate into `## Project-Specific Checks` below. Only edit if a genuinely new project-specific pattern emerged.
 
@@ -190,27 +190,27 @@ Print brief summary: N files fixed, top issues, `info` items needing manual atte
 
 Project conventions accumulated from past reviews. Apply in Step AUGMENT alongside the domain checks above.
 
-This section starts lean and accumulates as reviews surface durable, repo-specific patterns. Add a new subsection only when a genuinely htmlwasher-specific invariant emerges — never generic best-practice advice (those live in Step AUGMENT's domain checks).
+This section starts lean and accumulates as reviews surface durable, repo-specific patterns. Add a new subsection only when a genuinely trafilaturacore-specific invariant emerges — never generic best-practice advice (those live in Step AUGMENT's domain checks).
 
 ### Trafilatura port fidelity
-- htmlwasher's extraction core is a Rust fork of rs-trafilatura's live path — when porting behavior, match the reference implementations in `~/r/htmlwasher-sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
+- trafilaturacore's extraction core is a Rust fork of rs-trafilatura's live path — when porting behavior, match the reference implementations in `~/r/trafilatura-sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
 - When references disagree, adbar/trafilatura (Python) is the extraction-semantics authority — and verify branch LIVENESS, not just code shape: go-trafilatura carries its own dead code (its `link_density_test` discard deadens go's backtracking; Python returns the list), so a faithful port of go can be a bug
-- `~/r/htmlwasher-sources/` repos are READ-ONLY reference inputs in an external sibling dir (OUTSIDE this repo) — never edit them and never import from them at runtime
+- `~/r/trafilatura-sources/` repos are READ-ONLY reference inputs in an external sibling dir (OUTSIDE this repo) — never edit them and never import from them at runtime
 
 ### DOM and parser boundary
-- `linkedom` + `parse5` handle all TS-side parsing (metadata sidecar + washing); extraction/classification parsing is `dom_query`/html5ever inside the Rust crate. Do not introduce a new DOM/HTML parser on either side
+- `linkedom` + `parse5` handle all TS-side parsing (metadata sidecar + cleaning); extraction/classification parsing is `dom_query`/html5ever inside the Rust crate. Do not introduce a new DOM/HTML parser on either side
 - Treat all parsed HTML as untrusted — sanitize node content before any downstream interpolation
-- Entity decoding must be SINGLE-PASS (one alternation regex + lookup map, `html.unescape` semantics) — chained sequential `.replace()` calls double-decode `&amp;lt;`; this bug appeared independently in metadata `unescapeHtml` and washing `decodeAttrEntities`
+- Entity decoding must be SINGLE-PASS (one alternation regex + lookup map, `html.unescape` semantics) — chained sequential `.replace()` calls double-decode `&amp;lt;`; this bug appeared independently in metadata `unescapeHtml` and cleaning `decodeAttrEntities`
 
 ### Native classifier interface
-- Page-type inference is the pure-Rust GBDT evaluator in the `@htmlwasher/native` crate (no ONNX runtime); the model artifacts (`model.xgb.json`, `tfidf-vocab.json`, produced by offline `training/`) are baked into the crate via `include_str!` and hard-validated at first use
-- A native/classifier failure must never reject `wash()`: `pipeline.ts` degrades to whole-document washing with a warning (and surfaces native `warnings` in `messages`)
+- Page-type inference is the pure-Rust GBDT evaluator in the `@trafilaturacore/native` crate (no ONNX runtime); the model artifacts (`model.xgb.json`, `tfidf-vocab.json`, produced by offline `training/`) are baked into the crate via `include_str!` and hard-validated at first use
+- A native/classifier failure must never reject `clean()`: `pipeline.ts` degrades to whole-document cleaning with a warning (and surfaces native `warnings` in `messages`)
 
 ### Native packaging invariants
-- `pipeline.ts` lazy-loads `@htmlwasher/native` — never reintroduce an eager top-level import (it breaks `boilerplate:'none'`, metadata-only use, and the CLI on platforms without a loadable prebuild)
+- `pipeline.ts` lazy-loads `@trafilaturacore/native` — never reintroduce an eager top-level import (it breaks `boilerplate:'none'`, metadata-only use, and the CLI on platforms without a loadable prebuild)
 - The native package's self-skipping build/test scripts probe the toolchain via `spawnSync('cargo', ['--version'])` — NEVER via `CARGO_HOME` (rustup does not export it; the old gate silently skipped rebuilds and `cargo test` on standard installs). `npm_config_rebuild_native=1` stays as the force override
 - Any `native/src/**.rs` behavior change must rebuild AND refresh the committed host prebuild (`npm/darwin-arm64/*.node`) in the same change; the other targets come from `.github/workflows/build-native.yml`
-- `htmlwasher` (public) depends on the private `@htmlwasher/native` via `workspace:*` — publishing is blocked by a `prepublishOnly` guard until the alpha tarball-bundling plan lands; do not remove the guard without implementing that plan
+- `trafilaturacore` (public) depends on the private `@trafilaturacore/native` via `workspace:*` — publishing is blocked by a `prepublishOnly` guard until the alpha tarball-bundling plan lands; do not remove the guard without implementing that plan
 
 ### Workspace boundaries
 - `training/` is offline-only, Python, uv-managed, and NOT a pnpm workspace package — it must never be imported by or shipped with the TypeScript library
