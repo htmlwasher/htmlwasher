@@ -723,6 +723,17 @@ was an htmlprocessing-server inheritance, not a Trafilatura behavior — so it w
 - **Re-verified:** corpus tester 28 fixtures × 5 combos, page-type accuracy 100%, 0
   hard/security failures, verdict PASS; adbar eval P 0.831 / R 0.840 / F1 0.835 (previous
   docs said ≈0.83 — unchanged/slightly up).
+- **Benchmark (`/bench:improve`, report `@/benchmarks/2026-07-07-2347-benchmark.md`):** the
+  four-engine live-corpus run after the refactor is **F1-neutral** vs the last committed run
+  (overall F1 0.897 → 0.898, precision 0.939 → 0.941, per-type identical on 5 of 6 types;
+  product +0.016 noise). trafilaturacore still leads all comparison engines (0.898 > rs 0.881 >
+  readability 0.846). No defaults-only fix was applied: every remaining worst-page gap
+  root-causes to a reference-relative artifact (overreacted.io — Trafilatura drops the code
+  blocks tc keeps, `const` 76× vs 1×; webscraper.io — degenerate duplicated reference;
+  wikinews — reference drops a short list) or per-page noise (books.toscrape travel_2 — its
+  sibling mystery_3 scores 0.936 with the identical profile), consistent with the prior
+  `2026-07-06-2106` determination. Rust-core/classifier surgery was rejected as high-risk to
+  the adbar oracle for negative expected value on ≤3-page, reference-noisy types.
 
 ---
 
