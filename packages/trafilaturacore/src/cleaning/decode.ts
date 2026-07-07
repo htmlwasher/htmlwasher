@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Ported from htmlprocessing-server decode-buffer.ts (Apache-2.0). Buffer → UTF-8
+// Buffer → UTF-8
 // string with WHATWG-priority BOM detection, a valid-UTF-8 fast path, then a
 // chardet+iconv-lite fallback (with a 20% confidence floor for legacy encodings).
 

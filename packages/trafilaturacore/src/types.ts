@@ -1,8 +1,7 @@
 // Public type surface for trafilaturacore.
 //
 // The knobs (boilerplate-removal mode + optional custom cleaning config) are
-// plain string-union / `as const`-array types, NOT TypeScript `enum`s — mirroring
-// htmlprocessing-server's `PROCESSING_MODES = [...] as const` pattern (locked
+// plain string-union / `as const`-array types, NOT TypeScript `enum`s (locked
 // decision #4 in the build brief). Cleaning uses the single Trafilatura-aligned
 // `DEFAULT_CLEAN_CONFIG`; callers may instead pass a fully-custom `CleanConfig`
 // (pure JSON data — see {@link CleanOptions.config}).

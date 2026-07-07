@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Ported from htmlprocessing-server normalize-html.ts (Apache-2.0). parse5-based
+// parse5-based
 // WHATWG-HTML5 well-forming: full documents via parse+serialize, fragments via
 // parseFragment+serialize. `isHtmlDocument` is the document/fragment heuristic.
 

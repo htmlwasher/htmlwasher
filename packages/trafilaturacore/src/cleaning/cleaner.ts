@@ -4,7 +4,6 @@
 // there are two implementations behind one interface:
 //
 //   - `cleanHtmlBackend` (DEFAULT): sanitize-html driven by a `CleanConfig`.
-//     This is the byte-for-byte port of htmlprocessing-server behavior.
 //   - `dompurifyBackend` (opt-in, `hardened: true`): DOMPurify over a jsdom window,
 //     using the same allow-list derived from the config. DOMPurify + jsdom are
 //     OPTIONAL dependencies and are imported lazily; if either is missing the

@@ -5,8 +5,7 @@ Working reference for the phased port defined in
 source→target module mapping, resolved questions, parity gotchas, and open
 questions. Kept current as phases land (per the Phase 7 gate and the deliverables
 checklist). Built from a Phase 0 reconnaissance of the reference repos under
-`~/r/trafilatura-sources/` and the sibling projects `~/r/tools/packages/htmlprocessing-server`
-and `~/r/contextractor`.
+`~/r/trafilatura-sources/`.
 
 ---
 
@@ -670,7 +669,7 @@ The TS-side regression oracle now lives in `packages/trafilaturacore/test/valida
 
 Alignment run per [`@/prompts/2026-7-7-align-levels-with-trafilatura/prompt.md`](prompts/2026-7-7-align-levels-with-trafilatura/prompt.md).
 Rationale: upstream Trafilatura has NO "cleaning level" concept — the five-level preset system
-was an htmlprocessing-server inheritance, not a Trafilatura behavior — so it was removed outright.
+was not a Trafilatura behavior — so it was removed outright.
 
 - **Removed:** `CLEANING_LEVELS` (`minimal | standard | permissive | styled | correct`), the
   `CleaningLevel` type, `DEFAULT_CLEANING_LEVEL`, `isCleaningLevel`, the `CleanOptions.level`
@@ -749,7 +748,7 @@ was an htmlprocessing-server inheritance, not a Trafilatura behavior — so it w
   precedence; 60 unit tests pass; correct title/author/date/sitename on real adbar
   pages. `date.ts` is a reduced htmldate equivalent; DOM XPaths translated to CSS
   (regex-anchored class/id predicates loosened to substring — documented per module).
-- Phase 6 (cleaning levels) — done. `src/cleaning/` ports the htmlprocessing-server
+- Phase 6 (cleaning levels) — done. `src/cleaning/` implements the cleaning
   pipeline; 5 levels, security at every level + the styled CSS-URL allow-list
   (closes sanitize-html's gap), optional DOMPurify/jsdom hardened backend; 71
   tests pass. `cleanHtml`/`cleanBuffer` are async (prettier/minifier lazily imported)
@@ -869,8 +868,6 @@ small effect there.
   these for the core algorithm, thresholds, and metadata semantics.
 - `trafilatura-rs` (nchapman) is the cross-check / tiebreaker.
 - `readability` (mozilla) is a TS/DOM idiom reference only.
-- `htmlprocessing-server` defines the **HTML-cleaning** pillar (sanitize-html presets +
-  normalize/format pipeline).
 - `contextractor` defines the **boilerplate-mode → favor_precision/favor_recall** mapping.
 
 ## Resolved questions
@@ -1032,21 +1029,21 @@ confirmed).
 
 ### HTML cleaning → `@/packages/trafilaturacore/src/cleaning/`
 
-Faithful port of `htmlprocessing-server/src/process-html.ts`. Pipeline order:
+The HTML cleaning pipeline order:
 decode (chardet, iconv-lite; buffers only), then normalize (parse5), then sanitize
 (sanitize-html with the level preset; skipped for `correct`), then re-normalize (only if
 `transformTags`), then DOCTYPE prepend (full documents), then format (prettier by default;
 html-minifier-terser when `minify`). Returns `{ html, messages }`.
 
-- `cleaning/modes.ts` — cleaning-level union as `as const` (NEVER a TS enum), mirroring
-  `PROCESSING_MODES`. **trafilaturacore uses exactly 5 levels** —
+- `cleaning/modes.ts` — cleaning-level union as `as const` (NEVER a TS enum).
+  **trafilaturacore uses exactly 5 levels** —
   `minimal | standard | permissive | styled | correct` — and **drops the four `*-reader`
   variants** (the Readability concern is handled by the boilerplate pillar; do not bundle
   jsdom/@mozilla/readability). (Superseded 2026-07-07: cleaning levels removed entirely —
   see the dated v2 section above.)
 - `cleaning/presets/{minimal,standard,permissive,styled}.ts` — `CleanConfig` objects
-  (`allowedTags, allowedAttributes, allowedClasses, selfClosing, nonTextTags, transformTags`),
-  copied from `htmlprocessing-server/src/presets/`. `standard` is the default. (Superseded
+  (`allowedTags, allowedAttributes, allowedClasses, selfClosing, nonTextTags, transformTags`).
+  `standard` is the default. (Superseded
   2026-07-07: `presets/` deleted — the single `DEFAULT_CLEAN_CONFIG` in `cleaning/config.ts`
   replaces them.)
 - `cleaning/sanitize.ts` — wraps sanitize-html; runs `filterEventHandlers` (strip every `on*`
@@ -1081,7 +1078,7 @@ maxInputBytes?, url? }` — and `'none'` is renamed `'clean-only'`.)
 - The custom-config CSS-URL gap is a security boundary — test it (since 2026-07-07 the former
   `correct`/`styled` levels are gone; `cleanStyledHtml` runs unconditionally, and a custom
   config that re-allows `style` must stay covered).
-- prettier is the DEFAULT formatter in htmlprocessing-server (`shouldMinify` defaults false).
+- prettier is the DEFAULT formatter (`shouldMinify` defaults false).
 - parse5 pin: source uses `^8`; trafilaturacore pins `^7.3.0` — serializer output can differ
   (whitespace/attr order) and break golden fixtures. **Bump trafilaturacore to parse5 `^8`** for
   cleaning parity (decision: align to the cleaning engine).

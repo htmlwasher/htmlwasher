@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// The HTML cleaning stage. A faithful port of htmlprocessing-server's
-// process-html.ts pipeline, retargeted onto the single Trafilatura-aligned
+// The HTML cleaning stage, built around the single Trafilatura-aligned
 // DEFAULT_CLEAN_CONFIG (see ./config.ts — upstream Trafilatura has no
 // "cleaning levels", so neither does trafilaturacore).
 //
