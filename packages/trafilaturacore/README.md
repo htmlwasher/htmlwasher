@@ -1,5 +1,9 @@
 # trafilaturacore
 
+[![Build](https://github.com/trafilatura/trafilatura/actions/workflows/build-native.yml/badge.svg)](https://github.com/trafilatura/trafilatura/actions/workflows/build-native.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](https://github.com/trafilatura/trafilatura/blob/main/LICENSE)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/trafilatura/trafilatura)
+
 A TypeScript **HTML-cleanup** library: **HTML in → cleaned HTML out**. It never
 converts to Markdown, XML, or plain text, and never touches the network. It
 combines two composable pillars:
