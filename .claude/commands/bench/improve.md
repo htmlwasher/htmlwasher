@@ -74,6 +74,13 @@ opposite; a token-F1 cliff isolated to one page type points at that type's profi
 
 ## Step REPORT
 
+- If NO defaults-only fix was warranted (every gap root-caused to a reference-relative artifact or
+  per-page noise), still write the full report: set BEFORE = the last committed `@/benchmarks/*.md`
+  run's "after" column so the tables double as a regression check on whatever change drove this run
+  (BEFORE→AFTER then shows that change's F1 effect, not a vacuous before==after), and make **Changes**
+  a "Documented, not tuned" section justifying each rejected candidate. When a prior benchmark already
+  documented the same plateau, diff the current per-type against its "after" column to confirm the
+  plateau still holds rather than re-deriving from scratch.
 - Write a timestamped report to `@/benchmarks/<TS>-benchmark.md` (`TS = $(date '+%Y-%m-%d-%H%M')`) exactly
   as `/bench:run` Step REPORT, but with BEFORE/AFTER columns in the overall AND per-type tables, plus a
   **Changes** section naming each fix: its root cause, the layer it touched (Rust core / classifier /
