@@ -8,6 +8,648 @@ checklist). Built from a Phase 0 reconnaissance of the reference repos under
 `~/r/htmlwasher-sources/` and the sibling projects `~/r/tools/packages/htmlprocessing-server`
 and `~/r/contextractor`.
 
+---
+
+## v2 — Rust extraction core rebuild (hybrid Rust + TypeScript)
+
+> Everything **below this `## v2` heading down to the `## v1 record` marker** is the living
+> v2 migration reference for [`@/prompts/2026-6-24-init/prompt.md`](prompts/2026-6-24-init/prompt.md)
+> (the 2026-07-06 rewrite: Rust boilerplate/classifier core, TS-owned sanitization,
+> contextractor layout, no ONNX). The sections after the `## v1 record` marker are the
+> historical all-TypeScript v1 port notes, kept as the regression oracle.
+
+## v2 status (phase tracker)
+
+- **Operating mode: UPDATE-IN-PLACE.** A working v1 exists (now at `@/packages/*` after Phase
+  RESTRUCTURE — originally `@/htmlwasher/` + `@/tools/htmlwasher/`); `pnpm test` is green (28 corpus
+  fixtures @ 100% page-type accuracy, 0 security failures; ~369 lib tests). v1 is the regression
+  oracle. Branch `rust-core`.
+- **Phase ORIENT — done** (this block). Module map, strip list, dormant exclusion, perf
+  baseline below. No production code.
+- **Phase FLOOR — done.** The TS washing floor is now UNCONDITIONAL: `enforceSecurityFloor`
+  then `sanitizeStyledHtml` run as the final pass on EVERY `washHtml` path (preset, custom
+  config, and `correct`), no longer gated on `configAllowsStyle`. This closes the doc-09 bypass
+  where a custom `{ allowedAttributes: { '*': ['*'] } }` config passed shape validation and kept
+  `onclick` plus a `javascript:` CSS URL. New regression tests: the exact wildcard config
+  (`wash.test.ts`) and hostile input through the public `wash()` at every level with
+  `boilerplate: 'balanced'` (`pipeline.test.ts`); the wash-corpus-tester now hard-asserts security
+  at EVERY level incl. `correct` (stale soft-exemption removed from `corpus-runner.ts`/`report.ts`).
+  SPECs updated. `pnpm build && lint && test` green (377 lib tests; corpus 28 fixtures,
+  security-failures-at-all-levels 0, verdict PASS).
+  - **Gotcha (carry into every later phase gate): a cached-green `pnpm test` is NOT a real run.**
+    The baseline `pnpm test` reported `FULL TURBO` (all 4 tasks cached), so `htmlwasher#test` never
+    actually executed — a hardcoded stale-session scratchpad path in `cli-program.test.ts`
+    (`/private/tmp/.../<old-session-id>/scratchpad`) was ENOENT-ing and only surfaced once a source
+    edit invalidated the turbo cache. Fixed to a per-run `mkdtemp` temp dir. Lesson: after each phase
+    force a genuine run (`turbo run test --force`, or rely on a source edit to bust the cache); never
+    trust cached green as the regression oracle. And capture the real exit code — a piped
+    `pnpm test | tail` masks it behind `tail`'s exit status.
+- **Phase RESTRUCTURE — done.** Adopted the contextractor flat `packages/*` layout via `git mv`:
+  `htmlwasher` to `packages/htmlwasher`, `tools/htmlwasher/{wash-corpus-tester,live-crawl-tester}` up
+  to `packages/*`, `tools/` dissolved. Package NAMES unchanged (`htmlwasher` published; `@htmlwasher/*`
+  testers private). `pnpm-workspace.yaml` set to the three contextractor globs; tsconfig `extends`
+  depth fixed (flagship gains one `../`, each tester loses one); `knip.json` workspace keys, the
+  `spec-gate.sh`/`test-gate.sh` path matchers, and off-by-one relative doc links (`../../../` to
+  `../`/`../../`) all repointed; full `tools/htmlwasher | @/htmlwasher/` sweep across CLAUDE.md
+  (structure tree + SPEC mapping), root SPEC.md, READMEs, `.claude/**`, `.gitignore`, and training
+  docs. `pnpm ls -r` shows every package at its new path with its name unchanged. Gate green:
+  `pnpm build && lint && test` (377 lib tests; corpus 28 fixtures PASS).
+- **Phase CRATE — done.** `packages/htmlwasher/native/` (crate `htmlwasher-native`, plain lib —
+  cdylib/napi land at BIND) ports the live rs-trafilatura path through the tested v1 TS core with
+  the doc-09 divergences: bucket-B cleaning (`html_processing.rs` + `tags.rs`), the content-node
+  cascade (`selector/{content,discard,utils}.rs`), link density (`link_density.rs`), the relocated
+  `prune_unwanted_nodes` (`extractor/fallback.rs`), the 7 profiles + `PageType` (`page_type/mod.rs`),
+  and orchestration + the DUAL-mode serializer (`extract.rs`). Gate green: `cargo build/test`
+  (63 tests: 8 unit + 55 integration incl. the doc-09 backoff guards + malformed no-panic corpus +
+  adbar sanity), `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`. Decisions/deviations:
+  - **`html-cleaning` NOT wired.** 0.3.0 pins `dom_query 0.24`, type-incompatible with the mandated
+    `dom_query 0.28` (two dom_query trees). Bucket-B cleaning is ported directly from the tested v1
+    `clean.ts` instead — faithful + license-clean. (Resolves the CRATE license open question moot.)
+  - **dom_query `unwrap_node` is a footgun**: it removes a node's _parent_ (promoting the node + its
+    siblings), NOT "replace element with its children". Tag stripping uses `strip_elements` (correct
+    keep-children unwrap); `unwrap_node` is never used. This was the root cause of a 93%-content-loss
+    bug via `<meta>` in `<body>` (microdata) during cleaning.
+  - **Depth guard enforced.** `enforce_max_depth` (iterative, `MAX_TREE_DEPTH=512`) runs before
+    cleaning so no downstream recursion (dom_query's recursive `strip_elements`, the serializer)
+    overflows; verified on 3000-deep divs / 2000-deep tables in dev AND release. Table caps
+    (`MAX_TABLE_CELLS=20_000`, `MAX_TABLE_TEXT_LEN=200_000`) enforced in the serializer.
+  - **`remove_comments` implemented for real** (rs's `dom.rs` stub is a no-op) as a DOM comment strip.
+  - **`prune_unwanted_nodes` reconciled to ONE copy** in `extractor/fallback.rs`.
+  - **`COMMENTS_ARE_CONTENT` thread-local → explicit `comments_are_content` field** on `CoreOptions`.
+  - **`textLength` from DOM `text()`** of the kept subtree (the text twin), never regex; `''`-on-
+    whitespace contract preserved.
+  - **DEFERRED (honest partial):** `aggregate_sections`/`collect_repeated_items` post-passes (dead
+    flags in v1; carried as profile config, effect measured at VALIDATE) and the structured
+    JSON-LD/Discourse/baseline rescue fallbacks are NOT ported this phase — the v1-equivalent core
+    cascade (selector → semantic → scoring → body) + backoff + body fallback is.
+  - **RE-BASELINED tests:** the v1 "no class/style/id leakage" assertions invert under preserve-markup
+    (attributes SURVIVE); the original whitelist behavior is retained behind `EmitMode::WhitelistParity`
+    and tested there. `precision`↔`recall` does not change output on the 4 adbar pages (matches v1's
+    documented finding); its observable effect is proven by synthetic link-density tests in `tests/extract.rs`.
+- **Phase CLASSIFY — done.** The 3-stage cascade + confidence + 189-feature extractor + pure-Rust GBDT
+  landed in `packages/htmlwasher/native/src/page_type/{url,features,tfidf,gbdt,model,signals}.rs` + the
+  `classify` fn in `mod.rs`, wired into `lib.rs::extract` (one parse feeds classify + extract; auto-classify
+  when `page_type` is `None`, else the override with confidence `None`). Ported from the proven v1
+  `src/classifier/*` (100%-parity target). Artifacts `artifacts/{model.xgb.json,tfidf-vocab.json}` are
+  `include_str!`-baked + `LazyLock`-validated. **Parity gate GREEN** (`tests/classifier_parity.rs`, 15
+  fixtures): numeric ≤ 3.4e-13, tfidf ≤ 2.2e-16, probs ≤ 6.9e-8, **argmax 15/15**. Full gate: 95 tests,
+  `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` all green. Key findings:
+  - **GBDT must evaluate splits in float32.** XGBoost stores features/thresholds as f32; comparing in f64
+    branches differently for a feature value near a split threshold, shifting probs by up to ~0.31 on one
+    fixture (argmax unaffected). Casting `(v as f32) < (thr as f32)` in `gbdt.rs` dropped the worst prob
+    diff from 3.1e-1 to 6.9e-8. (Resolves the fixture-0 vs fixture-4853 discrepancy.)
+  - **`base_score` (0.5) is inert.** A single scalar added to all 7 class margins → cancels under softmax;
+    margins accumulate from 0. `default_left` is present but never set (dense features) — the defensive
+    branch never fires. No early stopping (all 1400 trees; `iteration_indptr` = 201, attributes empty).
+  - **`<template>` needs NO explicit stripping.** Unlike linkedom (which forced the v1 `parseDocumentSpec`
+    template removal), dom_query/html5ever stores template children in a separate `template_contents`
+    fragment, so `.text()`/selectors/`children()` never descend into them — matching lexbor natively.
+  - **`dom::parse` == `parseDocumentSpec`.** html5ever's spec parse matches lexbor/selectolax on nested
+    `<body>` coercion + trailing whitespace text nodes; body-text parity is exact (f[58] within 1e-13).
+  - **`onnxruntime` dropped** — the classifier is a pure-Rust GBDT over the XGBoost JSON dump.
+  - **Python side (`training/`):** ONNX export removed; `train.py` writes the XGBoost native JSON dump
+    (`clf.get_booster().save_model` → `native/artifacts/model.xgb.json`) + `tfidf-vocab.json`;
+    `make_parity_fixtures.py` emits `native/tests/fixtures/classifier-parity.json` (15 fixtures). The retrain
+    is deterministic: held-out accuracy **0.7769** / macro-F1 0.6632 (matches v1), the model is byte-identical
+    to v1's, JSON round-trip argmax 100%. `pytest` + `ruff` green; `onnxmltools`/`skl2onnx` dropped from
+    `requirements.txt`; the training-root `model.onnx` removed. v1's shipped `src/classifier/model/*` untouched
+    (it leaves at INTEGRATE), so the v1 suite stays green.
+  - **Gotcha — biome reformats generated JSON artifacts.** `pnpm build`'s `pnpm fix` (biome) reformatted
+    `native/artifacts/tfidf-vocab.json` (biome skips the 1.8 MB `model.xgb.json` — over its size limit — but
+    not the small vocab), which breaks artifact reproducibility vs `training/`. Fixed: added
+    `!**/native/artifacts` to `biome.json` `files.includes` (alongside `!**/classifier/model` + `!**/fixtures`).
+    Always regenerate artifacts from `training/` (canonical `json.dumps`); never let biome touch them.
+- **Phase BIND — done.** napi-rs v3 addon surface (`src/binding.rs`) + `build.rs` + the contextractor
+  committed-prebuild packaging landed in `packages/htmlwasher/native/`. JS API: async
+  `extract(html, options?) → Promise<ExtractResult>` (napi `AsyncTask` on the libuv threadpool) +
+  `extractSync`; `ExtractOptions {pageType?, focus?, url?}` → the crate `Options`; `ExtractResult
+{contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings}`; typed errors → JS
+  exceptions. Auto-generated `index.d.ts` types `pageType`/`focus` as string-literal UNIONS (the 7 wire
+  strings incl. `'collection'`; `'precision' | 'balanced' | 'recall'`), asserted by the vitest smoke
+  test. `pnpm build`/`lint`/`test` green
+  (flagship v1 suite still 377; native smoke 4/4), cargo test 95, and clippy (default and
+  `--features napi`) plus fmt all clean. Committed the host `darwin-arm64` prebuild
+  (`npm/darwin-arm64/*.node`) + the generated
+  loader; the other 4 native targets (Zig) + `wasm32-wasip1-threads` (WASI SDK) are CI-deferred (dirs +
+  package.json + README note only — binaries NOT faked). Key decisions:
+  - **`napi-build` is v2, not v3.** napi/napi-derive are v3 (3.10 / 3.5) but napi-build is versioned
+    independently and maxes at 2.3.x (`napi-build = "2"`). Resolves the brief's `napi-build = "3"`.
+  - **`unsafe_code = "forbid"` → `"deny"`** (root workspace). napi-derive's generated code needs
+    `unsafe` behind a local `#[allow(unsafe_code)]`, which `forbid` overrides and rejects (E0453) —
+    the binding is uncompilable under forbid. `deny` still hard-errors on OUR unsafe. Locked-decision
+    deviation, forced by napi; documented in-line in `Cargo.toml`.
+  - **napi behind a default-OFF `napi` cargo feature** (optional `napi`/`napi-derive` deps). A
+    `#[cfg(not(test))]` gate is NOT enough: integration tests link the lib built WITHOUT `cfg(test)`,
+    so binding + Node-API symbols leak into the test exe (undefined-symbol link error). The feature
+    gate keeps `cargo test`/`build`/`clippy` pure-Rust; `napi build --features napi` builds the addon.
+  - **`pageType`/`focus` typed as string-literal UNIONS at the FFI boundary** (`String` fields +
+    `#[napi(ts_type = "'article' | … | 'service'")]`), NOT `#[napi(string_enum)]` const enums. Two
+    reasons: the frozen public API is a plain string union with no TS enums, AND bundlers (esbuild/vitest)
+    ERASE `const enum`s — a caller must pass the raw wire string, which a const-enum type rejects, so every
+    `pipeline.ts` call would need a cast (and the smoke test failed to type-check). The union `ts_type` gives
+    the exact `.d.ts` type AND working runtime strings; `binding.rs` converts string↔crate enum. (Initial
+    BIND used `string_enum`; corrected to `ts_type` unions during BIND verification.)
+  - **biome/knip ignores** for the generated loader (`native/*.js|cjs|mjs|d.ts`) + `ignoreWorkspaces`
+    for the binary prebuild packages. (knip's repo-wide exit-1 is PRE-EXISTING flagship unused exports,
+    not from BIND — INTEGRATE consumes/removes them.)
+- **Phase INTEGRATE — done.** The flagship TS package `packages/htmlwasher/` is rewired onto the
+  Rust core; the obsolete TS `core/`/`classifier/`/`profiles/` are deleted; the public `wash()`
+  surface + regression oracle stay byte-compatible and green. Changes:
+  - **`pipeline.ts` → `@htmlwasher/native`.** `runBoilerplate` now: `mode==='none'` → `{ html }`
+    (unchanged, washes the whole doc); else `const r = await extract(html, { focus:
+MODE_TO_FOCUS[mode], url })` (the Rust core classifies → profiles → extracts internally). The
+    old `classifyPage`/`getProfile`/`extractContentHTML`/`CoreOptions` logic + the classifier
+    try/catch are GONE. Empty `r.contentHtml` keeps the warn-and-wash-whole-document fallback;
+    else the unsanitized `r.contentHtml` flows through `washHtml` (unchanged boundary contract).
+    `wash()` passes NO `pageType` override (classifier always auto-runs); `maxInputBytes` still
+    enforced before the FFI call. Zero public-API change. `@htmlwasher/native` added as a
+    `workspace:*` dependency.
+  - **`core/dom.ts` → `metadata/dom.ts` (trimmed).** It was a self-contained linkedom wrapper; only
+    the metadata-used subset (`parseDocument`, `trim`, `TEXT_NODE`, `HNode`/`HElement`/`HDocument`)
+    is kept, dropping the extraction/classifier-only exports (`parseDocumentSpec`, `looksLikeDocument`,
+    `isElement`, `tagOf`, `unwrap`, `classId`, `textLength`, …) so knip stays clean. All 20
+    `metadata/**` imports repointed `../core/dom.js` → `./dom.js`. `parseDocument`/`trim` stay
+    covered transitively by the 20 metadata test files (no dedicated `metadata/dom.test.ts` needed).
+  - **Deletions:** `src/core/`, `src/classifier/`, `src/profiles/` (source + `*.test.ts`), and
+    `test/adbar-corpus.test.ts` (→ cargo `tests/adbar_corpus.rs`). `package.json`: dropped
+    `onnxruntime-node` (deps), `onnxruntime-web` (optionalDeps), and the `src/classifier/model`
+    `files` entry; kept `dompurify`/`jsdom`, `linkedom`/`parse5`/`htmlparser2`, `chardet`/`iconv-lite`,
+    etc. Root `package.json`: `onnxruntime-node` removed from `pnpm.onlyBuiltDependencies`.
+  - **Types + tests.** `types.ts` unchanged (frozen public surface). New `src/native-types.test.ts`:
+    a compile-time `Expect<Equal<PageType, ExtractResult['pageType']>>` + `expectTypeOf` both-ways
+    assertion (7 wire strings). New `pipeline.test.ts` case: `styled × balanced` proves `class` +
+    inline `style` SURVIVE extraction through `wash()` (the doc-09 payoff, impossible in v1). The
+    pre-existing Phase-FLOOR `HOSTILE_MAIN` extraction-path floor tests now exercise the REAL Rust
+    path and still pass (the washing floor sanitizes the Rust core's unsanitized output).
+  - **Goldens re-baselined: NONE.** There are no snapshot/golden files in the flagship package, and
+    no surviving test asserted the v1 stripped-markup behavior on the extraction path (those
+    assertions lived in the now-deleted `core/*` tests), so the doc-09 markup-preservation diff
+    (styled/correct × extraction keeping class/inline-style/data-\*) and the preset-level attribute
+    diffs surfaced zero test failures to re-baseline. The new `styled × balanced` test locks in the
+    payoff instead.
+  - **Deleted-`*.test.ts` → cargo mapping** recorded below the "v1 test → cargo test mapping seed"
+    table.
+  - **Gate GREEN:** `pnpm build && lint && test` all pass; flagship suite 218 tests (was 377 — the
+    ~159 core/classifier/profiles unit tests now live in cargo). **adbar eval:
+    P=0.814 / R=0.844 / F1=0.828** over 100 pages (a lift over v1's 0.79/0.81/0.80 — the
+    preserve-markup Rust core, not a regression; floors pages>50/P>0.6/R>0.65/F1>0.65 all cleared).
+    Offline wash-corpus-tester: 28 fixtures, security-at-all-levels 0, verdict PASS. `npx knip`
+    cleaner (the onnxruntime/classifier dead exports it flagged are gone).
+- **Phase VALIDATE — done.** Regression + perf vs the ORIENT v1 baseline, all measured on the same
+  commit as INTEGRATE (no code change between).
+  - **adbar eval (extraction quality): P=0.814 / R=0.844 / F1=0.828** over 100 pages — a modest LIFT vs
+    v1's ≈0.79 / 0.81 / 0.80; all floors cleared (pages>50, P>0.6, R>0.65, F1>0.65). **No regression.**
+    The gain is NOT from `aggregate_sections`/`collect_repeated_items` (those are deferred, not live);
+    it traces to the faithful-but-corrected Rust port (the `strip_elements`-vs-`unwrap_node` fix that
+    avoided v1-class content loss, cleaner content-node selection) plus preserve-markup retaining
+    marginally more matchable text. Documented as a gain.
+  - **wash-corpus-tester:** 28 fixtures, page-type accuracy 100%, hard failures 0, security-at-all-levels
+    0, verdict PASS.
+  - **Perf (Rust core vs v1 TS `extractContentHTML`, same adbar corpus / harness, node 22.13):**
+    apples-to-apples **extract-only** (pageType override, no classifier) = **~3× faster** — sum-of-medians
+    350 ms vs 1033 ms, p50 2.7 ms vs 8.4 ms, 906 KB page 6.7 ms vs 20.9 ms (3.14×). The **full**
+    classify+extract stage pipeline actually runs = 1003 ms sum / p50 8.4 ms / large page 15.8 ms (1.33×
+    faster on the large page) — i.e. comparable to v1's _extraction-only_ baseline DESPITE also running
+    the 189-feature classifier, which is ~65% of the full time (feature extraction dominates, as expected).
+    Rust harness saved at `scratchpad/perf-rust.mjs`. **Gate met:** scores + perf documented, no floor
+    regressions.
+- **Phase RETEST — done.** Deep external live benchmark (`~/r/htmlwasher-external-tester/`, 44 cached
+  live pages, 4 engines, token F1 vs the Trafilatura reference) + a root-caused autofix (detailed below).
+  - **Wiring + a real finding:** repointed the tester's `file:` dep to `../htmlwasher/packages/htmlwasher`
+    and added `pnpm.overrides` `@htmlwasher/native → file:.../native`, because the flagship's
+    `@htmlwasher/native: workspace:*` dep does NOT resolve via plain `file:` outside the monorepo
+    (`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`) — **htmlwasher is not yet consumable via `file:` outside its
+    workspace** (the brief's "ships prebuilds inside its own tarball while alpha" is unimplemented →
+    POLISH packaging item). With the override, htmlwasher v2 (Rust core) loads + runs from the external repo.
+  - **Token bench BEFORE the autofix:** htmlwasher F1 0.850 (P 0.918 / R 0.856) — a LIFT over v1's 0.841,
+    ~3× faster (median 111→36 ms), 100% success. vs rs-trafilatura (0.881): MORE precise (0.918 vs 0.897)
+    but lower recall (0.856 vs 0.915); the F1 gap (−0.031) was ALL on ARTICLE pages (hw 0.883 vs rs 0.990)
+    — htmlwasher wins/ties the other 5 types (forum +0.13, listing +0.09, collection +0.05, docs ≈).
+  - **Token bench AFTER the autofix:** htmlwasher **F1 0.873** (article 0.883→0.931), gap vs rs-trafilatura
+    closed to **−0.008**; antirez F1 0.002→1.000; every other type unchanged; 100% success. Offline oracle
+    held (adbar F1 0.831, corpus PASS, cargo 100). Refreshed `reports/` committed in the tester repo.
+  - **Remaining (future, NOT regressions):** the Gutenberg full-text case is a content-SELECTION gap (not a
+    fallback gap); `aggregate_sections`/`collect_repeated_items` + Discourse/product rescues stay deferred.
+    Visual layer: `visual:prep` regenerated the v2 bundles; the full Claude vision judge was not re-run (the
+    token P/R already quantify cleanliness↑/completeness; zero regressions to autofix) — pipeline stays wired.
+- **Phase RETEST autofix — done (partial, prioritized).** Ported the rs-trafilatura structured
+  RESCUES into `extractor/fallback.rs` + wired them into `lib.rs::extract` via
+  `extract.rs::rescue_under_extraction`: the profile-INDEPENDENT `baseline` (basic cleaning →
+  `<article>`/paragraph scraping with a focused `should_discard` → whole-body text) and the JSON-LD
+  `articleBody` pre-check (gated `MIN_STRUCTURED_BODY_LEN = 500`). Fired ONLY on genuine
+  under-extraction (`text_length < MIN_EXTRACTED_TEXT`, self-gating re-parse), keeps the longer result,
+  synthesizes best-effort bare `<p>` (doc-09 limitation) that stays script-free, and NEVER re-types the
+  page (classifier untouched). **antirez.com/news/123 BEFORE/AFTER:** `documentation`, textLength 26 /
+  ~5 words to `documentation` (unchanged type), textLength 4730 / ~816 words (`baseline-rescue`). Root
+  cause: the post body lived in `<article class="comment">`, dropped by the `comment` name filter; the
+  profile-independent baseline recovers it. Gate: `cargo test` 100 (5 new rescue tests + the gated
+  antirez fixture test), clippy (default and `--features napi`) plus fmt clean; host prebuild rebuilt +
+  committed; `pnpm build`/`test` green; the flagship adbar eval is `P=0.814/R=0.848/F1=0.831` (recall+F1
+  slightly UP vs the pre-fix 0.844/0.828 — the flagship IS wired to the Rust core via INTEGRATE, so the
+  rescue flows through `wash()`; the offline oracle confirms no precision regression from the rescue).
+  - **DEFERRED (lower-priority, honestly skipped):** `sanitize_tree` (dead whitelist-strip — TS washing
+    owns it, per the brief); the full `candidate_is_usable`/`compare_external_extraction` ">2x even when
+    substantial" comparison (only the conservative SHORT-branch replacement is wired, to protect adbar
+    precision — the Gutenberg-class "we extracted less than rs but still > min" case is a content-
+    SELECTION gap, not a fallback gap, so it is NOT fixed here); the Discourse `data-preloaded` +
+    Product-description rescues (not cheap — a second parse + bespoke JSON shape; skipped). The
+    `aggregate_sections`/`collect_repeated_items` passes remain deferred.
+- **Phase POLISH — done.** Licensing, docs, and a full-repo multi-agent adversarial review.
+  - **Security (CRITICAL, review-caught).** The unconditional floor was allow-all-tags but only dropped
+    `<script>`/`on*`/schemes, so `<iframe srcdoc="<script>…">` (srcdoc is inline HTML — not a URL, not
+    `on*`) executed as a nested-document XSS, and `<meta http-equiv="refresh">` auto-navigated. Since v2's
+    floor is the SOLE sanitizer, this was real stored XSS. Fixed `enforceSecurityFloor` to drop
+    `<script>/<iframe>/<object>/<embed>/<applet>/<base>` + `<meta http-equiv>` + `srcdoc` (doc-08's full
+    floor list, previously under-implemented); +9 regression tests at every level (flagship suite 218 → 233).
+  - **Review outcome:** rust-core NONE (only cosmetic nits); ts-washing the 2 XSS defects above; python 3
+    (vocab-length guard, pyright `dict|list` annotations, stale FEATURES.md) — all fixed. The adversarial
+    multi-agent review earned its keep (a phased build's blind spots surface under a fresh skeptical read).
+  - **Licensing (`@/NOTICE`, root + package):** rewritten for the code-level rs-trafilatura Rust derivation
+    (Apache-2.0 §4 changes stated); go-trafilatura re-pointed to `native/`; ONNX/`model.onnx` out,
+    `@htmlwasher/native` + `model.xgb.json` + the Rust crate deps in; WCXB CC-BY-4.0 kept. Crate license
+    Apache-2.0 (workspace-inherited); SPDX headers present. `html-cleaning` license moot (not wired).
+  - **Docs:** `CLAUDE.md` rewritten (hybrid Rust+TS, XGBoost-JSON, Rust-analyzer first-class, cargo
+    commands, structure) + a **real v2 rewrite of root `@/SPEC.md`** (hybrid architecture, napi boundary,
+    doc-09 split, contextractor layout, operating modes). READMEs + `.claude/agents/{ts-pro,python-pro}.md`
+    swept of ONNX/181-feature/`src/classifier`/onnxruntime/htmlparser2-hot-path staleness.
+  - **Dead code:** `htmlparser2` removed (never imported even pre-INTEGRATE). Remaining knip unused-exports
+    are pre-existing public-surface types — left intentionally.
+  - **Brief updated** in place with the v2 build learnings (html-cleaning/dom_query pin, napi-build v2 +
+    unsafe deny + ts_type unions + default-off feature, float32 splits, the workspace:\* consumability gap,
+    the full security-floor vector set, classifier-mis-route → baseline rescue).
+  - **Final gate (all three stacks green):** `pnpm build && lint && test` (flagship 233, native smoke 4/4,
+    corpus PASS, adbar P=0.814/R=0.848/F1=0.831); `cargo test --workspace` + `clippy --all-targets -D
+warnings` + `fmt --check`; `uv run pytest` (17) + `uvx ruff` clean. **Deliverables checklist fully checked.**
+- **Bench-improve run (2026-07-06, `/bench:improve`) — token F1 0.873 → 0.897, htmlwasher now LEADS
+  rs-trafilatura (0.881) on the 44-page live corpus** (report: `@/benchmarks/2026-07-06-2106-benchmark.md`).
+  Two defaults-only Rust-core fixes, both faithful reference ports, 0/44 page regressions:
+  - **Scoring coverage guard (`selector/content.rs`).** The Gutenberg-class flat-body gap root-caused: NOT
+    a fallback gap after all — rs-trafilatura wins those pages via a `coverage < 0.3` guard in its heuristic
+    scorer (best candidate covering <30% of body text → `None` → whole-body extraction). Its celebrated
+    `candidate_is_usable`/`compare_external_extraction` pair is effectively DEAD upstream (the "external"
+    candidate is built then discarded via `let _ =`), so the previously-deferred ">2x even when substantial"
+    port is moot. Ported the guard into `find_by_scoring` (winner <30% of body text → fall through to the
+    body floor; scoring stage only). gutenberg P&P F1 0.028 → 0.999 (1.8k → 128.7k words), preserve-markup
+    intact (no bare-`<p>` synth needed). +3 tests incl. a gated Gutenberg cache-fixture test.
+  - **Hidden-element discard (`html_processing.rs`).** Ported the hidden-element conditions of canonical
+    Trafilatura's default `OVERALL_DISCARD_XPATH` 2nd expression (xpaths.py:131-140; identical rule in
+    go-trafilatura; ABSENT from rs-trafilatura): `hidden` substring in id/style, `display:none`/`display:
+none` styles, `hide-`/`-hide-`/`hide-print`/`hidden`/`hide`/`noprint`/`notloaded` class tokens,
+    `aria-hidden="true"` — whole-subtree removal in `clean_document`, with an all-`<p>`-hidden backoff.
+    Kills e.g. Wikipedia's 50× `<span style="display: none;">Unsupported:</span>` sr-only spans (TypeScript
+    page 0.905 → 0.936; 5 more pages +0.006..+0.025). +10 tests. Gotcha: the napi smoke test's 4720.html
+    fixture is an AliExpress JS-skeleton whose ONLY static text was a hidden SEO `<h1>` — it now correctly
+    extracts empty (Trafilatura drops it too); smoke test re-pointed + a new test pins that behavior.
+  - **Documented, not tuned:** overreacted.io's gap is figure-wrapped code kept by htmlwasher's deliberate
+    `include_images=true` default (Trafilatura's default deletes `<figure>` subtrees wholesale — with
+    `include_images=True` it keeps the code too); webscraper.io/travel_2 are reference noise on tiny or
+    reference-inconsistent pages; forum/listing/collection types htmlwasher already leads rs on.
+  - **Offline oracle held:** adbar P 0.814→0.825 / R 0.848→0.840 / F1 0.831→0.832; corpus tester PASS
+    (100% page-type accuracy); cargo + pnpm gates green; host prebuild rebuilt + committed.
+
+## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
+
+Phase VALIDATE compares the Rust core against these (expect Rust faster). Harness:
+`extractContentHTML(html, { focus: 'balanced' })` over every cached adbar page,
+5 iters/page after a warmup pass, per-page median.
+
+- Environment: **node v22.13.1**, adbar corpus = **110 pages / 14.04 MB**
+  (`~/r/htmlwasher-sources/trafilatura/tests/cache`), errors=0.
+- **Sum of per-page median wall time = 1033 ms**; per-page **p50 = 8.42 ms, p95 = 22.54 ms**;
+  throughput ≈ 13.6 KB/ms.
+- Slowest: `correctiv.org.zusage.html` (409 KB) 37.2 ms; **large-page sample**
+  `pcgamer.com.skyrim.html` (906 KB) **20.9 ms** median.
+- Harness saved at `scratchpad/perf-baseline.mjs` (session scratchpad) — re-run pattern for
+  the Rust comparison at VALIDATE (time the napi `extract()` over the same 110 pages).
+
+## Target crate layout (contextractor pattern)
+
+```text
+Cargo.toml                              # root workspace: members=["packages/htmlwasher/native"], resolver="2",
+                                        #   [workspace.package] version/edition(2024)/license(Apache-2.0)/repository,
+                                        #   [workspace.lints] contextractor's clippy set + unsafe_code="forbid"
+                                        #   (contextractor uses "warn"; v2 tightens), [profile.release] lto/opt3/cu1/strip.
+                                        #   Cargo.lock IS committed (pnpm-lock gitignore does NOT extend to Cargo).
+packages/htmlwasher/native/            # crate `htmlwasher-native` = npm `@htmlwasher/native` (private, publish=false)
+  Cargo.toml                            #   [lib] crate-type=["cdylib"]; deps: napi v3 + napi-derive v3, dom_query,
+                                        #   tendril, html-cleaning, regex, serde/serde_json, thiserror, url;
+                                        #   build-deps: napi-build v3. (contextractor uses napi v2 + a crates.io
+                                        #   rs-trafilatura dep — v2 FORKS the live path INTO this crate instead.)
+  build.rs                              #   fn main(){ napi_build::setup(); }
+  src/
+    lib.rs                              #   #[napi] extract/extractSync surface (Phase BIND) + module wiring
+    options.rs result.rs error.rs       #   Options/ExtractResult/typed Error (thiserror; napi→JS exceptions)
+    dom.rs                              #   dom_query wrappers (from rs dom.rs — live subset)
+    patterns.rs                         #   the live regex subset (from rs patterns.rs)
+    html_processing.rs                  #   doc_cleaning_with_profile + the html-cleaning trafilatura preset (bucket B)
+    link_density.rs                     #   link-density tests
+    tags.rs                             #   TAGS_TO_CLEAN/STRIP/EMPTY_TAGS/TABLE_TAGS + VALID_TAG_CATALOG
+                                        #     (relocated OUT of dormant extractor/tags.rs)
+    selector/{mod,content,utils,discard}.rs   #   content selection + PARTIAL discard (should_discard + OVERALL_DISCARDED_CONTENT)
+    extractor/fallback.rs               #   the ONE live extractor submodule (JSON-LD/Discourse/baseline/external-cmp)
+    extract.rs                          #   orchestration, node cascade, DUAL-mode serializer + text twin, comments, tables
+    page_type/{mod,ml,features,gbdt}.rs #   3-stage cascade + 189-feature extractor + pure-Rust GBDT evaluator
+  artifacts/{model.xgb.json,tfidf-vocab.json}   #   include_str!-ed, LazyLock-validated (training/ exports these)
+  tests/fixtures/                       #   Python↔Rust parity fixtures (written by training/)
+  npm/<target>/                         #   5 platform pkgs w/ COMMITTED prebuilt .node (private, file:-linked optionalDeps)
+  package.json / SPEC.md                #   self-skipping build/test scripts (contextractor pattern)
+```
+
+`pnpm-workspace.yaml` globs (contextractor, verbatim): `packages/*`, `packages/*/native`,
+`packages/*/native/npm/*`. `.gitignore`: `target/` + `packages/htmlwasher/native/*.node`
+ignored, `npm/<target>/*.node` tracked. `knip.json`: ignore the generated `native/index.js`
+loader. `turbo.json` stays minimal (`build`→`dist/**`; `test`/`lint` dependsOn `^build`).
+The napi boundary (consumed only by `pipeline.ts`) is the frozen shape in the brief's
+"Project structure" section: `extract(html, {pageType?, focus?, url?})` →
+`{ contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings }`.
+
+## rs-trafilatura live-path → crate module map
+
+All anchors are `~/r/htmlwasher-sources/rs-trafilatura/src/` at v0.2.2; bare `NN` = `extract.rs:NN`.
+KEEP / STRIP / RELOCATE per the brief's strip list + doc 09. **rs-trafilatura ships two parallel
+implementations; only the LIVE path is ported** — namely `extract.rs`, `extractor/fallback.rs`,
+`selector/{mod,content,utils,discard}`, `html_processing.rs`, `link_density.rs`, `patterns.rs`,
+`dom.rs`, and `page_type/`.
+
+### Orchestration — `extract_content` (`extract.rs:36`, single live entry via `lib.rs:139`)
+
+| Stage (anchor)                                                                                                                                       | Disposition                                   | Note                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `42` `Document::from(html)` parse                                                                                                                    | **KEEP**                                      | dom_query/html5ever root = the FFI DOM root                                                                                |
+| `52` `metadata::extract_metadata`                                                                                                                    | **STRIP**                                     | whole `metadata/` module — TS owns the sidecar                                                                             |
+| `55-92` 3-stage cascade + confidence                                                                                                                 | **KEEP**                                      | Rust owns cascade + confidence (see classifier section)                                                                    |
+| `113` `doc_backup = clone_document`                                                                                                                  | **KEEP**                                      | pre-clean tree for fallbacks                                                                                               |
+| `118-132` structured fallbacks (`fallback.rs` JSON-LD articleBody `:150`, Product desc `:188`, Discourse `:44`), gated `MIN_STRUCTURED_BODY_LEN=500` | **KEEP**                                      | live rescue paths                                                                                                          |
+| `135` `extraction_profile()` → 7 profiles (`page_type/mod.rs:80-90,155-345`)                                                                         | **KEEP**                                      |                                                                                                                            |
+| `138-150` `effective_options`; forum forces `include_comments=true` + sets thread-local                                                              | **KEEP** coupling / **RELOCATE** thread-local | see re-entrancy fix                                                                                                        |
+| `154` `html_processing::doc_cleaning_with_profile`                                                                                                   | **KEEP**                                      | bucket-B cleaning (html-cleaning preset + profile preserve/boilerplate selectors)                                          |
+| `159` `extract_main_content_with_profile` (`1358`) → node cascade + serializers                                                                      | **KEEP**                                      |                                                                                                                            |
+| `175-226` under-extraction + `try_fallback_extraction` (`1007`)                                                                                      | **KEEP**                                      | wraps `fallback::compare_external_extraction`/`candidate_is_usable`/`baseline`                                             |
+| `231-247` `try_multi_candidate_merge` (`644`) — profile `aggregate_sections`                                                                         | **KEEP**                                      | **newly live vs v1** (v1 had a dead flag) — may move VALIDATE scores                                                       |
+| `252-266` `try_collect_repeated_items` (`524`) — profile `collect_repeated_items`                                                                    | **KEEP**                                      | **newly live vs v1** — may move VALIDATE scores                                                                            |
+| `273-286` `extract_collection_description` (`472`) for Category                                                                                      | **KEEP**                                      |                                                                                                                            |
+| `292-372` JSON-LD Product rescue + structured-data preference                                                                                        | **KEEP**                                      |                                                                                                                            |
+| `379-390` `extract_comments` (`3331`, KEEP) / `extract_images` (`3352`, **STRIP**)                                                                   | mixed                                         | comments KEEP behind include_comments; ImageData collection STRIP                                                          |
+| `401-406` `compute_extraction_quality_heuristic` (`880`)                                                                                             | **KEEP**                                      | feeds `warnings`; the ML twin `compute_extraction_quality_ml` (`775`→`predict_quality`) is **STRIP** (dead + `scoring.rs`) |
+| `409-421` build `ExtractResult`                                                                                                                      | **KEEP** content fields                       | **STRIP** `content_markdown`, `images`, metadata sub-struct                                                                |
+| `425-442` `output_markdown`→`quick_html2md`                                                                                                          | **STRIP**                                     | markdown path + `markdown.rs`                                                                                              |
+| `448` `apply_final_validations` (`1081`)                                                                                                             | **KEEP**                                      | min/max len + word-count warnings; **measure textLength from DOM textContent, not regex**                                  |
+
+Dead code inside `extract.rs` to STRIP: `strip_link_dense_sections` (`1150`, disabled `1086`),
+`try_length_based_fallback` (`1251`), `strip_navigation_boundaries` (`3719`), back-compat shims
+`find_main_content_node` (`1822`) / `find_heuristic_content_node` (`2063`).
+
+### Node cascade — `find_main_content_node_with_profile` (`1831`)
+
+Priority (first hit wins): profile `content_selectors` (`1838`, gated text>100) → content rules
+`selector::content::find_content` (`content.rs:618`, the only live `selector/` path besides
+`discard.rs`) → `ARTICLE_SELECTOR` (`1864`) → `MAIN_SELECTOR` (`1882`) → heuristic
+`find_heuristic_content_node_with_options` (`2068`, `score_content_node` `2182`: text cap 8000,
++200/p, +300/substantive-p, +100/h, +50/sentence, +10/depth, `class_score` `2035`, link-density
+mult; threshold **favor_precision 5000 / favor_recall 500 / default 1000** `2149`; coverage <0.3
+reject). Bottom-up recovery (text<1000): ancestor walk-up (`1404`) → `find_content_node_bottom_up`
+(`1905`, Readability paragraph scoring, min score 10). **KEEP the whole cascade — this is Rust's reason to exist.**
+
+### Serializer — `push_filtered_html_children` (`2700`; entry `2680`) → DUAL-mode
+
+- Current behavior = the v2 **whitelist parity mode** (retained behind an `Options` flag for
+  upstream reference-parity testing ONLY). Emit whitelist `2797-2834`
+  (`p div section article main h1-h6 blockquote pre code strong em b i a ul ol li dl dt dd table…col`);
+  attrs emitted only `a@href`/`code@class`/`td,th@colspan,rowspan`; non-whitelist elements **unwrapped** (`2879`).
+- **v2 default = preserve-markup:** emit each kept node's **original tag + ALL original attributes**,
+  text/attr values escaped (`escape_html` `2889`), voids handled. SKIP and EMIT never interleave →
+  a verbatim branch is ~40-70 LOC. Sanitizes nothing (TS owns tag/attr/scheme/CSS).
+- **Skip guards** (`2717-2755`): `script|style|noscript|iframe` → **KEEP** in serializer (zero-cost
+  no-script FFI invariant); `header`/`footer`-outside-`article`/`main` (`2717`), `nav|aside|svg|ins`,
+  `is_always_excluded_name` (`2727`, list `2934`), BreadcrumbList itemtype (`2750`) → **RELOCATE to DOM
+  passes**; `is_boilerplate` when `filter_named_boilerplate` (`2738`) → **KEEP** (bucket A) but relocated
+  off the emit path and NOT re-run on the backoff-rescued content; layout-table unwrap (`2759`, `is_layout_table` `2896`).
+- Text twin `extract_filtered_text_inner` (`2331`) — **KEEP internal** (fallbacks measure text length; only
+  HTML is exposed). Move its `header` look-up (`2403`), name guards, BreadcrumbList check (`2499`) to the same DOM passes.
+
+### Comments + tables
+
+- `extract_comments` (`3331`, the LOCAL fn — NOT dormant `extractor/comments.rs`); `find_comment_section`
+  (`3568`). **KEEP** behind `include_comments`, which the **forum** profile force-enables (`138`) while
+  flipping `COMMENTS_ARE_CONTENT` (`148`) so `is_boilerplate` uses `BOILERPLATE_CLASS_NO_COMMENTS`.
+- Tables: `MAX_TABLE_CELLS = 20_000` (`2969`), `MAX_TABLE_TEXT_LEN = 200_000` (`2970`) — **KEEP exact**;
+  `extract_table_text` (`2992`), `is_layout_table` (`2896`). Add a **real recursion/depth guard** (rs's
+  `max_tree_depth` option exists but the live path never enforces it — make it enforce; never panic).
+
+### Re-entrancy fix — `COMMENTS_ARE_CONTENT` thread-local (`27-29`, set `149`, reset `446`, read in `is_boilerplate` `3236`)
+
+Becomes an explicit `comments_are_content: bool` threaded through the extraction context /
+`is_boilerplate(name, comments_are_content)`. Rationale: a napi AsyncTask runs on the libuv pool;
+concurrent extracts on one worker thread corrupt a thread-local, and the `set(true)…set(false)`
+bracket is not panic-safe (early return/panic between `149` and `446` leaks the flag).
+
+## Explicit STRIP list + dormant-module exclusion
+
+- **STRIP (whole modules):** `spider_integration.rs` + `bin/` (spider + both CLIs), `markdown.rs` +
+  `quick_html2md` dep + `output_markdown` (Markdown path), `encoding.rs`/`encoding_rs` + `extract_bytes*`
+  (`lib.rs:179-218` — the crate takes `&str`; TS decodes), `metadata/**`, `scoring.rs` + the 27-feature
+  `predict_quality` ML quality regressor, `result::ImageData` + all `extract_image*`/`mark_hero_image`/
+  `clean_caption_text` (`3352-3566`), the entire `web-page-classifier` dependency + embedded model binaries.
+- **STRIP (dead options in `options.rs`):** `deduplicate`/`dedup_cache_size` (`101`,`207` — never read live;
+  also prune the `process_node`/`handle_text_node`/`duplicate_test` branches they gate), `output_markdown`
+  (`224`), `include_images` (`42`); of the `min_extracted_size`(`109`)/`min_extracted_len`(`118`) duplication
+  only `min_extracted_len` is live.
+- **STRIP (dead code, do NOT wire) — the doc-09 trap:** `html_processing.rs::post_cleaning` (`351-396`) is the
+  ported attribute stripper — **defined, unit-tested, NEVER called.** Wiring it silently breaks preserve-markup
+  (it kills `id`/`class`/`style`/`data-*`). Drop it + its statics `ELEMENT_WITH_SIZE_ATTR` (`27`) and
+  `ALLOWED_ATTRIBUTES` (`35`). Also dead: `build_clean_selector`/`build_strip_selector` (`268-318`).
+  Also `fallback.rs::sanitize_tree` (`487-535`, whitelist-strips via `VALID_TAG_CATALOG`) is a _sanitization_
+  step — drop/gate to reference-parity only (TS washing owns it).
+- **DORMANT — do NOT port (go-style parallel impl):** `extractor/{pipeline,handlers,state,comments,pruning}.rs`,
+  `extractor/mod.rs` (keep only `pub mod fallback;`), `selector/{precision,comments,meta}.rs`,
+  `selector/discard.rs`'s precision/teaser rules (`PRECISION_DISCARDED_CONTENT`, `precision_discard_rule_1`,
+  `TEASER_*`, `teaser_rule_1`, `find_discardable` — all zero live refs). **Transitive-live symbols to RELOCATE
+  out of dormant files** (do not port the parents): from `extractor/tags.rs` pull `TAGS_TO_CLEAN`,
+  `TAGS_TO_STRIP`, `EMPTY_TAGS_TO_REMOVE_SET`, `TABLE_TAGS_TO_STRIP`, `VALID_TAG_CATALOG` (→ live `tags.rs`);
+  from `extractor/pruning.rs` pull `prune_unwanted_nodes` — but `html_processing.rs:914` already defines an
+  equivalent, so **reconcile to ONE copy**.
+- **Gotcha:** `dom.rs::remove_comments` (`326-330`) is a **no-op stub with a TODO** — it does NOT strip comment
+  nodes. Bucket B requires comments gone, so the port needs a REAL comment-strip pass (verify at CRATE).
+
+## Doc 09 — the sanitization split (three buckets)
+
+- **Bucket A (boilerplate selection) — STAYS in Rust.** Main-content selection, nav/aside/footer drop, profile
+  `boilerplateSelectors`, link-density pruning, `BOILERPLATE_TOKENS`/`COMMENT_TOKENS` name filtering,
+  BreadcrumbList drop, empty-node pruning, the backoff. "The crate's reason to exist."
+- **Bucket B (extraction hygiene) — STAYS in Rust.** `cleanDocument` kills ~50 tag types on the whole body
+  BEFORE scoring (`script/style/noscript/iframe/svg/form/head/…` + HTML comments) — metrics would be garbage
+  otherwise. **This is what guarantees `<script>`/`<style>` never reach the serializer, as a pre-scoring side
+  effect, not a sanitization pass.**
+- **Bucket C (output sanitization) — DELETED from Rust.** The ~60-tag emit whitelist, non-whitelist unwrapping,
+  `postCleaning` attribute policy, escaping-as-policy, empty-element unwrap. The washing presets duplicate this
+  downstream at every sanitizing level.
+- **Preserve-markup serializer contract:** kept nodes emit original tags + ALL attributes (escaped); NO tag
+  whitelist / NO attribute policy in Rust. Attributes already survive doc-cleaning (`strip_attributes` never
+  set; `post_cleaning` dead); selection _depends_ on attributes (`class_score`, profile CSS selectors) →
+  preserve-markup needs zero changes to cleaning/selection.
+- **STAYS as serializer hard-skip:** `script/style/noscript/iframe`. **RELOCATES to DOM passes** (the trap at
+  v1 `serialize-filtered.ts:339-341`): header/footer-outside-article/main (header has NO other removal path →
+  leaks without a replacement pass), the name guards (`is_always_excluded_name` + gated `is_boilerplate`),
+  BreadcrumbList drop.
+- **Backoff-path trap (the doc-09 regression guard):** the emit-time name guard must NOT act on the backoff
+  path. Under preserve-markup it can see `class`/`id` again and would re-empty exactly what the §10 backoff
+  saves (v1 `extract.test.ts:133-143`). Move the name filter to a pre-backoff DOM pass; do not re-run it at
+  emit time on backoff-rescued content. Companion guard: unconditional bucket-A drops (always-excluded +
+  BreadcrumbList) must STILL fire on the backoff path (`extract.test.ts:150-166`).
+- **textLength from DOM `textContent`, never regex tag-strip** — an unescaped `>` inside a verbatim attribute
+  value (`data-*` JSON, `srcset`) truncates the regex and inflates "text". Preserve the **`''`-on-whitespace
+  contract** (`pipeline.ts` reads only `result.html === ''`).
+- **Unsanitized-FFI boundary contract:** `contentHtml` = original markup of kept nodes modulo hygiene,
+  script-free but otherwise untrusted; **MUST always flow through `washHtml`**, never exposed directly.
+  Safe because `washHtml` re-parses from scratch and assumes nothing about pre-sanitization.
+- **Known limitation:** when a fallback wins (JSON-LD `articleBody`, baseline rescue) markup is synthesized
+  (bare `<p>`) — preservation is best-effort by construction; "original markup" always means "modulo doc-cleaning".
+- Supersedes doc 08 §1's "two independent safety passes": script stripping stays two-layered (hygiene + floor);
+  the `on*`/scheme/attribute redundancy on `boilerplate ≠ 'none'` paths collapses to ONE hardened TS pass.
+
+## Classifier ground truth (Rust cascade, Python model, no ONNX)
+
+- **3-stage cascade** (`page_type/mod.rs` pieces, orchestrated `extract.rs:55-92`). Manual `options.page_type`
+  → override, confidence `None`, no stages run. Else, `url = options.url.unwrap_or("")`:
+  - **Stage 1 URL** `classify_url` (`mod.rs:600`): empty→Article; `extract_domain_path` strips `https://` else
+    `http://` (**NOT `//`** — mod.rs version is the target, verbatim in `extract_features.py:37-198`; the
+    web-page-classifier url_heuristics.rs variant that strips `//` is NOT it); first-match order
+    Forum→Documentation→Product→Category→Service→Listing→Article.
+  - **Stage 2 HTML signals** `refine_with_html_signals` (`mod.rs:728`): **only ever overrides `Article`**;
+    ordered signal rules (category structured data → og product.group → ≥5 product elems+pagination/grid+cart →
+    single Product → grid+cart → docs-nav+≥3 code → ≥500 code → link_ratio≥3 & p-word<30 Listing → Article).
+    `MIN_PRODUCT_ELEMENTS_FOR_CATEGORY=5`; LD `@type` compares exact + case-sensitive.
+  - **Stage 3 ML** `extract_ml_features` + `classify_ml`; TF-IDF input = `"{title} {description}"`.
+- **Cascade + confidence (compare ARGMAX class, never float):** `url_type != Article && ml == url_type` →
+  `(url_type, 1.0)`; else `refined != Article && ml == refined` → `(refined, 0.95)`; else `(ml_type, ml_conf)`.
+  1.0/0.95 are synthetic. Cross-language parity only requires argmax agreement (float probs across
+  html5ever/lexbor/linkedom need not match) — but a divergent **body text** shifts the numeric block and can
+  flip argmax, so establish byte-exact body-text parity FIRST.
+- **189 features = 89 numeric + 100 TF-IDF** (indices 0..88 scaled numeric ++ 89..188 unscaled TF-IDF).
+  `ml.rs`'s "81" comment + the classifier README are STALE — trust `training/` (`N_NUMERIC_FEATURES=89`,
+  `model.rs` test asserts `scaler_mean.len()==89`, `trees.len()==1400`, `n_classes==7`). Already resolved in
+  the v1 "Feature count" note below.
+- **Pure-Rust GBDT evaluator** over the **XGBoost native JSON dump** (`multi:softprob`, 7 classes, 200 rounds
+  → 1400 trees). Node = {feature i32 (<0 leaf), threshold f64, left/right}. `evaluate`: strict `<` → LEFT,
+  `>=` → RIGHT; missing/out-of-range feature → 0.0; cycle guard → 0.0. `predict`: `class_idx = tree_i % 7`
+  round-robin accumulate → softmax(margins) → argmax `(best_idx, best_prob)`. Read `tree_info` for the
+  round-robin class layout, honor `default_left` + string-typed `base_score`; read the shipped `class_labels`
+  for index→type (NOT enum order). Scaler `(x-mean)/scale if scale>0 else 0.0`. **Do NOT use** the reference
+  crate's `compute_tfidf` (`count/n_words`, no L2 — an approximation).
+- **Locked parity rules (target = `training/extract_features.py`, byte-level):** scikit-learn TF-IDF
+  (`smooth_idf=True`: `idf=ln((1+n)/(1+df))+1`, `norm='l2'`; per-doc `tf=raw_count × idf` then L2; token
+  pattern `(?u)\b\w\w+\b` drops 1-char, unigrams only); baked StandardScaler (89 mean/scale); enhanced-group
+  gate `if body_text_len > 500_000: f[63..89]=0` (strict `>`; `body_text_len` = UTF-8 bytes of `select("body")`
+  text; 500*000 does NOT trigger); **UTF-8 byte lengths everywhere** (Rust `str::len` matches naturally);
+  **CPython `str.split`/`str.strip` whitespace class** (adds U+001C–U+001F, U+0085; does NOT include U+FEFF —
+  reproduce, do not use Rust `char::is_whitespace`); **selectolax comma-union NO-dedup** (a node counts once
+  per matching sub-selector, in document order). Quirks: f[70] flush-before-assign accumulator, population
+  variance ÷N, ≥3 ratios; f[63]/f[64] count only children with a \_present* `class`; `<template>` exclusion
+  (html5ever/dom_query must keep template children out of `.text()`/selectors).
+- Panic policy: the reference `classify_ml`/`predict` `assert_eq!`/`unwrap` become typed `Result`s.
+
+## v1 test → cargo test mapping seed
+
+Crate root `packages/htmlwasher/native/`. Internal-fn tests → inline `#[cfg(test)] mod tests` in the ported
+module; cross-cutting goldens/parity/malformed-corpus → integration under `native/tests/`. ~155 v1 tests in
+scope across 15 files. Full disposition (record final mapping at CRATE/CLASSIFY per the INTEGRATE gate):
+
+| v1 test file                          | ~n  | Cargo target                                    | Disposition                                                                                                                                                                                   |
+| ------------------------------------- | --- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/extract.test.ts`                | 12  | `tests/extract.rs` (e2e)                        | PORT; **lines 38-45 (no class/style/id leakage) RE-BASELINE** under preserve-markup; **lines 133-143 backoff = THE doc-09 regression guard; 150-166 unconditional-drop-on-backoff companion** |
+| `core/clean.test.ts`                  | 8   | inline `html_processing.rs` + `link_density.rs` | PORT (bucket B, attribute-independent)                                                                                                                                                        |
+| `core/dom.test.ts`                    | 6   | inline `dom.rs`                                 | PORT (watch html5ever-vs-linkedom parse)                                                                                                                                                      |
+| `core/main-content.test.ts`           | 5   | inline `selector/content.rs`                    | PORT (node cascade)                                                                                                                                                                           |
+| `core/profile.test.ts`                | 3   | `tests/profile.rs`                              | PORT (profile options steer extraction)                                                                                                                                                       |
+| `profiles/index.test.ts`              | 8   | inline `page_type` profiles                     | PORT (config table; aggregation passes newly live)                                                                                                                                            |
+| `classifier/classifier.test.ts`       | 6   | inline/integration `page_type/`                 | PORT cascade+confidence; the `InferenceBackend`/ONNX-WASM-parity 3 cases COLLAPSE to the GBDT argmax test                                                                                     |
+| `classifier/url-heuristics.test.ts`   | 10  | inline `page_type/mod.rs`                       | straight PORT                                                                                                                                                                                 |
+| `classifier/html-signals.test.ts`     | 7   | inline `page_type`                              | PORT (incl. CPython-whitespace refine)                                                                                                                                                        |
+| `classifier/parity.test.ts`           | ~45 | `tests/classifier_parity.rs`                    | PORT retargeted ONNX→GBDT; numeric+TFIDF ≤1e-6, **argmax 100%** = Phase CLASSIFY gate                                                                                                         |
+| `classifier/features/index.test.ts`   | 10  | inline vocab loader                             | PORT as `include_str!`+`LazyLock` load-time validation                                                                                                                                        |
+| `classifier/features/numeric.test.ts` | 7   | inline numeric                                  | PORT (CPython split/strip; keep exotic codepoints)                                                                                                                                            |
+| `classifier/features/text.test.ts`    | 4   | inline text/meta                                | PORT (TF-IDF input assembly)                                                                                                                                                                  |
+| `classifier/features/tfidf.test.ts`   | 4   | inline tfidf                                    | PORT (sklearn smooth_idf L2)                                                                                                                                                                  |
+| `core/serialize-filtered.test.ts`     | 22  | split                                           | **PORT ≈17** (skip-layer/escaping/empty-node → DOM-pass tests) / **RETIRE ≈5** (emit-whitelist + attribute-policy = bucket C; port only vs the retained whitelist parity mode)                |
+
+### INTEGRATE final disposition — the 16 deleted v1 `*.test.ts` → cargo
+
+Recorded at Phase INTEGRATE when the TS `core/`/`classifier/`/`profiles/` were deleted. All cargo
+targets are under `packages/htmlwasher/native/` (integration = `tests/*.rs`; internal = inline
+`#[cfg(test)] mod tests`). Verified the named cargo modules exist.
+
+| deleted v1 `*.test.ts`                | disposition                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `core/extract.test.ts`                | → cargo `tests/extract.rs` (backoff/unconditional-drop guards ported; no-leakage RE-BASELINED)   |
+| `core/clean.test.ts`                  | → cargo `tests/clean.rs` + inline `html_processing.rs`/`link_density.rs`                         |
+| `core/dom.test.ts`                    | → cargo `tests/dom.rs` (spec-parse parity); `parseDocument`/`trim` now covered by metadata tests |
+| `core/main-content.test.ts`           | → cargo `tests/main_content.rs`                                                                  |
+| `core/profile.test.ts`                | → cargo `tests/profile.rs`                                                                       |
+| `core/serialize-filtered.test.ts`     | → cargo `tests/serialize.rs` (~17 ported); ~5 emit-whitelist/attr-policy RETIRED per doc 09      |
+| `profiles/index.test.ts`              | → cargo inline `page_type` profiles + `tests/profile.rs`                                         |
+| `classifier/classifier.test.ts`       | → cargo `tests/classifier_cascade.rs`; ONNX-backend/WASM-parity cases RETIRED per doc 09         |
+| `classifier/url-heuristics.test.ts`   | → cargo inline `page_type/url.rs`                                                                |
+| `classifier/html-signals.test.ts`     | → cargo inline `page_type/signals.rs`                                                            |
+| `classifier/parity.test.ts`           | → cargo `tests/classifier_parity.rs` (retargeted ONNX→GBDT, argmax 15/15)                        |
+| `classifier/features/index.test.ts`   | → cargo inline vocab loader (`page_type/tfidf.rs` + `model.rs` LazyLock validation)              |
+| `classifier/features/numeric.test.ts` | → cargo inline `page_type/features.rs`                                                           |
+| `classifier/features/text.test.ts`    | → cargo inline `page_type/features.rs` (TF-IDF input assembly)                                   |
+| `classifier/features/tfidf.test.ts`   | → cargo inline `page_type/tfidf.rs`                                                              |
+| `test/adbar-corpus.test.ts`           | → cargo `tests/adbar_corpus.rs`                                                                  |
+
+The TS-side regression oracle now lives in `packages/htmlwasher/test/validation/corpus-validation.test.ts`
+(adbar eval P/R/F1) and the offline wash-corpus-tester — both exercise the full `wash()` over the Rust core.
+
+## v2 open questions (resolve at the named phase)
+
+- **CRATE — `html-cleaning` crate license — RESOLVED (moot).** 0.3.0 is MIT OR Apache-2.0 but pins
+  `dom_query 0.24`, type-incompatible with the mandated `dom_query 0.28`; NOT wired (bucket-B cleaning
+  ported directly from v1 `clean.ts`). No `@/NOTICE` entry needed for it.
+- **CRATE — `remove_comments` no-op stub — RESOLVED.** Implemented as a real DOM comment-strip pass
+  (`html_processing.rs::remove_comments`, iterating comment nodes).
+- **CRATE — two `prune_unwanted_nodes` copies — RESOLVED.** Reconciled to ONE copy in
+  `extractor/fallback.rs::prune_unwanted_nodes`.
+- **CRATE — dom_query `unwrap_node` footgun — RESOLVED.** It removes a node's PARENT, not the node;
+  tag stripping uses `strip_elements` instead. Flagged so CLASSIFY/BIND avoid it.
+- **CLASSIFY — does `default_left` ever activate? — RESOLVED (no).** The exported dump has `default_left`
+  present but 0 nodes set it (dense f[], never NaN). The evaluator honors it defensively but it never fires;
+  strict-`<` with 0.0-for-absent is the whole story. NEW finding: the split comparison must be **float32**
+  (see the CLASSIFY phase bullet) — that, not missing-routing, was the probs-parity blocker.
+- **CLASSIFY — `token_pattern`/`ngram_range` — RESOLVED.** `tfidf-vocab.json` ships
+  `tokenPattern="(?u)\b\w\w+\b"`, `ngramRange=[1,1]`, 100 unigram terms; the Rust tokenizer reproduces the
+  column order (tfidf parity ≤ 2.2e-16).
+- **VALIDATE — score movement — RESOLVED.** The adbar eval LIFTED to P=0.814/R=0.844/F1=0.828 (vs v1
+  ≈0.79/0.81/0.80) — investigated: NOT from `aggregate_sections`/`collect_repeated_items` (still deferred,
+  not functional), but from the faithful-but-corrected Rust port (`strip_elements`-vs-`unwrap_node` fix that
+  avoided v1-class content loss + cleaner selection) plus preserve-markup retaining marginally more matchable
+  text. A documented GAIN, no floor regression (see the VALIDATE phase entry). Rust core ~3× faster on
+  extraction (extract-only vs v1 `extractContentHTML`).
+- **RETEST-deferred — rs-trafilatura structured rescues + aggregation passes (the "newly live" behavior).**
+  The crate reproduces v1's extraction (selector → semantic → scoring → body cascade + name-filter backoff +
+  whole-body fallback); it does NOT yet port `extractor/fallback.rs`'s structured rescues (JSON-LD `articleBody`,
+  Discourse `data-preloaded`, external-candidate comparison, baseline `should_discard` pruning) or the
+  `aggregate_sections`/`collect_repeated_items` post-passes. Intentional for regression parity (v1 lacked them
+  → no VALIDATE regression), but they are the enhancements the brief wanted. Port them if RETEST's live corpus
+  shows DOM-extraction failures a structured rescue would fix, or a per-type F1 gap the aggregation passes would
+  close. Caveat: a fallback win synthesizes markup (preservation is best-effort by construction).
+- **BIND — Zig + WASI SDK — DEFERRED TO CI (as planned).** The host `aarch64-apple-darwin` prebuild is
+  built + committed. The other 4 native targets need `cargo-zigbuild` (`napi build -x`) and
+  `wasm32-wasip1-threads` needs `WASI_SDK_PATH` — neither is on this host, so their `npm/<target>/`
+  dirs + `package.json` + a README note exist but the binaries are CI's job (NOT faked). `build:wasm`
+  script is wired for CI.
+- **POLISH — dead-code / knip cleanup.** After INTEGRATE, `npx knip` still exits 1 on pre-existing dead
+  code now fully exposed. Chief item: **`htmlparser2` is a dead flagship dependency** — `git grep` confirms
+  it was never imported in `src` even pre-INTEGRATE (the stale SPEC "classifier hot-path" claim was wrong;
+  the classifier used the linkedom-based `dom-query`), so DROP it. Plus pre-existing unused exports
+  (`extractMetadataFromDocument`, `OpenGraphResult`, `TitleParts`, `DecodeBufferResult`, `NormalizeHtmlResult`,
+  `WashOptions`/`WashOutput`; wash-corpus-tester `renderTable`/`renderMarkdown`/`SUBSTANTIAL_BODY_TEXT`/`ComboResult`),
+  the live-crawl-tester stub deps, and the root `vitest` devDep. Resolve at POLISH's full-repo review + a
+  clean `npx knip` pass (remove or `knip.ignore`).
+
+---
+
+## v1 record (historical — the all-TypeScript port, the regression oracle)
+
 ## Status
 
 - Phase 0 (orientation) — done (this document).
@@ -44,7 +686,7 @@ and `~/r/contextractor`.
   (parse5 normalize → linkedom) for byte-exact body text.
 - Phase 5 (part 2) — done. `pipeline.ts` classifies → selects profile → extracts;
   `wash()` returns `pageType` + `confidence`. `none` skips classification.
-- Phase 8 (offline wash-corpus tester) — done. `tools/htmlwasher/wash-corpus-tester/`: 28
+- Phase 8 (offline wash-corpus tester) — done. `packages/wash-corpus-tester/`: 28
   WCXB fixtures (≥3 per type × 7), 196 runs (7 boilerplate×level combos each),
   asserting security invariants + page-type plausibility, with a stdout table +
   `report.json`/`report.md`. Offline, deterministic, `pnpm test:corpus`.
@@ -61,7 +703,7 @@ and `~/r/contextractor`.
   pass through unchanged (recorded as soft warnings, not failures) — but the
   no-config path still runs `enforceSecurityFloor` + `sanitizeStyledHtml`, so
   `<script>`/`on*`/dangerous-URL/dangerous-CSS are stripped even there.
-- **`tools/htmlwasher/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
+- **`packages/live-crawl-tester/` decision:** the brief's offline Phase 8 deliverable
   is `wash-corpus-tester` (built). The pre-existing scaffold `live-crawl-tester`
   (an unimplemented network-fetch stub) is left untouched — deleting it would churn
   ~15 incidental references across the `.claude/` config for no functional gain,
@@ -186,7 +828,7 @@ trained-model argmax.
 
 ## Source → target module map
 
-### Boilerplate-removal core → `@/htmlwasher/src/core/`
+### Boilerplate-removal core → `@/packages/htmlwasher/src/core/`
 
 The core follows go-trafilatura's **keep-HTML** route (its `convertTags` keeps HTML,
 `html-processing.go:481-484`), NOT adbar's XML round-trip. Shared pipeline stages (adbar
@@ -241,7 +883,7 @@ rules, style, valign, vspace`; drop `width/height` except on `table/th/td/hr/pre
   fallback on a pre-cleaning backup, then profile post-passes (`aggregate_sections`,
   `collect_repeated_items`, Category description prepend, Product JSON-LD description).
 
-### Metadata → `@/htmlwasher/src/metadata/` (optional sidecar)
+### Metadata → `@/packages/htmlwasher/src/metadata/` (optional sidecar)
 
 Orchestrator: adbar `metadata.py:extract_metadata` (457-561). Per-field MERGE (not a
 blanket override): meta/OpenGraph fill first; then JSON-LD fills EMPTY
@@ -262,7 +904,7 @@ ends with `clean_and_trim` (cap each string field to 10000 chars, then
 - `date.ts` — adbar delegates to the external **htmldate** `find_date`. htmlwasher must port
   a JSON-LD/meta/url/text date heuristic or a minimal htmldate equivalent (open question on scope).
 
-### Classifier → `@/htmlwasher/src/classifier/` + training
+### Classifier → `@/packages/htmlwasher/src/classifier/` + training
 
 - `classifier/features/` (TS, htmlparser2 hot-path) + `training/extract_features.py` (Python,
   selectolax) — the **same** 89-numeric + 100-TF-IDF extractor, byte-for-byte. Reproduce
@@ -282,7 +924,7 @@ ends with `clean_and_trim` (cap each string field to 10000 chars, then
   missing feature → 0.0. For TS↔Python (lexbor) feature parity, `parseDocumentSpec`
   strips `<template>` subtrees before counting features.
 
-### Per-type profiles → `@/htmlwasher/src/profiles/`
+### Per-type profiles → `@/packages/htmlwasher/src/profiles/`
 
 `ExtractionProfile` (`page_type/mod.rs:98-345`) LIVE fields: `comments_are_content`,
 `content_selectors`, `preserve_tags`, `boilerplate_selectors`, `aggregate_sections`,
@@ -298,7 +940,7 @@ deliberately. Copy the 7 profile selector/tag arrays verbatim. Confidence:
 the 27-feature ML quality model `predict_quality` is a _second_ model — out of scope unless
 confirmed).
 
-### HTML washing → `@/htmlwasher/src/washing/`
+### HTML washing → `@/packages/htmlwasher/src/washing/`
 
 Faithful port of `htmlprocessing-server/src/process-html.ts`. Pipeline order:
 decode (chardet, iconv-lite; buffers only), then normalize (parse5), then sanitize
@@ -323,7 +965,7 @@ html-minifier-terser when `minify`). Returns `{ html, messages }`.
   sanitize-html does NOT scheme-filter `url()` inside `style` attrs or `<style>` blocks, so
   `url(javascript:|data:)`, `expression()`, `@import`, `-moz-binding` survive by default.
 
-### Orchestration → `@/htmlwasher/src/pipeline.ts` + `index.ts`
+### Orchestration → `@/packages/htmlwasher/src/pipeline.ts` + `index.ts`
 
 `wash(html, { boilerplate?, level?, minify? })` → `{ html, messages, metadata? }`. Defaults:
 `boilerplate: 'balanced'`, `level: 'standard'`, `minify: false`. `boilerplate: 'none'`
@@ -368,10 +1010,10 @@ options are the **entire** user surface — no `includeComments/Tables/Images/Li
 
 ## tools/ tester: brief vs scaffold drift (Phase 8)
 
-The brief (§4, §7, §8) specifies an **offline** `tools/htmlwasher/wash-corpus-tester/` (saved HTML
+The brief (§4, §7, §8) specifies an **offline** `packages/wash-corpus-tester/` (saved HTML
 fixtures in → cleaned HTML out, **no network**, ≥3 fixtures per page type × 7 types). The
-current scaffold instead has `tools/htmlwasher/live-crawl-tester/` (a polite network fetcher per
+current scaffold instead has `packages/live-crawl-tester/` (a polite network fetcher per
 CLAUDE.md). The brief and the §8 non-goals are explicit that htmlwasher never touches the
-network. **Decision: build `tools/htmlwasher/wash-corpus-tester/` per the brief** and reconcile the
+network. **Decision: build `packages/wash-corpus-tester/` per the brief** and reconcile the
 scaffold at Phase 8 (repoint the workspace, retire or repurpose the live-crawl-tester, and
 update CLAUDE.md / SPEC.md accordingly).

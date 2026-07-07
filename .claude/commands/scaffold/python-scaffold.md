@@ -7,7 +7,7 @@ argument-hint: <project-type> [project-name]
 
 Create a production-ready Python project with modern tooling and best practices.
 
-In htmlwasher the primary target is the `training/` project — an offline, uv-managed Python 3.12+ project that trains an XGBoost page-type classifier from the public WCXB dataset and exports `model.onnx` + `tfidf-vocab.json` for the TypeScript classifier to load. It is NOT a pnpm workspace member and is NOT shipped at runtime. Use the `data-pipeline` or `library` type for it; uv manages the environment (`uv sync`, `uv run`), and a `pyproject.toml` is optional (the project may stay a plain uv-managed script dir until packaging is needed).
+In htmlwasher the primary target is the `training/` project — an offline, uv-managed Python 3.12+ project that trains an XGBoost page-type classifier from the public WCXB dataset and exports `model.xgb.json` + `tfidf-vocab.json` for the TypeScript classifier to load. It is NOT a pnpm workspace member and is NOT shipped at runtime. Use the `data-pipeline` or `library` type for it; uv manages the environment (`uv sync`, `uv run`), and a `pyproject.toml` is optional (the project may stay a plain uv-managed script dir until packaging is needed).
 
 ## Usage
 

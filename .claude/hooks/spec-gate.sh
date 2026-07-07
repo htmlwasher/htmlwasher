@@ -39,11 +39,11 @@ api_surface_changed=false
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   case "$f" in
-    */htmlwasher/src/*)
-      required_specs+=$'\n'"htmlwasher/SPEC.md"
+    */packages/htmlwasher/src/*)
+      required_specs+=$'\n'"packages/htmlwasher/SPEC.md"
       [[ "$f" == */index.ts ]] && api_surface_changed=true ;;
-    */tools/htmlwasher/live-crawl-tester/src/*)
-      required_specs+=$'\n'"tools/htmlwasher/live-crawl-tester/SPEC.md" ;;
+    */packages/live-crawl-tester/src/*)
+      required_specs+=$'\n'"packages/live-crawl-tester/SPEC.md" ;;
     */training/*.py)
       required_specs+=$'\n'"training/SPEC.md" ;;
   esac

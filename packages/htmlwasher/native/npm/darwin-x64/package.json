@@ -1,0 +1,15 @@
+{
+  "name": "@htmlwasher/native-darwin-x64",
+  "version": "0.0.0",
+  "private": true,
+  "main": "htmlwasher-native.darwin-x64.node",
+  "files": [
+    "htmlwasher-native.darwin-x64.node"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

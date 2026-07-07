@@ -9,8 +9,8 @@ Scan all packages for drift between source code and their SPEC.md files. Apply s
 
 ## Source → SPEC Mapping
 
-- `htmlwasher/src/**` → `htmlwasher/SPEC.md`
-- `tools/htmlwasher/live-crawl-tester/src/**` → `tools/htmlwasher/live-crawl-tester/SPEC.md`
+- `packages/htmlwasher/src/**` → `packages/htmlwasher/SPEC.md`
+- `packages/live-crawl-tester/src/**` → `packages/live-crawl-tester/SPEC.md`
 - `training/**/*.py` → `training/SPEC.md`
 - Architecture or data-flow changes in any of the above → root `SPEC.md`
 
@@ -19,8 +19,8 @@ Scan all packages for drift between source code and their SPEC.md files. Apply s
 Run `git diff --name-only HEAD~1..HEAD` and `git status --short` to identify what changed recently. If the working tree is clean, read key public API surfaces directly and compare to spec prose.
 
 Public API surfaces to prioritize:
-- `htmlwasher/src/index.ts` — library public exports
-- `tools/htmlwasher/live-crawl-tester/src/index.ts` (or its main entry) — live-crawl-tester public surface
+- `packages/htmlwasher/src/index.ts` — library public exports
+- `packages/live-crawl-tester/src/index.ts` (or its main entry) — live-crawl-tester public surface
 - `training/*.py` — training scripts and model/vocab export entry points
 
 ## Step MAP: Identify affected specs

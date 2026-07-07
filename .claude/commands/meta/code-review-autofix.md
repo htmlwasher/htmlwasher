@@ -61,20 +61,20 @@ Determine domain per file:
 
 | Path pattern | Domain |
 |---|---|
-| `htmlwasher/src/core/**/*.ts` | TypeScript (extraction core) |
-| `htmlwasher/src/metadata/**/*.ts` | TypeScript (metadata) |
-| `htmlwasher/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
-| `htmlwasher/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
-| `htmlwasher/src/**/*.ts` | TypeScript (library) |
-| `tools/htmlwasher/live-crawl-tester/src/**/*.ts` | TypeScript (live-crawl tester) |
+| `packages/htmlwasher/src/core/**/*.ts` | TypeScript (extraction core) |
+| `packages/htmlwasher/src/metadata/**/*.ts` | TypeScript (metadata) |
+| `packages/htmlwasher/src/classifier/**/*.ts` | TypeScript (ONNX classifier) |
+| `packages/htmlwasher/src/profiles/**/*.ts` | TypeScript (page-type profiles) |
+| `packages/htmlwasher/src/**/*.ts` | TypeScript (library) |
+| `packages/live-crawl-tester/src/**/*.ts` | TypeScript (live-crawl tester) |
 | `training/**/*.py` | Python (offline training) |
 
 ## Step RESEARCH
 
 For each non-trivial pattern or API usage in the change set:
 - **Repo grep**: search `htmlwasher/`, `tools/`, and `training/` for existing usage — establishes convention vs. new introduction
-- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`htmlwasher/SPEC.md`, `tools/htmlwasher/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
-- **Web fetch**: for unfamiliar library APIs (linkedom, parse5, htmlparser2, onnxruntime), fetch their official docs
+- **SPEC.md / CLAUDE.md**: read the SPEC.md colocated with the changed package/tool (`packages/htmlwasher/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, and root `SPEC.md` for architecture changes); re-read relevant `.claude/rules/` files
+- **Web fetch**: for unfamiliar library APIs (napi-rs, dom_query, linkedom, parse5, sanitize-html), fetch their official docs
 - **Security**: WebSearch for CVEs or OWASP issues on security-adjacent patterns (untrusted HTML parsing, input handling)
 
 ## Step REVIEW
@@ -112,7 +112,7 @@ Classify each finding:
 - No floating promises — every async call is awaited or explicitly handed off
 - No `console.log` in production library paths — the library must not emit to stdout/stderr by default
 - DOM parsing stays behind the established interface — `linkedom` + `parse5` for full-document work, `htmlparser2` only in the classifier feature hot-path; do not introduce a new parser
-- ONNX inference goes through the single runtime interface that wraps `onnxruntime-node` (default) and `onnxruntime-web` (WASM) — do not import a runtime directly in feature/profile code
+- Page-type classification is a pure-Rust GBDT over the XGBoost JSON dump (`model.xgb.json`) inside the `@htmlwasher/native` crate — there is NO ONNX/onnxruntime; the feature extractor, GBDT evaluator, and profiles live in the Rust crate, not TS
 
 ### Python checks (training/)
 
@@ -120,7 +120,7 @@ Classify each finding:
 - No mutable default arguments
 - Pin no logic into module import side effects — training entry points run under a `if __name__ == "__main__"` guard or a CLI function
 - The training project is offline-only and uv-managed — it must never be imported by or shipped with the TypeScript runtime
-- Model export writes `model.onnx` + `tfidf-vocab.json`; keep the export reproducible (fixed random seeds where applicable)
+- Model export writes `model.xgb.json` + `tfidf-vocab.json`; keep the export reproducible (fixed random seeds where applicable)
 
 ### Security checks
 
@@ -173,7 +173,7 @@ Use Edit tool directly on the prompt files.
 - List prompts: `find prompts/ -name "*.md" -maxdepth 3 2>/dev/null | head -10`
 - Match: compare branch name keywords and recent commit messages against prompt directory names; pick the best match
 - If matched: read the prompt, then update it to mark completed steps as `[DONE]`, update the "Current State" section if one exists, and add any new patterns or constraints discovered during this review
-- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`htmlwasher/SPEC.md`, `tools/htmlwasher/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
+- Also update the relevant `SPEC.md` for any package or tool whose source files were modified this session (`packages/htmlwasher/SPEC.md`, `packages/live-crawl-tester/SPEC.md`, `training/SPEC.md`, or root `SPEC.md` for architecture changes) — check if the exported API, types, or entry points changed
 
 **Tertiary — fix this command.** Extract repo-specific patterns (not generic best-practices) and integrate into `## Project-Specific Checks` below. Only edit if a genuinely new project-specific pattern emerged.
 
@@ -201,12 +201,12 @@ This section starts lean and accumulates as reviews surface durable, repo-specif
 - Treat all parsed HTML as untrusted — sanitize node content before any downstream interpolation
 
 ### ONNX runtime interface
-- All inference goes through the single runtime interface wrapping `onnxruntime-node` (default) and `onnxruntime-web` (WASM); feature and profile code must not import a runtime package directly
-- The model artifacts (`model.onnx`, `tfidf-vocab.json`) are produced by the offline `training/` project and consumed at runtime — keep the loading path tolerant of a missing/optional model
+- Page-type inference is the pure-Rust GBDT evaluator in the `@htmlwasher/native` crate (no ONNX runtime); the model artifacts are baked into the crate via `include_str!` and validated at load
+- The model artifacts (`model.xgb.json`, `tfidf-vocab.json`) are produced by the offline `training/` project and consumed at runtime — keep the loading path tolerant of a missing/optional model
 
 ### Workspace boundaries
 - `training/` is offline-only, Python, uv-managed, and NOT a pnpm workspace package — it must never be imported by or shipped with the TypeScript library
-- `tools/htmlwasher/live-crawl-tester/` is a separate TS workspace package and a polite live fetcher (robots.txt, rate limit, disk cache) — it is not Crawlee/Playwright; keep its politeness guarantees intact
+- `packages/live-crawl-tester/` is a separate TS workspace package and a polite live fetcher (robots.txt, rate limit, disk cache) — it is not Crawlee/Playwright; keep its politeness guarantees intact
 
 ### Import hygiene
 - `import type` for every import that carries no runtime value

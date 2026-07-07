@@ -30,7 +30,7 @@ Choose sources by applicability to the prompt's domain; official-first always:
 
 - Claude Code docs: `https://code.claude.com/docs/en/mcp`, `/en/mcp-quickstart`, `/en/discover-plugins`, `/en/plugins-reference`, `/en/plugin-marketplaces`, `/en/skills`, `/en/sub-agents`, `/en/settings`, `/en/permissions`.
 - Anthropic announcements and engineering blog (Agent Skills, code-execution-with-MCP) for current best practice.
-- This repo's stack, as applicable: Rust — crates.io + `https://docs.rs/`, napi-rs (`https://napi.rs/`); Python — PyPI + the project's own docs (XGBoost, scikit-learn, ONNX/onnxruntime); TypeScript — the library's npm dependency docs. Prefer the vendor's own `llms.txt` / raw-markdown docs where offered.
+- This repo's stack, as applicable: Rust — crates.io + `https://docs.rs/`, napi-rs (`https://napi.rs/`); Python — PyPI + the project's own docs (XGBoost, scikit-learn, imbalanced-learn, selectolax); TypeScript — the library's npm dependency docs. Prefer the vendor's own `llms.txt` / raw-markdown docs where offered.
 - MCP discovery: the Anthropic Directory first (`https://claude.ai/directory` — reviewed connectors; any remote server listed there can be added with `claude mcp add`), then the official registry API — `curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=<term>&limit=10"` (preview status; it verifies namespaces only, no security scanning) — plus curated directories (PulseMCP for curation, Glama "Official" tier).
 - Industry discussions (GitHub, community forums) to confirm each candidate is the current best option and maintained, not deprecated/renamed: `gh repo view <owner>/<repo> --json pushedAt,stargazerCount,latestRelease,openIssues`.
 

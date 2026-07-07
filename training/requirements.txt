@@ -8,21 +8,17 @@
 #
 # The WCXB dataset itself is NOT listed and NOT committed: it is fetched at
 # runtime from Hugging Face / Zenodo by download_wcxb.py (see README.md) and is
-# .gitignored. Only the trained artifacts (model.onnx + tfidf-vocab.json) are
-# committed, under @/htmlwasher/src/classifier/model/.
+# .gitignored. Only the trained artifacts (model.xgb.json + tfidf-vocab.json) are
+# committed, under @/packages/htmlwasher/native/artifacts/.
 #
 # Pins are conservative lower bounds; uv resolves the latest compatible release.
 
-# Model training
+# Model training + native JSON export (xgboost.Booster.save_model). The model is
+# evaluated at runtime by a pure-Rust GBDT evaluator in the crate — no ONNX, no
+# onnxruntime, so skl2onnx/onnxmltools/onnx/onnxruntime are no longer required.
 xgboost>=2.1,<3
 scikit-learn>=1.5,<2
 imbalanced-learn>=0.12,<1
-
-# ONNX export (XGBoost / sklearn -> ONNX) and inference for parity checks
-skl2onnx>=1.17,<2
-onnxmltools>=1.12,<2
-onnx>=1.17,<2
-onnxruntime>=1.23,<1.24
 
 # Numerics and data handling
 numpy>=2.1,<3

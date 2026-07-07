@@ -1,27 +1,34 @@
 # htmlwasher — htmlwasher
 
-htmlwasher hosts **`htmlwasher`**, a faithful **TypeScript port of [Trafilatura](https://github.com/adbar/trafilatura)** with page-type-aware extraction and an ONNX page-type classifier. It extracts a page's main content — clean text plus structured metadata (title, author, date, sitename, tags) — and classifies the page into one of 7 page types (article, forum, product, collection, listing, documentation, service) to route extraction through a type-specific profile. Alongside the library, this repo holds an offline Python `training/` pipeline (XGBoost → ONNX) and the offline `tools/htmlwasher/wash-corpus-tester/` end-to-end fixture harness (the brief's Phase 8 deliverable). It is a **content-extraction library for Node.js — not a scraper, not a browser-automation crawler, not an Apify Actor.**
+htmlwasher hosts **`htmlwasher`**, a **hybrid Rust + TypeScript** content-extraction library derived from **[Trafilatura](https://github.com/adbar/trafilatura)**. Its boilerplate-removal + page-type-classification core is a **Rust crate** (`packages/htmlwasher/native/`, a simplified fork of rs-trafilatura's live path) reached from Node via **napi-rs**; the public async `wash()` API, the HTML-washing/sanitization levels, the metadata sidecar, and the CLI stay **TypeScript**. It extracts a page's main content — clean HTML plus structured metadata (title, author, date, sitename, tags) — and classifies the page into one of 7 page types (article, forum, product, collection, listing, documentation, service) via a **pure-Rust GBDT evaluator over the XGBoost native JSON dump (no ONNX/onnxruntime)** to route extraction through a type-specific profile. Alongside the library, this repo holds an offline Python `training/` pipeline (XGBoost → `model.xgb.json`) and the offline `packages/wash-corpus-tester/` end-to-end fixture harness. It is a **content-extraction library for Node.js — not a scraper, not a browser-automation crawler, not an Apify Actor.**
 
 ## Project Structure
 
 ```
-htmlwasher/         # the TypeScript library (npm package `htmlwasher`, alpha)
-                           #   src/{core,metadata,classifier/{features,model},profiles}, test/, fixtures/
-training/                  # OFFLINE Python project (3.12+, uv-managed): trains XGBoost from the
-                           #   WCXB dataset, exports model.onnx + tfidf-vocab.json. Not a pnpm
-                           #   workspace package; not shipped at runtime.
-tools/htmlwasher/          # per-product tool grouping (plain folder — no package.json here)
-├── wash-corpus-tester/    # THE offline E2E tester (brief Phase 8 / §7): runs wash() over saved HTML
-│                          #   fixtures across the 7 page types; reports PASS/FAIL; no network; in `pnpm test`.
+Cargo.toml                 # root Rust workspace (member: packages/htmlwasher/native); Cargo.lock committed
+packages/                  # flat pnpm/Turborepo workspace (contextractor layout; `tools/` dissolved)
+├── htmlwasher/            # the TS library (npm package `htmlwasher`, alpha): src/{washing,metadata},
+│   │                      #   pipeline.ts, cli*, types.ts, test/, fixtures/ — the TS shell over the Rust core
+│   └── native/            # the Rust crate `htmlwasher-native` = npm `@htmlwasher/native` (private):
+│                          #   the simplified rs-trafilatura fork — extraction, page_type/ (cascade +
+│                          #   189-feature extractor + pure-Rust GBDT), profiles, dual-mode serializer,
+│                          #   #[napi] extract/extractSync; artifacts/{model.xgb.json,tfidf-vocab.json};
+│                          #   npm/<target>/ committed prebuilds. (The former TS src/{core,classifier,
+│                          #   profiles}/ live here now.)
+├── wash-corpus-tester/    # THE offline E2E tester (brief §7): runs wash() over saved HTML fixtures across
+│                          #   the 7 page types; reports PASS/FAIL; no network; in `pnpm test`.
 └── live-crawl-tester/     # OUT-OF-BRIEF, OPTIONAL, UNIMPLEMENTED scaffold stub (index.ts only logs
                            #   "not yet implemented"). Would hit the network, so NOT in offline `pnpm test`.
+training/                  # OFFLINE Python project (3.12+, uv-managed): trains XGBoost from the WCXB
+                           #   dataset, exports model.xgb.json + tfidf-vocab.json + parity fixtures into
+                           #   the crate. Not a pnpm workspace package; not shipped at runtime.
 # (the six READ-ONLY reference repos are cloned OUTSIDE this repo into ~/r/htmlwasher-sources/, by clone-other-repos.sh)
 prompts/2026-6-24-init/    # build brief (prompt.md) + research context docs — do not modify
 ```
 
 ## Current status
 
-The phased port (Phases 0–8 of [`@/prompts/2026-6-24-init/prompt.md`](@/prompts/2026-6-24-init/prompt.md)) is **implemented**. `htmlwasher` exposes the public async `wash()` composing the boilerplate-removal core (Trafilatura-derived extraction + the trained ONNX page-type classifier + per-type profiles), the metadata sidecar, and the five HTML-washing levels. `training/` trains the classifier from WCXB and exports `model.onnx` + `tfidf-vocab.json`; `tools/htmlwasher/wash-corpus-tester/` is the offline E2E tester. The TS↔Python feature extractor is at 100% parity; extraction scores F1 ≈ 0.79 on the adbar eval corpus, the classifier ~0.78 on the held-out WCXB test split. See [`@/PORTING-NOTES.md`](@/PORTING-NOTES.md) for the port map, per-phase notes, and known gaps, and each package's `SPEC.md` for the current API. Alpha — APIs may still change.
+The **v2 hybrid rebuild** ([`@/prompts/2026-6-24-init/prompt.md`](@/prompts/2026-6-24-init/prompt.md), phases ORIENT→POLISH) is **implemented**. `htmlwasher` exposes the public async `wash()` composing the Rust boilerplate-removal + classification core (`@htmlwasher/native`, a simplified rs-trafilatura fork with a **pure-Rust GBDT page-type classifier over the XGBoost JSON dump — no ONNX**), the TypeScript metadata sidecar, and the five HTML-washing levels (the washing stage is the **sole sanitization authority** — the Rust core emits preserve-markup, unsanitized HTML; context doc 09). `training/` trains the classifier from WCXB and exports `model.xgb.json` + `tfidf-vocab.json` + the Rust↔Python parity fixtures into the crate; `packages/wash-corpus-tester/` is the offline E2E tester. Rust↔Python feature parity is exact (numeric ≤ 3.4e-13, argmax 100%); extraction scores F1 ≈ 0.83 on the adbar eval corpus (a lift over v1's ≈0.80) and the Rust core is ~3× faster; the classifier ≈ 0.777 held-out WCXB accuracy. See [`@/PORTING-NOTES.md`](@/PORTING-NOTES.md) for the per-phase map, gotchas, and scores, and each package's `SPEC.md` for the current API. Alpha — APIs may still change.
 
 ## Commands
 
@@ -35,6 +42,11 @@ pnpm fix:md            # Markdown only: markdownlint --fix + Prettier --write (B
 pnpm clone-sources     # `bash clone-other-repos.sh` — fetch the six read-only reference repos into ~/r/htmlwasher-sources/
 npx cspell "**/*.md"   # Spell check (cspell dictionaries: bash, en-gb, git, rust)
 npx knip               # Dead-code: unused exports/files/deps (config in knip.json)
+# Rust native crate (packages/htmlwasher/native/ — needs a Rust toolchain):
+cargo test --workspace                          # crate unit + integration tests (incl. Rust↔Python parity)
+cargo clippy --workspace --all-targets -- -D warnings   # lint (unwrap/expect/unsafe denied)
+cargo fmt --check                               # format check
+# napi build --release --features napi          # rebuild the prebuilt .node (needs @napi-rs/cli; committed prebuilds otherwise)
 # Offline Python training (run from training/):
 uv sync                # Create/refresh the uv-managed venv
 uv run pytest          # Run training unit tests
@@ -46,10 +58,10 @@ Biome owns JS/TS/JSON lint+format; Prettier + markdownlint-cli2 own Markdown; cs
 
 ## Local Prerequisites
 
-- **Node 22+**, **pnpm 10+** — the library and the offline `tools/htmlwasher/wash-corpus-tester/`
+- **Node 22+**, **pnpm 10+** — the library and the offline `packages/wash-corpus-tester/`
 - **Python 3.12+ with [uv](https://docs.astral.sh/uv/)** — only for the offline `training/` pipeline
 - **git** — to clone the six read-only reference repos into `~/r/htmlwasher-sources/`
-- **No Rust toolchain is required to build htmlwasher.** Rust appears only as read-only reference under `~/r/htmlwasher-sources/` (never built here); `rust-analyzer` is enabled solely to READ those references.
+- **Rust toolchain (cargo/rustc, current stable ≥ 1.85 for edition 2024) — required only to REBUILD the native crate** at `packages/htmlwasher/native/`. Committed prebuilt `.node` binaries (added at Phase BIND) let contributors without Rust still `pnpm build`/`pnpm test` — the native build script self-skips when no toolchain is configured. `rust-analyzer` is first-class: it reads the in-repo crate AND the read-only references under `~/r/htmlwasher-sources/`.
 
 ## Reference sources are read-only (external)
 
@@ -62,7 +74,7 @@ The reference repos live at **`~/r/htmlwasher-sources/`** — an external siblin
 
 ## TypeScript LSP
 
-The `typescript-lsp@claude-plugins-official` plugin wires `typescript-language-server` into the built-in `LSP` tool — go-to-definition, find-all-references, hover types, and real-time diagnostics across `.ts`/`.tsx`/`.js`/`.jsx`. Python (`pyright-lsp`) and Rust (`rust-analyzer-lsp`) are also enabled — pyright for the `training/` Python, rust-analyzer to READ the Rust references under `~/r/htmlwasher-sources/`.
+The `typescript-lsp@claude-plugins-official` plugin wires `typescript-language-server` into the built-in `LSP` tool — go-to-definition, find-all-references, hover types, and real-time diagnostics across `.ts`/`.tsx`/`.js`/`.jsx`. Python (`pyright-lsp`) and Rust (`rust-analyzer-lsp`) are also enabled — pyright for the `training/` Python, and **rust-analyzer is first-class**: it drives the in-repo native crate at `packages/htmlwasher/native/` (go-to-def, types, diagnostics) AND reads the read-only Rust references under `~/r/htmlwasher-sources/`.
 
 - Use `Grep`/`Glob` for **discovery** (finding files, searching patterns)
 - Use `LSP` for **understanding** (definitions, references, type errors) — prefer it over reading whole files
@@ -91,15 +103,15 @@ Rules under `.claude/rules/` auto-load by reference; the SessionStart snapshot p
 
 Spec maintenance routes changes to the nearest SPEC.md:
 
-- `htmlwasher/src/**` → `htmlwasher/SPEC.md`
-- `tools/htmlwasher/wash-corpus-tester/src/**` → `tools/htmlwasher/wash-corpus-tester/SPEC.md`
-- `tools/htmlwasher/live-crawl-tester/src/**` → `tools/htmlwasher/live-crawl-tester/SPEC.md` (scaffold stub only)
+- `packages/htmlwasher/src/**` → `packages/htmlwasher/SPEC.md`
+- `packages/wash-corpus-tester/src/**` → `packages/wash-corpus-tester/SPEC.md`
+- `packages/live-crawl-tester/src/**` → `packages/live-crawl-tester/SPEC.md` (scaffold stub only)
 - `training/**.py` → `training/SPEC.md`
 - architecture / data-flow changes → root `SPEC.md`
 
 ## Security
 
-Treat all fetched HTML as untrusted — never `eval`, never feed it into a template engine without escaping, sanitize before downstream use. No secrets in logs (redact tokens, full request bodies). Validate input at every boundary (zod or typed parsing in TypeScript). If the out-of-brief `tools/htmlwasher/live-crawl-tester/` scaffold is ever implemented, it must be a polite fetcher that honors robots.txt + per-host rate limits and target sites' Terms of Service per Crawlee/Apify industry standards (it is NOT Crawlee/Playwright itself). No `.env*` files in the repo.
+Treat all fetched HTML as untrusted — never `eval`, never feed it into a template engine without escaping, sanitize before downstream use. No secrets in logs (redact tokens, full request bodies). Validate input at every boundary (zod or typed parsing in TypeScript). If the out-of-brief `packages/live-crawl-tester/` scaffold is ever implemented, it must be a polite fetcher that honors robots.txt + per-host rate limits and target sites' Terms of Service per Crawlee/Apify industry standards (it is NOT Crawlee/Playwright itself). No `.env*` files in the repo.
 
 See [`@/.claude/rules/security.md`](@/.claude/rules/security.md) for the full security checklist.
 
@@ -115,5 +127,5 @@ The Claude config is a maintained artifact. The `SessionStart` hook (`.claude/ho
 - [Murrough-Foley/rs-trafilatura](https://github.com/Murrough-Foley/rs-trafilatura) — divergent Rust fork with ML page-typing (primary port target)
 - [Murrough-Foley/web-page-classifier](https://github.com/Murrough-Foley/web-page-classifier) — the XGBoost page-type classifier
 - [WCXB dataset (Hugging Face)](https://huggingface.co/datasets/murrough-foley/web-content-extraction-benchmark) — training data; mirror on [Zenodo (DOI 10.5281/zenodo.19316874)](https://doi.org/10.5281/zenodo.19316874) (CC-BY-4.0, attribution required)
-- [onnxruntime-node](https://www.npmjs.com/package/onnxruntime-node) / [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) — ONNX inference backends
+- [napi-rs](https://napi.rs/) — the Rust↔Node binding for the native crate · [dom_query](https://crates.io/crates/dom_query) — the crate's html5ever-based DOM · [XGBoost model JSON](https://xgboost.readthedocs.io/en/stable/tutorials/saving_model.html) — the classifier's native-JSON dump format (evaluated by a pure-Rust GBDT, no ONNX)
 - [mozilla/readability](https://github.com/mozilla/readability) — TypeScript/DOM idiom reference

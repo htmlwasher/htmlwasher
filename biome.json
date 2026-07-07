@@ -15,6 +15,12 @@
       "!**/*.svg",
       "!**/fixtures",
       "!**/classifier/model",
+      "!**/native/artifacts",
+      "!**/native/target",
+      "!**/native/*.js",
+      "!**/native/*.cjs",
+      "!**/native/*.mjs",
+      "!**/native/*.d.ts",
       "!**/dist",
       "!**/node_modules"
     ]

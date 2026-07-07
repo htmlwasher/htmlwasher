@@ -1,0 +1,18 @@
+{
+  "name": "@htmlwasher/native-linux-x64-gnu",
+  "version": "0.0.0",
+  "private": true,
+  "main": "htmlwasher-native.linux-x64-gnu.node",
+  "files": [
+    "htmlwasher-native.linux-x64-gnu.node"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ]
+}

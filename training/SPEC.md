@@ -1,23 +1,31 @@
 # SPEC — training (offline classifier pipeline)
 
 > Status: IMPLEMENTED. `download_wcxb.py`, `extract_features.py`, `train.py`, and
-> `make_parity_fixtures.py` exist and run end-to-end; `model.onnx` +
-> `tfidf-vocab.json` are exported and copied into the TS package, and
-> `htmlwasher/fixtures/classifier/` holds the TS↔Python parity fixtures.
-> Authority: `@/prompts/2026-6-24-init/prompt.md` (Phase 4) and the feature
-> contract in `@/training/FEATURES.md`.
+> `make_parity_fixtures.py` exist and run end-to-end; `model.xgb.json` +
+> `tfidf-vocab.json` are exported into the Rust crate's `artifacts/` dir, and
+> `packages/htmlwasher/native/tests/fixtures/classifier-parity.json` holds the
+> Rust↔Python parity fixtures. Authority: `@/prompts/2026-6-24-init/prompt.md`
+> (Phase 4 / Phase CLASSIFY) and the feature contract in `@/training/FEATURES.md`.
 
 ## Purpose
 
-Train htmlwasher's page-type classifier offline and export the two
-runtime artifacts consumed by the TypeScript library:
+Train htmlwasher's page-type classifier offline and export the two runtime
+artifacts consumed by the Rust extraction core (v2):
 
-- `model.onnx` — XGBoost classifier exported to ONNX.
-- `tfidf-vocab.json` — locked TF-IDF vocabulary + IDF weights.
+- `model.xgb.json` — the XGBoost native JSON dump (trees + `tree_info`
+  round-robin class layout + `default_left` + `base_score`). Evaluated at
+  runtime by a pure-Rust GBDT evaluator in the crate — no ONNX, no onnxruntime.
+- `tfidf-vocab.json` — locked TF-IDF vocabulary + IDF weights + the baked
+  StandardScaler `mean`/`scale`.
 
-Both are written to `@/htmlwasher/src/classifier/model/` and are the
-only outputs committed to the repository. This project is offline-only, not a
-pnpm workspace member, and not shipped at runtime.
+Both are written to `@/packages/htmlwasher/native/artifacts/` (`include_str!`-ed
+by the crate) and are committed to the repository, alongside the parity fixture
+at `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`. This
+project is offline-only, not a pnpm workspace member, and not shipped at runtime.
+
+> **v1 note:** the shipped `@/packages/htmlwasher/src/classifier/model/model.onnx`
+> + `tfidf-vocab.json` remain committed and untouched so the v1 TypeScript suite
+> stays green until Phase INTEGRATE. This pipeline no longer writes them.
 
 ## Pipeline
 
@@ -59,7 +67,7 @@ The pipeline is a four-stage flow, one script per stage.
   not) and **segfaults** when `.attributes` is read off iterated children on some
   deep trees.
 - **Parity requirement:** these features MUST match the TypeScript extractor in
-  `@/htmlwasher/src/classifier/features/` exactly. Validated by the TS↔Python
+  `@/packages/htmlwasher/src/classifier/features/` exactly. Validated by the TS↔Python
   parity fixtures (target ≥99% exact match; compare the **argmax class**, not raw
   probabilities).
 - **`title_meta_text` is a documented simplification:** `<title>` element text +
@@ -93,27 +101,37 @@ The pipeline is a four-stage flow, one script per stage.
 
 ### Stage EXPORT — (within `train.py`)
 
-- Export to `model.onnx` via `onnxmltools.convert_xgboost`, input a single
-  `[None, 189]` float tensor (`target_opset=13`; the converter emits the
-  `ai.onnx.ml` `TreeEnsembleClassifier`). Scaling and TF-IDF live in the feature
-  code — the ONNX graph is pure XGBoost on the 189-vector. Outputs are `label`
-  (int64) and `probabilities` `[None, 7]`.
-- After export, the run cross-checks ONNX vs native-XGBoost argmax on TEST
-  (expected 100% agreement) against the pinned `onnxruntime` (>=1.23,<1.24 —
-  outside the 1.21.x–1.22.x category-only-trees bug window).
+- Export the XGBoost native JSON dump via
+  `clf.get_booster().save_model(model.xgb.json)`. The file carries the 1400 trees
+  (200 rounds × 7 classes), `tree_info` (the round-robin class layout,
+  `tree_info[i] == i % 7`), per-node `default_left`, and a string-typed
+  `base_score` (`"5E-1"` = 0.5). Scaling and TF-IDF live in the feature code — the
+  model is pure XGBoost on the 189-vector.
+- After export, `_verify_json` reloads `model.xgb.json` into a fresh
+  `xgboost.Booster` and asserts its argmax over TEST matches the trained
+  classifier's (must round-trip at 100%).
 - Emit `tfidf-vocab.json`: `vocabulary` (term→index), `idf` (100), `numericMean`
   + `numericScale` (89 each, the StandardScaler stats), `classLabels` (7),
   `nNumeric` (89), `nTfidf` (100), `tokenPattern`, `ngramRange`, `lowercase`.
-- Copy `model.onnx` + `tfidf-vocab.json` into `@/htmlwasher/src/classifier/model/`
-  (the only committed copies; the `training/`-local copies are `.gitignore`d).
+- Both `model.xgb.json` + `tfidf-vocab.json` are written directly into
+  `@/packages/htmlwasher/native/artifacts/` (the only committed copies; no
+  `training/`-local copies).
 
 ### Stage PARITY — `make_parity_fixtures.py`
 
-- Picks small (<60 KB) dev HTML pages (2 per type, 14 total), copies them to
-  `@/htmlwasher/fixtures/classifier/<id>.html`, and writes `parity.json`: per
-  fixture `{file, url, pageType, numeric[89], tfidf[100], argmax, argmaxLabel}`,
-  with `argmax` from running the exported ONNX on the assembled 189-vector. The TS
-  parity test re-extracts from the same HTML and compares.
+- Reads every committed HTML fixture under
+  `@/packages/htmlwasher/fixtures/classifier/*.html` (with each fixture's `url` +
+  ground-truth type from the v1 `parity.json` manifest, so it runs offline
+  without the dataset), loads `model.xgb.json` + `tfidf-vocab.json`, and writes
+  `@/packages/htmlwasher/native/tests/fixtures/classifier-parity.json`:
+  `{model, n_numeric:89, n_tfidf:100, n_classes:7, class_labels, fixtures:[{file,
+  url, numeric[89] (RAW), tfidf[100] (RAW L2-normed), argmax, page_type,
+  probs[7]}]}`. `argmax`/`probs` come from running the Booster on the assembled
+  189-vector `[scaled_numeric ++ tfidf]`. The Cargo parity test re-extracts from
+  the same HTML, applies the baked scaler, feeds its pure-Rust GBDT evaluator,
+  and asserts numeric/tfidf ≤1e-6 and argmax 100%.
+- The v1 `@/packages/htmlwasher/fixtures/classifier/parity.json` (consumed by the
+  v1 TS parity suite) is left untouched.
 
 ## Determinism and validation
 
@@ -132,6 +150,11 @@ The pipeline is a four-stage flow, one script per stage.
   `contains_any`, `title_meta_text`, and determinism.
 - `tests/test_tfidf.py` — TF-IDF fit determinism, the `smooth_idf` formula, L2
   normalization, and the 1-char-token drop.
+- `tests/test_model_export.py` — asserts exported-artifact metadata (the
+  `classifier-parity.json` shape: 89 numeric + 100 tfidf + 7 probs + valid
+  argmax/label per entry) and a `model.xgb.json` round-trip (reload the Booster,
+  assert its argmax reproduces each fixture's recorded argmax). Skips gracefully
+  when the artifacts have not been generated yet, so the default run stays green.
 - All tests are fully offline (no dataset, no network). The dataset download and
   the end-to-end `train.py` run are exercised manually, not in the default
   `pytest` run.
@@ -139,7 +162,9 @@ The pipeline is a four-stage flow, one script per stage.
 ## Tooling
 
 - Python 3.12+, uv-managed; deps in `requirements.txt` (`xgboost`,
-  `scikit-learn`, `imbalanced-learn`, `skl2onnx`/`onnxmltools`/`onnx`,
-  `onnxruntime`, `selectolax`, `huggingface_hub`, `pytest`, `ruff`).
+  `scikit-learn`, `imbalanced-learn`, `selectolax`, `huggingface_hub`, `pytest`,
+  `ruff`). ONNX (`skl2onnx`/`onnxmltools`/`onnx`/`onnxruntime`) was dropped — the
+  model exports as the XGBoost native JSON dump and is evaluated by a pure-Rust
+  GBDT evaluator in the crate, so no ONNX toolchain is needed.
 - `ruff` (line-length 100, target py312) and `pytest` (`testpaths = ["tests"]`)
   configured in `pyproject.toml`.

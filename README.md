@@ -2,7 +2,7 @@
 
 A TypeScript **HTML-cleanup** library — HTML in → cleaned HTML out — built on a
 [Trafilatura](https://github.com/adbar/trafilatura)-derived, page-type-aware
-extraction core with an ONNX page-type classifier. The published library is
+extraction core with a pure-Rust page-type classifier. The published library is
 `htmlwasher` (alpha — see Status below).
 
 htmlwasher composes two orthogonal pillars behind a single `wash()` API:
@@ -17,32 +17,34 @@ scraper or browser-automation framework.
 ## Status
 
 Alpha — implemented (built in phases per `@/prompts/2026-6-24-init/prompt.md`).
-The extraction core, metadata extractor, trained ONNX classifier, per-type
-profiles, and the five washing levels are all in place and exercised by the test
-suite (260+ tests). The classifier scores ~0.78 on the held-out WCXB test split;
-extraction scores F1 ≈ 0.79 on the adbar evaluation corpus. APIs may still change
-before a stable release.
+The extraction core, metadata extractor, trained pure-Rust GBDT classifier,
+per-type profiles, and the five washing levels are all in place and exercised
+by the test suite (260+ tests). The classifier scores ~0.78 on the held-out
+WCXB test split; extraction scores F1 ≈ 0.79 on the adbar evaluation corpus.
+APIs may still change before a stable release.
 
 ## Repo layout
 
 This is a pnpm + turbo monorepo.
 
-- `@/htmlwasher/` — the TypeScript library (the npm package
-  `htmlwasher`). Strict TypeScript, Node 22+. Holds the core extraction
-  algorithm, metadata extraction, the page-type classifier (189-feature
-  extractor plus ONNX backends), per-page-type profiles, and the HTML-washing
-  levels, exposed both as the `wash()` library API and as an offline `htmlwasher`
-  CLI (reads a file or stdin, writes cleaned HTML to stdout; never fetches).
+- `@/packages/htmlwasher/` — the TypeScript library (the npm package
+  `htmlwasher`). Strict TypeScript, Node 22+. Holds metadata extraction and the
+  HTML-washing levels; the core extraction algorithm, the page-type classifier
+  (a 189-feature extractor evaluated by a pure-Rust GBDT, no ONNX), and
+  per-page-type profiles live in the `@htmlwasher/native` Rust crate
+  (`@/packages/htmlwasher/native/`, reached via napi-rs). Exposed both as the
+  `wash()` library API and as an offline `htmlwasher` CLI (reads a file or
+  stdin, writes cleaned HTML to stdout; never fetches).
 - `@/training/` — an offline Python project (Python 3.12+, uv-managed) that
   trains the page-type classifier from the public WCXB dataset and exports
-  `model.onnx` + `tfidf-vocab.json`. It is run offline, is not a pnpm workspace
-  package, and is not shipped at runtime.
-- `@/tools/htmlwasher/wash-corpus-tester/` — a separate **offline** TypeScript workspace
+  `model.xgb.json` (the XGBoost native JSON dump) + `tfidf-vocab.json`. It is
+  run offline, is not a pnpm workspace package, and is not shipped at runtime.
+- `@/packages/wash-corpus-tester/` — a separate **offline** TypeScript workspace
   package: runs htmlwasher end-to-end over saved WCXB HTML fixtures (≥3 per page
   type × 7 types) across boilerplate × washing-level combos, asserting the
   security invariants + page-type plausibility and emitting a report. No network
   (`pnpm test:corpus`).
-- `@/tools/htmlwasher/live-crawl-tester/` — a separate scaffold stub for a future live-site
+- `@/packages/live-crawl-tester/` — a separate scaffold stub for a future live-site
   fetcher; not part of the htmlwasher pipeline (htmlwasher itself never fetches).
 - `~/r/htmlwasher-sources/` — six read-only reference repositories (rs-trafilatura,
   web-page-classifier, go-trafilatura, adbar/trafilatura, trafilatura-rs,
@@ -85,17 +87,20 @@ htmlwasher page.html --json > out.json               # full result (html + metad
 ```
 
 The classifier is trained offline in `@/training/` (Python, uv-managed) and is
-**not** part of the Node.js install — the npm package ships only the exported
-`model.onnx` + `tfidf-vocab.json` and runs them via `onnxruntime`. The
-`wash-corpus-tester` runs entirely offline; the `live-crawl-tester` is an
-unimplemented stub (htmlwasher itself never fetches).
+**not** part of the Node.js install at build time — the npm package ships the
+`@htmlwasher/native` crate (a prebuilt `.node` binary) with `model.xgb.json` +
+`tfidf-vocab.json` baked in via Rust `include_str!`; there is no `onnxruntime`
+at runtime. The `wash-corpus-tester` runs entirely offline; the
+`live-crawl-tester` is an unimplemented stub (htmlwasher itself never fetches).
 
-## Inference backends
+## Classifier inference
 
-The page-type classifier runs ONNX inference behind a single interface, with
-`onnxruntime-node` as the default backend and `onnxruntime-web` (WASM) as an
-alternative. DOM parsing uses linkedom + parse5, with htmlparser2 in the
-classifier feature hot-path.
+The page-type classifier is not a swappable JS inference backend: it runs
+in-crate as a pure-Rust GBDT evaluator over the XGBoost native JSON dump
+(`model.xgb.json`), reached from Node via the `@htmlwasher/native` napi-rs
+binding — there is no ONNX runtime and no `onnxruntime-node`/`onnxruntime-web`
+backend to swap. DOM parsing on the TypeScript side (metadata extraction, HTML
+washing) uses `linkedom` (backed by `parse5`).
 
 ## License
 

@@ -1,3 +1,4 @@
 packages:
-  - "htmlwasher"
-  - "tools/htmlwasher/*"
+  - "packages/*"
+  - "packages/*/native"
+  - "packages/*/native/npm/*"

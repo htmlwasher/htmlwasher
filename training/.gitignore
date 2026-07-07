@@ -11,8 +11,6 @@ __pycache__/
 # so this is a virtual stub that pins nothing.
 uv.lock
 
-# Regenerated build outputs. The committed copies live under
-# htmlwasher/src/classifier/model/ — these training-local copies are
-# rewritten on every `python train.py` run and must not be committed.
-model.onnx
-tfidf-vocab.json
+# train.py now writes model.xgb.json + tfidf-vocab.json directly into
+# packages/htmlwasher/native/artifacts/ (committed, include_str!-ed by the crate);
+# there are no training-local artifact copies to ignore.
