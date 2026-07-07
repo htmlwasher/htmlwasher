@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook — blocks turn completion when:
 #   1. TypeScript source files were edited but no test files were updated, OR
-#   2. Test files were edited but the tests fail when run.
+#   2. Rust native-crate source files were edited but no Rust tests were updated, OR
+#   3. Test files were edited but the tests fail when run.
 set -euo pipefail
 
 input=$(cat)
@@ -46,7 +47,32 @@ if [[ -n "$ts_source" && -z "$ts_tests" ]]; then
   exit 0
 fi
 
-# Check 2: test files were edited — run them to verify they pass.
+# Rust source files in the native crate (packages/htmlwasher/native/src/**).
+rs_source=$(printf '%s\n' "$edited" | \
+  grep -E '/packages/htmlwasher/native/src/.+\.rs$' || true)
+
+# A Rust test change: an edited file under native/tests/, or an edited native/src file
+# that itself carries a #[cfg(test)] mod (inline unit tests edited alongside the code).
+rs_tests=$(printf '%s\n' "$edited" | grep -E '/packages/htmlwasher/native/tests/.+\.rs$' || true)
+if [[ -n "$rs_source" && -z "$rs_tests" ]]; then
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    if [[ -f "$f" ]] && grep -q '#\[cfg(test)\]' "$f"; then
+      rs_tests="$f"
+      break
+    fi
+  done < <(printf '%s\n' "$rs_source")
+fi
+
+# Check 2: Rust source changed without Rust test updates.
+if [[ -n "$rs_source" && -z "$rs_tests" ]]; then
+  files=$(printf '%s\n' "$rs_source" | sed -E 's|.*/packages/htmlwasher/native/|packages/htmlwasher/native/|' | head -3 | tr '\n' ' ' | sed 's/ $//')
+  msg="Rust source changed without test updates ($files). Add or update a #[cfg(test)] mod or a packages/htmlwasher/native/tests/ test in the same response. See .claude/rules/test-maintenance.md."
+  printf '{"decision":"block","reason":"%s"}' "$msg"
+  exit 0
+fi
+
+# Check 3: test files were edited — run them to verify they pass.
 if [[ -n "$ts_tests" ]]; then
   # Resolve the package name for each edited test file via the nearest package.json.
   pkgs=""

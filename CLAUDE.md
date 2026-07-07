@@ -23,7 +23,8 @@ training/                  # OFFLINE Python project (3.12+, uv-managed): trains 
                            #   dataset, exports model.xgb.json + tfidf-vocab.json + parity fixtures into
                            #   the crate. Not a pnpm workspace package; not shipped at runtime.
 # (the six READ-ONLY reference repos are cloned OUTSIDE this repo into ~/r/htmlwasher-sources/, by clone-other-repos.sh)
-prompts/2026-6-24-init/    # build brief (prompt.md) + research context docs — do not modify
+prompts/2026-6-24-init/    # build brief (prompt.md, self-updating per its own "Keep this brief current"
+                           #   rule) + research context docs (read-only)
 ```
 
 ## Current status

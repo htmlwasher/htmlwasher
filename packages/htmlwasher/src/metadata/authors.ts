@@ -2,7 +2,8 @@
 // Author normalization ported from trafilatura/json_metadata.py
 // (normalize_authors) and trafilatura/metadata.py (check_authors) — Apache-2.0.
 
-import { stripHtmlTags, trim, unescapeHtml } from './text.js';
+import { trim } from './dom.js';
+import { stripHtmlTags, unescapeHtml } from './text.js';
 
 // Anchored at the start of the string to mirror Python `re.match` semantics
 // (json_metadata.normalize_authors uses AUTHOR_EMAIL.match(...), which only

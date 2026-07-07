@@ -63,9 +63,3 @@ pub const VOID_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
     "track", "wbr",
 ];
-
-/// Whether `tag` is a member of `set` (case-sensitive; callers pass lowercased tags).
-#[must_use]
-pub fn contains(set: &[&str], tag: &str) -> bool {
-    set.contains(&tag)
-}

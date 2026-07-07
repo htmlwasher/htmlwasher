@@ -55,35 +55,15 @@ pub struct ExtractResult {
     pub warnings: Vec<String>,
 }
 
-/// Parse a wire page-type string into the crate enum (accepts the `category` alias).
+/// Parse a wire page-type string via the canonical [`crate::PageType`] `FromStr` table
+/// (which accepts the same `category`/`docs` aliases, ASCII-case-insensitively), mapping
+/// the crate error to the boundary's descriptive JS error.
 fn parse_page_type(s: &str) -> Result<crate::PageType> {
-    Ok(match s {
-        "article" => crate::PageType::Article,
-        "forum" => crate::PageType::Forum,
-        "product" => crate::PageType::Product,
-        "collection" | "category" => crate::PageType::Category,
-        "listing" => crate::PageType::Listing,
-        "documentation" | "docs" => crate::PageType::Documentation,
-        "service" => crate::PageType::Service,
-        other => {
-            return Err(napi::Error::from_reason(format!(
-                "invalid pageType {other:?}; expected one of {PAGE_TYPE_TS}"
-            )));
-        }
+    s.parse::<crate::PageType>().map_err(|_| {
+        napi::Error::from_reason(format!(
+            "invalid pageType {s:?}; expected one of {PAGE_TYPE_TS}"
+        ))
     })
-}
-
-/// The crate enum → its wire string (`Category` serializes as `"collection"`).
-fn page_type_to_wire(pt: crate::PageType) -> &'static str {
-    match pt {
-        crate::PageType::Article => "article",
-        crate::PageType::Forum => "forum",
-        crate::PageType::Product => "product",
-        crate::PageType::Category => "collection",
-        crate::PageType::Listing => "listing",
-        crate::PageType::Documentation => "documentation",
-        crate::PageType::Service => "service",
-    }
 }
 
 /// Parse a wire focus string into the crate enum.
@@ -121,7 +101,7 @@ fn run(html: &str, options: Option<ExtractOptions>) -> Result<ExtractResult> {
         crate::extract(html, &opts).map_err(|e| napi::Error::from_reason(e.to_string()))?;
     Ok(ExtractResult {
         content_html: result.content_html,
-        page_type: page_type_to_wire(result.page_type).to_string(),
+        page_type: result.page_type.as_str().to_string(),
         confidence: result.confidence,
         text_length: u32::try_from(result.text_length).unwrap_or(u32::MAX),
         fallback_used: result.fallback_used,

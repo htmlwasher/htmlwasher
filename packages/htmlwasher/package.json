@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "node -e \"console.error('htmlwasher cannot be published yet: @htmlwasher/native is a private workspace dep; implement the alpha tarball-bundling plan (see PORTING-NOTES.md) first.'); process.exit(1);\"",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "biome check .",

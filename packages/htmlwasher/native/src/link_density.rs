@@ -98,12 +98,14 @@ pub fn link_density_test<'a>(element: &NodeRef<'a>, opts: &CoreOptions) -> LinkD
         let link_dense = info.link_length as f64 > text_length as f64 * 0.8
             || (info.non_empty.len() > 1
                 && info.short_links as f64 / info.non_empty.len() as f64 > 0.8);
-        if link_dense {
-            return LinkDensityVerdict {
-                non_empty: info.non_empty,
-                high_density: true,
-            };
-        }
+        // Python parity (`link_density_test` → `return False, mylist`): the collected
+        // links are returned even when NOT dense — they power `delete_by_link_density`'s
+        // backtracking branch. (go-trafilatura discards them here, deadening its
+        // backtracking; rs-trafilatura's `link_density_test_with_info` matches Python.)
+        return LinkDensityVerdict {
+            non_empty: info.non_empty,
+            high_density: link_dense,
+        };
     }
 
     LinkDensityVerdict {

@@ -119,4 +119,18 @@ describe('sanitizeStyledHtml', () => {
     expect(out).toContain("url('')");
     expect(out).not.toMatch(/javascript:/i);
   });
+
+  it('does not double-decode a double-escaped entity in a style attribute', () => {
+    // `&amp;lt;` is the literal text `&lt;` — decoding must stop after one level
+    // (a chained-replace decode would corrupt it into a live `<`).
+    const out = sanitizeStyledHtml(`<div style="content:'&amp;lt;'">x</div>`);
+    expect(out).toContain("content:'&amp;lt;'");
+    expect(out).not.toContain("content:'<'");
+    expect(out).not.toContain("content:'&lt;'");
+  });
+
+  it('round-trips &amp;amp; URL query separators without double-decoding', () => {
+    const out = sanitizeStyledHtml('<div style="background:url(a?x=1&amp;amp;y=2)">x</div>');
+    expect(out).toContain('url(a?x=1&amp;amp;y=2)');
+  });
 });

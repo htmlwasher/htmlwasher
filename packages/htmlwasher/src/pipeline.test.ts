@@ -230,6 +230,111 @@ describe('wash() orchestration', () => {
   });
 });
 
+describe('wash() native-core diagnostics and degradation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('surfaces native extraction warnings as boilerplate-prefixed messages', async () => {
+    vi.resetModules();
+    vi.doMock('@htmlwasher/native', () => ({
+      extract: async () => ({
+        contentHtml: '<p>short</p>',
+        pageType: 'article',
+        confidence: 0.9,
+        textLength: 5,
+        fallbackUsed: true,
+        warnings: ['body-fallback-used', 'content-very-short'],
+      }),
+    }));
+    const { wash: washMocked } = await import('./pipeline.js');
+    const { messages, pageType } = await washMocked(PAGE, { boilerplate: 'balanced' });
+    const boilerMessages = messages.filter((m) => m.text.startsWith('boilerplate: '));
+    expect(boilerMessages.map((m) => m.text)).toEqual([
+      'boilerplate: body-fallback-used',
+      'boilerplate: content-very-short',
+    ]);
+    expect(boilerMessages.every((m) => m.type === 'warning')).toBe(true);
+    expect(pageType).toBe('article');
+  });
+
+  it('degrades to whole-document washing when the native extract() rejects', async () => {
+    vi.resetModules();
+    vi.doMock('@htmlwasher/native', () => ({
+      extract: async () => {
+        throw new Error('native exploded');
+      },
+    }));
+    const { wash: washMocked } = await import('./pipeline.js');
+    const result = await washMocked(PAGE, { boilerplate: 'balanced' });
+    expect(result.html).toContain('Real Title'); // still produces output
+    const warning = result.messages.find((m) => m.text.startsWith('boilerplate removal failed'));
+    expect(warning?.type).toBe('warning');
+    expect(warning?.text).toContain('native exploded');
+    expect(warning?.text).toContain('washing the whole document');
+    expect(result.pageType).toBeUndefined();
+    expect(result.confidence).toBeUndefined();
+  });
+
+  it('degrades with a warning when the native binding itself fails to load', async () => {
+    vi.resetModules();
+    // A throwing factory makes `import('@htmlwasher/native')` reject — the closest
+    // simulation of a missing/unloadable prebuilt .node. (vitest wraps the thrown
+    // error's text, so assert the degradation contract, not the original message.)
+    vi.doMock('@htmlwasher/native', () => {
+      throw new Error('Cannot find native binding');
+    });
+    const { wash: washMocked } = await import('./pipeline.js');
+    const result = await washMocked(PAGE, { boilerplate: 'balanced' });
+    expect(result.html).toContain('Real Title');
+    const warning = result.messages.find((m) => m.text.startsWith('boilerplate removal failed'));
+    expect(warning?.type).toBe('warning');
+    expect(warning?.text).toContain('washing the whole document');
+    expect(result.pageType).toBeUndefined();
+  });
+
+  it("boilerplate 'none' never loads the native binding (lazy FFI)", async () => {
+    vi.resetModules();
+    const factory = vi.fn(() => {
+      throw new Error('should never load');
+    });
+    vi.doMock('@htmlwasher/native', factory);
+    // The package (pipeline module) itself must load without the binding…
+    const { wash: washMocked } = await import('./pipeline.js');
+    // …and a 'none'-mode wash must never trigger the import.
+    const { html, messages } = await washMocked(PAGE, { boilerplate: 'none' });
+    expect(html).toContain('Real Title');
+    expect(factory).not.toHaveBeenCalled();
+    expect(messages.some((m) => m.text.startsWith('boilerplate removal failed'))).toBe(false);
+  });
+
+  it('metadata warnings precede boilerplate warnings (extraction overlaps the metadata parse)', async () => {
+    vi.resetModules();
+    vi.doMock('./metadata/index.js', () => ({
+      extractMetadata: () => {
+        throw new Error('meta boom');
+      },
+    }));
+    vi.doMock('@htmlwasher/native', () => ({
+      extract: async () => ({
+        contentHtml: '',
+        pageType: 'article',
+        confidence: 0.5,
+        textLength: 0,
+        fallbackUsed: false,
+        warnings: ['content-very-short'],
+      }),
+    }));
+    const { wash: washMocked } = await import('./pipeline.js');
+    const { messages } = await washMocked('<p>x</p>', { boilerplate: 'balanced' });
+    const metaIdx = messages.findIndex((m) => m.text.startsWith('metadata extraction failed'));
+    const boilerIdx = messages.findIndex((m) => m.text.startsWith('boilerplate: '));
+    expect(metaIdx).toBeGreaterThanOrEqual(0);
+    expect(boilerIdx).toBeGreaterThan(metaIdx);
+  });
+});
+
 describe('wash() warning builders narrow non-Error throws', () => {
   afterEach(() => {
     vi.restoreAllMocks();

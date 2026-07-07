@@ -42,12 +42,14 @@ while IFS= read -r f; do
     */packages/htmlwasher/src/*)
       required_specs+=$'\n'"packages/htmlwasher/SPEC.md"
       [[ "$f" == */index.ts ]] && api_surface_changed=true ;;
+    */packages/htmlwasher/native/src/*)
+      required_specs+=$'\n'"packages/htmlwasher/native/SPEC.md" ;;
     */packages/live-crawl-tester/src/*)
       required_specs+=$'\n'"packages/live-crawl-tester/SPEC.md" ;;
     */training/*.py)
       required_specs+=$'\n'"training/SPEC.md" ;;
   esac
-done < <(printf '%s\n' "$edited" | grep -E '\.(ts|py)$' | grep -v 'SPEC\.md' || true)
+done < <(printf '%s\n' "$edited" | grep -E '\.(ts|py|rs)$' | grep -v 'SPEC\.md' || true)
 
 # Deduplicate.
 required_specs=$(printf '%s\n' "$required_specs" | sort -u | grep -v '^$' || true)

@@ -21,11 +21,11 @@
     ]
   },
   "scripts": {
-    "build": "node -e \"if (!process.env.CARGO_HOME && !process.env.npm_config_rebuild_native) { console.log('@htmlwasher/native: skipping build (committed prebuilds present; set CARGO_HOME or npm_config_rebuild_native=1 to rebuild).'); process.exit(0); } require('child_process').execSync('napi build --platform --release --features napi', { stdio: 'inherit' });\"",
+    "build": "node -e \"const cp = require('node:child_process'); const hasCargo = cp.spawnSync('cargo', ['--version']).status === 0; if (!hasCargo && !process.env.npm_config_rebuild_native) { console.log('@htmlwasher/native: skipping build (no cargo on PATH; committed prebuilds present; set npm_config_rebuild_native=1 to force).'); process.exit(0); } cp.execSync('napi build --platform --release --features napi', { stdio: 'inherit' });\"",
     "build:rebuild": "napi build --platform --release --features napi",
     "build:debug": "napi build --platform --features napi",
     "build:wasm": "napi build --platform --release --features napi --target wasm32-wasip1-threads",
-    "test": "node -e \"const cp = require('child_process'); if (process.env.CARGO_HOME || process.env.npm_config_rebuild_native) { cp.execSync('cargo test --workspace', { stdio: 'inherit' }); } cp.execSync('vitest run', { stdio: 'inherit' });\"",
+    "test": "node -e \"const cp = require('node:child_process'); if (cp.spawnSync('cargo', ['--version']).status === 0 || process.env.npm_config_rebuild_native) { cp.execSync('cargo test --workspace', { stdio: 'inherit' }); } else { console.log('@htmlwasher/native: skipping cargo test (no cargo on PATH).'); } cp.execSync('vitest run', { stdio: 'inherit' });\"",
     "lint": "vitest run --passWithNoTests"
   },
   "devDependencies": {

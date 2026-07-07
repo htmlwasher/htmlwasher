@@ -5,9 +5,9 @@
 
 import type { Metadata } from '../types.js';
 import { normalizeAuthors } from './authors.js';
-import type { HDocument } from './dom.js';
+import { type HDocument, trim } from './dom.js';
 import { extractOpenGraph } from './opengraph.js';
-import { stripHtmlTags, trim, unescapeHtml } from './text.js';
+import { stripHtmlTags, unescapeHtml } from './text.js';
 import { isValidUrl } from './url.js';
 
 const METANAME_AUTHOR = new Set([

@@ -49,6 +49,10 @@ Every fixture is washed through these `boilerplate` x `level` combos:
   `style`/`class` and the `<style>` tag), where a CSS-URL allow-list regression would surface
 - `precision` x `minimal` — exercises the `precision` boilerplate mode end-to-end
 
+A fixture's combos run **concurrently** (`Promise.all` — each `wash()` is independent and the Rust
+extraction runs on the libuv threadpool); results are folded back in combo order, so failures and
+report rows stay deterministic. Fixtures themselves run sequentially (bounded memory, readable logs).
+
 ## Assertions
 
 ### Hard (any failure fails the run)
@@ -58,6 +62,12 @@ Every fixture is washed through these `boilerplate` x `level` combos:
   This is a HARD assertion everywhere: the v2 `htmlwasher` washing floor is unconditional (context
   doc 09) — `enforceSecurityFloor` + `sanitizeStyledHtml` run as the final pass on every level
   including `correct` — so a survival is always a real failure, never a normalize-only soft exemption.
+  The handler and `javascript:` detectors are **tag-anchored** (`src/security-detectors.ts`): they
+  extract opening-tag substrings first and match only inside them (`javascript:` additionally only
+  in the URL-bearing attributes `href`/`src`/`action`/`formaction`/`xlink:href`/`data`), so escaped
+  visible text — prose like "chapter one = another" or documentation quoting `javascript:void(0)` —
+  can never trip them. Only the raw `<script` check runs over the whole output (escaped text can
+  never contain a raw `<script`).
 - **Non-empty output** — cleaned HTML is non-empty, unless the input lacks substantial body text
   (< `SUBSTANTIAL_BODY_TEXT` = 200 chars of tag-stripped text — a JS-shell / near-empty page), in
   which case empty extraction output is legitimate.
@@ -80,6 +90,10 @@ Every fixture is washed through these `boilerplate` x `level` combos:
 - `COMBOS` — the `{ boilerplate, level }` combos (`as const`).
 - `PAGE_TYPE_ACCURACY_FLOOR` (`0.4`) and `SUBSTANTIAL_BODY_TEXT` (`200`) — the run thresholds.
 - Types: `CorpusReport`, `FixtureResult`, `ComboResult`, `AssertionFailure`.
+- `src/security-detectors.ts` — the exported, unit-testable HARD security detectors:
+  `hasScriptTag(html)`, `findEventHandlerAttr(html)` (returns the surviving attribute or
+  `undefined`), `hasJavascriptUrl(html)`. Unit-tested standalone in
+  `src/security-detectors.test.ts` (no `htmlwasher` import — runs without the corpus E2E).
 
 ### `CorpusReport` shape (abridged)
 

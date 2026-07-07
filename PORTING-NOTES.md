@@ -306,6 +306,26 @@ none` styles, `hide-`/`-hide-`/`hide-print`/`hidden`/`hide`/`noprint`/`notloaded
     reference-inconsistent pages; forum/listing/collection types htmlwasher already leads rs on.
   - **Offline oracle held:** adbar P 0.814→0.825 / R 0.848→0.840 / F1 0.831→0.832; corpus tester PASS
     (100% page-type accuracy); cargo + pnpm gates green; host prebuild rebuilt + committed.
+- **Post-merge review-autofix run (2026-07-07, `/meta:code-review-autofix` on the Rust-core PR commit).**
+  A 34-agent adversarial review + autofix; full report in `temp/code-review-autofix-report.md`. The one
+  extraction-behavior fix:
+  - **Link-density backtracking was dead — a genuine port bug, now live (`link_density.rs`).**
+    `link_density_test`'s failing in-limit path now returns the collected non-empty links (Python
+    `htmlprocessing.py` `return False, mylist`; rs-trafilatura `link_density_test_with_info` agrees),
+    making `delete_by_link_density`'s backtracking branch — the `div` pass of `prune_unwanted_nodes` —
+    live. The initial port copied go-trafilatura's `html-processing.go:307` `return nil, false`, which
+    discards the list and provably deadens go's own backtracking. Python's out-of-limit fall-through
+    (empty `mylist`) is kept over rs-trafilatura's broader `(n_non_empty_links > 0, false)` final
+    fall-through; the two only differ under `Focus::Precision`. Regression test:
+    `tests/clean.rs::backtracking_removes_short_link_cluster_div`. No golden movement in the crate suite.
+  - Other notable fixes: single-pass entity decoding (metadata `unescapeHtml` + washing
+    `decodeAttrEntities` double-decoded `&amp;lt;`); native warnings/fallback diagnostics now surface in
+    `wash().messages`; native failure degrades to whole-document washing; the native binding is
+    lazy-loaded (`boilerplate: 'none'` never touches the FFI); native build/test scripts probe
+    `cargo --version` instead of `CARGO_HOME` (the old gate silently skipped rebuilds + cargo tests on
+    standard rustup installs); corpus-tester security detectors are tag-anchored (no prose false
+    positives); `.github/workflows/build-native.yml` authored (untested) for the missing 5-target +
+    wasm prebuilds; flagship `prepublishOnly` guard blocks the currently-uninstallable publish.
 
 ## v1 performance baseline (measured at ORIENT, before the TS core is deleted)
 

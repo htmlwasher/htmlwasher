@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type PageType, type WashResult, wash } from 'htmlwasher';
+import { findEventHandlerAttr, hasJavascriptUrl, hasScriptTag } from './security-detectors.js';
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 // `src/` (tsx) and `dist/` (compiled) both sit one level under the package dir.
@@ -129,13 +130,9 @@ export interface CorpusReport {
   ok: boolean;
 }
 
-// --- security + structural detectors (operate on the cleaned output HTML) ---
-
-const SCRIPT_TAG = /<script[\s/>]/i;
-// An HTML event-handler attribute: `on<word>=` preceded by whitespace (so we do
-// not match e.g. a literal "lemonade=" substring). Covers onclick, onerror, etc.
-const EVENT_HANDLER_ATTR = /\son[a-z]+\s*=/i;
-const JAVASCRIPT_URL = /javascript:/i;
+// --- structural detectors (operate on the cleaned output HTML; the HARD
+// security detectors live in security-detectors.ts, anchored to tag context so
+// escaped visible text can never trip them) ---
 
 /** Distinct lowercased tag names appearing as opening tags in `html`. */
 function distinctTagNames(html: string): Set<string> {
@@ -227,19 +224,18 @@ function assertCombo(
   };
 
   // SECURITY (core invariant): no script tag survives at any level.
-  if (SCRIPT_TAG.test(html)) {
+  if (hasScriptTag(html)) {
     securityFail('no-script', '<script> survived in cleaned output');
   }
-  // SECURITY: no inline event-handler attribute survives.
-  if (EVENT_HANDLER_ATTR.test(html)) {
-    const m = EVENT_HANDLER_ATTR.exec(html);
-    securityFail(
-      'no-event-handler',
-      `event-handler attribute survived: ${m?.[0]?.trim() ?? '<unknown>'}`,
-    );
+  // SECURITY: no inline event-handler attribute survives inside any tag
+  // (tag-anchored — escaped prose like "chapter one = intro" never matches).
+  const handlerAttr = findEventHandlerAttr(html);
+  if (handlerAttr !== undefined) {
+    securityFail('no-event-handler', `event-handler attribute survived: ${handlerAttr}`);
   }
-  // SECURITY: no javascript: URL survives.
-  if (JAVASCRIPT_URL.test(html)) {
+  // SECURITY: no javascript: URL survives in a URL-bearing attribute
+  // (tag-anchored — escaped text like "javascript:void(0)" never matches).
+  if (hasJavascriptUrl(html)) {
     securityFail('no-javascript-url', 'javascript: URL survived in cleaned output');
   }
 
@@ -286,16 +282,23 @@ export async function runCorpus(): Promise<CorpusReport> {
     const inputBodyTextLength = bodyTextLength(html);
 
     // Run all combos first so we know `minimal`'s tag count before asserting
-    // `correct`'s superset property.
-    const washed = new Map<string, WashResult>();
-    for (const combo of COMBOS) {
-      const result = await wash(html, {
-        boilerplate: combo.boilerplate,
-        level: combo.level,
-        url: fixture.url,
-      });
-      washed.set(`${combo.boilerplate}x${combo.level}`, result);
-    }
+    // `correct`'s superset property. The combos are independent, so wash them
+    // concurrently (the Rust extraction runs on the libuv threadpool);
+    // Promise.all preserves combo order, and the assertion/report fold below
+    // iterates COMBOS in order, so the output stays deterministic. Fixtures
+    // themselves stay sequential to bound memory and keep logs readable.
+    const washed = new Map<string, WashResult>(
+      await Promise.all(
+        COMBOS.map(async (combo): Promise<[string, WashResult]> => {
+          const result = await wash(html, {
+            boilerplate: combo.boilerplate,
+            level: combo.level,
+            url: fixture.url,
+          });
+          return [`${combo.boilerplate}x${combo.level}`, result];
+        }),
+      ),
+    );
 
     // Baseline for the `correct-superset` assertion: the `none`x`minimal` combo
     // shares the SAME full-document input as `none`x`correct`, so the comparison

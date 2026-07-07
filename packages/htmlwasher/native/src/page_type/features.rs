@@ -343,7 +343,8 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
             0.0
         },
     );
-    set(&mut f, 16, select_len(doc, "h1, h2, h3, h4, h5, h6") as f64);
+    let heading_nodes = select_doc(doc, "h1, h2, h3, h4, h5, h6");
+    set(&mut f, 16, heading_nodes.len() as f64);
     let h2_count = select_len(doc, "h2");
     let body_nodes = select_doc(doc, "body");
     let body_text_full = selection_text(&body_nodes);
@@ -457,7 +458,8 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
         ),
     );
 
-    let link_count = select_len(doc, "a");
+    let a_nodes = select_doc(doc, "a");
+    let link_count = a_nodes.len();
     let p_text = selection_text(&select_doc(doc, "p"));
     let p_words = split_whitespace(&p_text).len();
     set(
@@ -510,7 +512,8 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
         bool_f(select_len(doc, "[class*='breadcrumb']") > 0),
     );
     set(&mut f, 50, select_len(doc, "form") as f64);
-    set(&mut f, 51, select_len(doc, "img") as f64);
+    let img_count = select_len(doc, "img");
+    set(&mut f, 51, img_count as f64);
     set(&mut f, 52, select_len(doc, "ul, ol") as f64);
     set(&mut f, 53, select_len(doc, "table") as f64);
     set(&mut f, 54, select_len(doc, "nav") as f64);
@@ -576,7 +579,6 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
             + count_char(&body_text_full, '£')) as f64,
     );
 
-    let img_count = select_len(doc, "img");
     set(
         &mut f,
         66,
@@ -588,8 +590,8 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
     );
 
     let mut heading_level_counts = [0usize; 6];
-    for node in select_doc(doc, "h1, h2, h3, h4, h5, h6") {
-        let name = tag_of(&node).unwrap_or_default();
+    for node in &heading_nodes {
+        let name = tag_of(node).unwrap_or_default();
         if let Some(second) = name.chars().nth(1) {
             if let Some(level) = second.to_digit(10) {
                 if (1..=6).contains(&level) {
@@ -617,8 +619,8 @@ pub fn extract_numeric_features(doc: &Document, url: &str) -> Vec<f64> {
 
     // f[69]: repeated link texts (strip+lower, byte-len > 3, count >= 3).
     let mut link_text_counts: HashMap<String, usize> = HashMap::new();
-    for node in select_doc(doc, "a") {
-        let text = py_strip(&node_text(&node)).to_lowercase();
+    for node in &a_nodes {
+        let text = py_strip(&node_text(node)).to_lowercase();
         if blen(&text) > 3 {
             *link_text_counts.entry(text).or_insert(0) += 1;
         }

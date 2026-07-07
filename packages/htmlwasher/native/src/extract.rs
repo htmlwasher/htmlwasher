@@ -152,10 +152,6 @@ fn escape_text(text: &str) -> String {
     html_escape::encode_text(text).into_owned()
 }
 
-fn escape_attr(value: &str) -> String {
-    html_escape::encode_double_quoted_attribute(value).into_owned()
-}
-
 // ---- table caps -------------------------------------------------------------------
 
 fn table_is_oversized(table: &NodeRef) -> bool {
@@ -164,31 +160,28 @@ fn table_is_oversized(table: &NodeRef) -> bool {
 
 // ---- preserve-markup serializer (doc-09 default) ----------------------------------
 
-fn emit_preserve_children(node: &NodeRef, depth: usize) -> String {
-    let mut out = String::new();
+fn emit_preserve_children(node: &NodeRef, depth: usize, out: &mut String) {
     for child in node.children() {
         if child.is_text() {
             let text = child.text();
-            out.push_str(&escape_text(&text));
+            html_escape::encode_text_to_string(&*text, out);
         } else if child.is_element() {
-            out.push_str(&emit_preserve(&child, depth));
+            emit_preserve(&child, depth, out);
         }
     }
-    out
 }
 
-fn emit_preserve(node: &NodeRef, depth: usize) -> String {
+fn emit_preserve(node: &NodeRef, depth: usize, out: &mut String) {
     if depth > MAX_SERIALIZE_DEPTH {
-        return String::new();
+        return;
     }
     let Some(tag) = tag_of(node) else {
-        return String::new();
+        return;
     };
     if SERIALIZE_HARD_SKIP.contains(&tag.as_str()) {
-        return String::new();
+        return;
     }
 
-    let mut out = String::new();
     out.push('<');
     out.push_str(&tag);
     for attr in node.attrs() {
@@ -197,42 +190,42 @@ fn emit_preserve(node: &NodeRef, depth: usize) -> String {
         out.push(' ');
         out.push_str(name);
         out.push_str("=\"");
-        out.push_str(&escape_attr(value));
+        html_escape::encode_double_quoted_attribute_to_string(value, out);
         out.push('"');
     }
 
     if VOID_TAGS.contains(&tag.as_str()) {
         out.push('>');
-        return out;
+        return;
     }
 
     out.push('>');
     if tag == "table" && table_is_oversized(node) {
         // Honor the resource caps: emit the table shell, drop its runaway contents.
         out.push_str("</table>");
-        return out;
+        return;
     }
-    out.push_str(&emit_preserve_children(node, depth + 1));
+    emit_preserve_children(node, depth + 1, out);
     out.push_str("</");
     out.push_str(&tag);
     out.push('>');
-    out
 }
 
 /// Preserve-markup serialize: original tags + all attributes (escaped), hard-skipping
 /// only `script`/`style`/`noscript`/`iframe`. An `html`/`body` root is unwrapped so
 /// the output is a content fragment, not a document wrapper.
 pub fn serialize_preserve(root: &NodeRef) -> String {
+    let mut out = String::new();
     match tag_of(root).as_deref() {
-        Some("html" | "body") => emit_preserve_children(root, 1),
-        _ => emit_preserve(root, 0),
+        Some("html" | "body") => emit_preserve_children(root, 1, &mut out),
+        _ => emit_preserve(root, 0, &mut out),
     }
+    out
 }
 
 // ---- whitelist-parity serializer (reference-parity mode only) ---------------------
 
-fn emit_whitelist_attrs(el: &NodeRef, tag: &str, opts: &CoreOptions) -> String {
-    let mut out = String::new();
+fn emit_whitelist_attrs(el: &NodeRef, tag: &str, opts: &CoreOptions, out: &mut String) {
     for name in whitelist_attrs(tag) {
         if tag == "a" && *name == "href" && !opts.include_links {
             continue;
@@ -244,10 +237,9 @@ fn emit_whitelist_attrs(el: &NodeRef, tag: &str, opts: &CoreOptions) -> String {
         out.push(' ');
         out.push_str(name);
         out.push_str("=\"");
-        out.push_str(&escape_attr(&value));
+        html_escape::encode_double_quoted_attribute_to_string(&*value, out);
         out.push('"');
     }
-    out
 }
 
 fn emit_whitelist_children(
@@ -255,56 +247,62 @@ fn emit_whitelist_children(
     opts: &CoreOptions,
     depth: usize,
     inside: bool,
-) -> String {
-    let mut out = String::new();
+    out: &mut String,
+) {
     for child in node.children() {
         if child.is_text() {
             let text = child.text();
-            out.push_str(&escape_text(&text));
+            html_escape::encode_text_to_string(&*text, out);
         } else if child.is_element() {
-            out.push_str(&emit_whitelist(&child, opts, depth, inside));
+            emit_whitelist(&child, opts, depth, inside, out);
         }
     }
-    out
 }
 
-fn emit_whitelist(el: &NodeRef, opts: &CoreOptions, depth: usize, inside: bool) -> String {
+fn emit_whitelist(el: &NodeRef, opts: &CoreOptions, depth: usize, inside: bool, out: &mut String) {
     if depth > MAX_SERIALIZE_DEPTH {
-        return String::new();
+        return;
     }
     let Some(tag) = tag_of(el) else {
-        return String::new();
+        return;
     };
     if WHITELIST_SKIP_TAGS.contains(&tag.as_str()) {
-        return String::new();
+        return;
     }
     let child_inside = inside || tag == "article" || tag == "main";
 
     if EMIT_TAGS.contains(&tag.as_str()) {
         if tag == "a" && !opts.include_links {
-            return emit_whitelist_children(el, opts, depth + 1, child_inside);
+            return emit_whitelist_children(el, opts, depth + 1, child_inside, out);
         }
         if (tag == "img" || tag == "picture" || tag == "source") && !opts.include_images {
-            return String::new();
+            return;
         }
-        let attrs = emit_whitelist_attrs(el, &tag, opts);
+        out.push('<');
+        out.push_str(&tag);
+        emit_whitelist_attrs(el, &tag, opts, out);
+        out.push('>');
         if VOID_TAGS.contains(&tag.as_str()) {
-            return format!("<{tag}{attrs}>");
+            return;
         }
-        if tag == "table" && table_is_oversized(el) {
-            return format!("<{tag}{attrs}></{tag}>");
+        if !(tag == "table" && table_is_oversized(el)) {
+            emit_whitelist_children(el, opts, depth + 1, child_inside, out);
         }
-        let inner = emit_whitelist_children(el, opts, depth + 1, child_inside);
-        return format!("<{tag}{attrs}>{inner}</{tag}>");
+        out.push_str("</");
+        out.push_str(&tag);
+        out.push('>');
+        return;
     }
 
     // Non-whitelisted and not skipped → unwrap (emit children, drop the tag).
-    emit_whitelist_children(el, opts, depth + 1, child_inside)
+    emit_whitelist_children(el, opts, depth + 1, child_inside, out);
 }
 
 /// Whitelist-parity serialize (the upstream rs-trafilatura emit). Reference-parity ONLY.
 pub fn serialize_whitelist(root: &NodeRef, opts: &CoreOptions) -> String {
-    emit_whitelist(root, opts, 0, false)
+    let mut out = String::new();
+    emit_whitelist(root, opts, 0, false, &mut out);
+    out
 }
 
 // ---- relocated DOM passes ---------------------------------------------------------
@@ -357,11 +355,13 @@ fn render_clone(node: &NodeRef, opts: &CoreOptions, drop_boilerplate_named: bool
 
     prune_unwanted_nodes(&root, opts);
     remove_header_footer_outside_main(&root);
-    // Unconditional bucket-A drops fire even on the backoff path...
-    remove_always_excluded_named(&root, opts);
-    // ...but the gated name filter is skipped on backoff (the doc-09 trap).
+    // One name pass: the gated filter (skipped on backoff — the doc-09 trap) already
+    // checks `is_always_excluded_name` first, so the unconditional bucket-A drops fire
+    // on BOTH paths without a separate full-tree pass.
     if drop_boilerplate_named {
         remove_boilerplate_named(&root, opts);
+    } else {
+        remove_always_excluded_named(&root, opts);
     }
     prune_empty_elements(&root);
 

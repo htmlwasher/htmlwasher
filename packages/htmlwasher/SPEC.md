@@ -48,6 +48,21 @@ yields empty content, `wash()` keeps the whole document and warns. `mode: 'none'
 bypasses the FFI call entirely (no extraction, no classification) and washes the
 whole document.
 
+#### Native diagnostics and degradation
+
+The native module is loaded **lazily** (a cached dynamic import) on the first
+non-`none` wash — `boilerplate: 'none'`, metadata-only use, and any platform
+without a loadable prebuilt `.node` never touch the FFI module (package import
+and the CLI keep working). The core's non-fatal `warnings` (`body-fallback-used`,
+`content-very-short`, `json-ld-rescue`, `baseline-rescue`) surface in
+`WashResult.messages` as `{ type: 'warning', text: 'boilerplate: <warning>' }`;
+`fallbackUsed` gets no message of its own — every fallback/rescue result already
+carries one of those warnings. If the native call fails (an `extract()` rejection
+or a missing/unloadable binding), `wash()` does **not** reject: it degrades to
+washing the whole document, pushes a `boilerplate removal failed: …; washing the
+whole document` warning, and omits `pageType`/`confidence`. `wash()` still throws
+`TypeError`/`RangeError` for its own boundary validation (below).
+
 ### Markup-preservation semantics (doc 09)
 
 Because the Rust core is preserve-markup, `class`/inline `style`/`data-*`/`id`
@@ -219,7 +234,11 @@ present when extraction runs.
   `{ "allowedAttributes": { "*": ["*"] } }` wildcard-config bypass. Optional
   DOMPurify/jsdom hardened backend behind the `Sanitizer` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → wash(level),
-  exposing the public `wash()`. _implemented_
+  exposing the public `wash()`. Loads `@htmlwasher/native` lazily (never for
+  `mode: 'none'`), starts the Rust extraction before the synchronous metadata
+  parse so the threadpool work overlaps it, surfaces native `warnings` as
+  `boilerplate: <warning>` messages, and degrades a native failure to
+  whole-document washing with a warning. _implemented_
 - `src/cli-program.ts` — the offline CLI core: `buildProgram()` (commander),
   `runWash(opts, io)` (testable, stream-injected, returns an exit code), `runCli`,
   `isMainEntry`. Wraps `wash()`; never fetches. _implemented_

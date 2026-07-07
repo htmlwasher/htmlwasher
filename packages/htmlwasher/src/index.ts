@@ -1,14 +1,12 @@
-// htmlwasher — a TypeScript HTML-cleanup library. HTML in → cleaned HTML out.
+// htmlwasher — a hybrid Rust + TypeScript content-extraction library.
+// HTML in → cleaned HTML out (+ metadata sidecar and page type).
 //
-// Two composable pillars (see @/prompts/2026-6-24-init/prompt.md):
-//   1. Boilerplate removal — a Trafilatura-derived, page-type-aware main-content
-//      extractor that keeps the result AS an HTML subtree (never text/markdown).
-//   2. HTML washing — sanitize-html-based cleanup at five levels.
-//
-// The public entry point is wash() (src/pipeline.ts), composing the boilerplate
-// (Phase 2) and washing (Phase 6) pillars plus the metadata sidecar (Phase 3).
-// Page-type classification + per-type profile routing (Phase 4/5) plug into the
-// boilerplate stage as the trained classifier lands.
+// The public entry point is the async wash() (src/pipeline.ts), composing:
+//   - the @htmlwasher/native Rust core — Trafilatura-derived boilerplate removal
+//     + page-type classification, emitting preserve-markup, UNSANITIZED HTML;
+//   - the TypeScript washing levels (src/washing/) — the sole sanitization
+//     authority over that output;
+//   - the TypeScript metadata sidecar (src/metadata/).
 
 export { wash } from './pipeline.js';
 export * from './types.js';

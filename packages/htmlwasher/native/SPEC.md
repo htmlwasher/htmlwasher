@@ -105,16 +105,18 @@ only `napi build --features napi` compiles the cdylib addon). Deps: `napi` v3 (o
   (napi `AsyncTask`; never blocks the event loop).
 - `extractSync(html, options?) → ExtractResult` — synchronous.
 - `ExtractOptions { pageType?: PageType, focus?: 'precision'|'balanced'|'recall', url?: string }`
-  → mapped to the crate `Options` (default emit = preserve-markup).
+  → mapped to the crate `Options` (default emit = preserve-markup). `pageType` parsing delegates
+  to the canonical `PageType::FromStr` (same `category`/`docs` aliases, ASCII-case-insensitive);
+  the result's `pageType` string comes from `PageType::as_str`.
 - `ExtractResult { contentHtml, pageType, confidence?, textLength, fallbackUsed, warnings }`
   — `pageType` is a `PageType` string enum whose 7 values are the wire strings
   (`Category → "collection"`); `confidence` is omitted on a `pageType` override. Typed crate
   errors become JS exceptions (nothing panics). `index.d.ts` is auto-generated.
 
 Packaging (contextractor committed-prebuild pattern): `package.json` (`@htmlwasher/native`,
-private) with a self-skipping `build` (skips when no `CARGO_HOME`/`npm_config_rebuild_native`
-and a prebuild is present) and a `test` that runs `cargo test` + the vitest smoke test when a
-toolchain is present, vitest-only otherwise. `optionalDependencies` = 5 native targets +
+private) with a self-skipping `build` (probes `cargo --version`; skips when no cargo is on
+PATH — `npm_config_rebuild_native=1` forces) and a `test` that runs `cargo test` + the vitest
+smoke test when cargo is on PATH, vitest-only otherwise. `optionalDependencies` = 5 native targets +
 `wasm32-wasi`, each `npm/<target>/` a private os/cpu-scoped package. The generated loader
 (`index.js`/`index.d.ts` + wasm glue) is committed; the crate-root `*.node` is gitignored while
 `npm/<target>/*.node` prebuilds are committed. `test/smoke.test.ts` loads the built binding and
@@ -131,7 +133,10 @@ extracts a fixture end-to-end.
   `enforce_max_depth`. `clean_document` also removes visually-hidden subtrees first
   (`remove_hidden_elements` — canonical Trafilatura's `OVERALL_DISCARD_XPATH` hidden-element rule,
   matched by go-trafilatura, absent from rs-trafilatura), backed off when it would delete every `<p>`.
-- `link_density.rs` — `link_density_test(_tables)`, `delete_by_link_density`.
+- `link_density.rs` — `link_density_test(_tables)`, `delete_by_link_density`. The test returns its
+  non-empty link list even on the failing in-limit path (Python's `return False, mylist`), which
+  powers `delete_by_link_density`'s backtracking branch (live on the `div` pass of
+  `prune_unwanted_nodes`; go-trafilatura discards the list, deadening its backtracking).
 - `selector/{content,discard,utils}.rs` — the content-node cascade, name-based discard predicates,
   content-rule matching.
 - `extractor/fallback.rs` — `prune_unwanted_nodes` (reconciled single copy) + the profile-INDEPENDENT
@@ -165,7 +170,7 @@ extracts a fixture end-to-end.
 
 ## Gate
 
-`cargo build --workspace`, `cargo test --workspace` (100 tests), `cargo clippy --workspace
+`cargo build --workspace`, `cargo test --workspace` (114 tests), `cargo clippy --workspace
 --all-targets -- -D warnings` (+ `--features napi` to lint the binding), `cargo fmt --check` — all
 green. Monorepo: `pnpm build` (native self-skips to the committed prebuild), `pnpm lint`, `pnpm test`
 (flagship v1 suite + the native vitest smoke test) all green. `tests/classifier_parity.rs` is the

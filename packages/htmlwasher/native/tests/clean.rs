@@ -76,6 +76,49 @@ fn uses_higher_limit_for_last_p_before_whitespace_text_node() {
 }
 
 #[test]
+fn backtracking_removes_short_link_cluster_div() {
+    // Python parity (`link_density_test` → `return False, mylist`): a short div holding
+    // a cluster of non-short links is NOT high-density on its own, but the populated
+    // link list lets `delete_by_link_density`'s backtracking branch prune it.
+    let html = "<div><div><a href=\"/one\">first useful link</a> <span>plus some regular filler text sitting between the links</span> <a href=\"/two\">second useful link</a></div><p>real content paragraph that stays</p></div>";
+
+    // Not link-dense, but the failing verdict carries the non-empty links.
+    let doc = parse(html);
+    let inner = doc
+        .select("div div")
+        .nodes()
+        .first()
+        .copied()
+        .expect("inner div");
+    let verdict = link_density_test(&inner, &core(Focus::Balanced));
+    assert!(!verdict.high_density);
+    assert!(!verdict.non_empty.is_empty());
+
+    // Kept without backtracking...
+    let doc = parse(html);
+    let root = doc
+        .select("body > div")
+        .nodes()
+        .first()
+        .copied()
+        .expect("outer div");
+    delete_by_link_density(&root, &core(Focus::Balanced), false, &["div"]);
+    assert_eq!(select_all(&root, "div").len(), 1);
+
+    // ...removed by the backtracking pass (short text, >= 3 element children).
+    let doc = parse(html);
+    let root = doc
+        .select("body > div")
+        .nodes()
+        .first()
+        .copied()
+        .expect("outer div");
+    delete_by_link_density(&root, &core(Focus::Balanced), true, &["div"]);
+    assert!(select_all(&root, "div").is_empty());
+    assert!(!select_all(&root, "p").is_empty());
+}
+
+#[test]
 fn removes_link_dense_list_under_subtree() {
     let doc = parse(
         "<div><p>real content here</p><ul><li><a href=\"/1\">a</a></li><li><a href=\"/2\">b</a></li><li><a href=\"/3\">c</a></li></ul></div>",

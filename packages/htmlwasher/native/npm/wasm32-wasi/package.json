@@ -8,5 +8,8 @@
     "htmlwasher-native.wasm32-wasi.wasm",
     "wasi-worker.mjs",
     "wasi-worker-browser.mjs"
-  ]
+  ],
+  "dependencies": {
+    "@napi-rs/wasm-runtime": "^1.1.6"
+  }
 }

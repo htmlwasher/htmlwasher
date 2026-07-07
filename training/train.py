@@ -110,10 +110,9 @@ def main() -> None:
     # The Rust loader (native/src/page_type/model.rs::build_model) HARD-REJECTS any
     # tfidf-vocab.json whose vocabulary length != N_TFIDF, disabling the classifier
     # at load time. A retrain on a small/low-diversity corpus could yield fewer than
-    # N_TFIDF unigram terms; the ``_pad`` step below only zero-pads the tfidf MATRIX
-    # to N_TFIDF columns for training-shape consistency — it does NOT fabricate
-    # extra vocabulary terms, so without this guard a short vocab would silently
-    # ship an unloadable artifact. Fail loudly instead, before spending time training.
+    # N_TFIDF unigram terms and would silently ship an unloadable artifact. Fail
+    # loudly instead, before spending time training. (Past this guard the TF-IDF
+    # matrices always have exactly N_TFIDF columns — no padding step is needed.)
     if vocab_size != N_TFIDF:
         raise ValueError(
             f"TF-IDF vocabulary has {vocab_size} terms, expected exactly {N_TFIDF}. "
@@ -122,18 +121,6 @@ def main() -> None:
             "load time. Retrain on a larger/more diverse WCXB split so "
             f"TfidfVectorizer(max_features={N_TFIDF}) actually yields {N_TFIDF} terms."
         )
-
-    # Pad TF-IDF to exactly N_TFIDF columns if the corpus yielded fewer terms, so
-    # the model input width is always 189 (the TS side ships N_TFIDF=100 slots).
-    def _pad(mat: np.ndarray) -> np.ndarray:
-        if mat.shape[1] == N_TFIDF:
-            return mat
-        padded = np.zeros((mat.shape[0], N_TFIDF), dtype=mat.dtype)
-        padded[:, : mat.shape[1]] = mat
-        return padded
-
-    dev_tfidf = _pad(dev_tfidf)
-    test_tfidf = _pad(test_tfidf)
 
     # --- StandardScaler (fit on dev numeric only) ---
     scaler = StandardScaler()

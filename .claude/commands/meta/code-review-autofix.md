@@ -111,7 +111,7 @@ Classify each finding:
 - `import type` for all type-only imports — check re-exports specifically
 - No floating promises — every async call is awaited or explicitly handed off
 - No `console.log` in production library paths — the library must not emit to stdout/stderr by default
-- DOM parsing stays behind the established interface — `linkedom` + `parse5` for full-document work, `htmlparser2` only in the classifier feature hot-path; do not introduce a new parser
+- DOM parsing stays behind the established interface — `linkedom` + `parse5` for the TS side (metadata + washing); extraction/classification parse in the Rust crate (`dom_query`/html5ever); do not introduce a new parser on either side
 - Page-type classification is a pure-Rust GBDT over the XGBoost JSON dump (`model.xgb.json`) inside the `@htmlwasher/native` crate — there is NO ONNX/onnxruntime; the feature extractor, GBDT evaluator, and profiles live in the Rust crate, not TS
 
 ### Python checks (training/)
@@ -193,16 +193,24 @@ Project conventions accumulated from past reviews. Apply in Step AUGMENT alongsi
 This section starts lean and accumulates as reviews surface durable, repo-specific patterns. Add a new subsection only when a genuinely htmlwasher-specific invariant emerges — never generic best-practice advice (those live in Step AUGMENT's domain checks).
 
 ### Trafilatura port fidelity
-- htmlwasher is a faithful TypeScript port of Trafilatura — when porting behavior, match the reference implementations in `~/r/htmlwasher-sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
+- htmlwasher's extraction core is a Rust fork of rs-trafilatura's live path — when porting behavior, match the reference implementations in `~/r/htmlwasher-sources/` (adbar `trafilatura`, `go-trafilatura`, `trafilatura-rs`, `rs-trafilatura`); never invent extraction heuristics that diverge from upstream without an explicit reason
+- When references disagree, adbar/trafilatura (Python) is the extraction-semantics authority — and verify branch LIVENESS, not just code shape: go-trafilatura carries its own dead code (its `link_density_test` discard deadens go's backtracking; Python returns the list), so a faithful port of go can be a bug
 - `~/r/htmlwasher-sources/` repos are READ-ONLY reference inputs in an external sibling dir (OUTSIDE this repo) — never edit them and never import from them at runtime
 
 ### DOM and parser boundary
-- `linkedom` + `parse5` handle full-document parsing; `htmlparser2` is reserved for the classifier feature hot-path. Do not introduce a new DOM/HTML parser or move `htmlparser2` outside the classifier
+- `linkedom` + `parse5` handle all TS-side parsing (metadata sidecar + washing); extraction/classification parsing is `dom_query`/html5ever inside the Rust crate. Do not introduce a new DOM/HTML parser on either side
 - Treat all parsed HTML as untrusted — sanitize node content before any downstream interpolation
+- Entity decoding must be SINGLE-PASS (one alternation regex + lookup map, `html.unescape` semantics) — chained sequential `.replace()` calls double-decode `&amp;lt;`; this bug appeared independently in metadata `unescapeHtml` and washing `decodeAttrEntities`
 
-### ONNX runtime interface
-- Page-type inference is the pure-Rust GBDT evaluator in the `@htmlwasher/native` crate (no ONNX runtime); the model artifacts are baked into the crate via `include_str!` and validated at load
-- The model artifacts (`model.xgb.json`, `tfidf-vocab.json`) are produced by the offline `training/` project and consumed at runtime — keep the loading path tolerant of a missing/optional model
+### Native classifier interface
+- Page-type inference is the pure-Rust GBDT evaluator in the `@htmlwasher/native` crate (no ONNX runtime); the model artifacts (`model.xgb.json`, `tfidf-vocab.json`, produced by offline `training/`) are baked into the crate via `include_str!` and hard-validated at first use
+- A native/classifier failure must never reject `wash()`: `pipeline.ts` degrades to whole-document washing with a warning (and surfaces native `warnings` in `messages`)
+
+### Native packaging invariants
+- `pipeline.ts` lazy-loads `@htmlwasher/native` — never reintroduce an eager top-level import (it breaks `boilerplate:'none'`, metadata-only use, and the CLI on platforms without a loadable prebuild)
+- The native package's self-skipping build/test scripts probe the toolchain via `spawnSync('cargo', ['--version'])` — NEVER via `CARGO_HOME` (rustup does not export it; the old gate silently skipped rebuilds and `cargo test` on standard installs). `npm_config_rebuild_native=1` stays as the force override
+- Any `native/src/**.rs` behavior change must rebuild AND refresh the committed host prebuild (`npm/darwin-arm64/*.node`) in the same change; the other targets come from `.github/workflows/build-native.yml`
+- `htmlwasher` (public) depends on the private `@htmlwasher/native` via `workspace:*` — publishing is blocked by a `prepublishOnly` guard until the alpha tarball-bundling plan lands; do not remove the guard without implementing that plan
 
 ### Workspace boundaries
 - `training/` is offline-only, Python, uv-managed, and NOT a pnpm workspace package — it must never be imported by or shipped with the TypeScript library

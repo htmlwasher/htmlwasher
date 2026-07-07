@@ -111,14 +111,29 @@ export function sanitizeCss(css: string): string {
 const STYLE_ATTR = /(\sstyle\s*=\s*)("([^"]*)"|'([^']*)')/gi;
 const STYLE_ELEMENT = /(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi;
 
-/** Decode the small set of HTML entities that can appear in an attribute value. */
+// One alternation over the exact entity set handled (named + the numeric
+// apostrophe forms), decoded in a SINGLE scan.
+const ATTR_ENTITY = /&(amp|lt|gt|quot|apos|#0*39|#x0*27);/gi;
+
+const ATTR_ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * Decode the small set of HTML entities that can appear in an attribute value.
+ * Single-pass (one scan, like a browser's attribute decode) so a double-escaped
+ * entity decodes exactly once: `&amp;lt;` → `&lt;`, never `<` — the scan
+ * continues past the replaced `&`, so it is never re-read as a new entity start.
+ */
 function decodeAttrEntities(value: string): string {
-  return value
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;|&#x0*27;|&apos;/gi, "'");
+  // The numeric apostrophe forms (&#0*39; / &#x0*27;) miss the map → fall back to `'`.
+  return value.replace(ATTR_ENTITY, (_match, name: string) => {
+    return ATTR_ENTITY_MAP[name.toLowerCase()] ?? "'";
+  });
 }
 
 /** Re-encode the characters that must stay escaped inside a double-quoted attribute. */

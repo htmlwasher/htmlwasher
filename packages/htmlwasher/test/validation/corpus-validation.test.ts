@@ -65,7 +65,7 @@ describe.skipIf(!hasCorpus)('adbar eval corpus — extraction quality', () => {
     const precision = tp / (tp + fp || 1);
     const recall = tp / (tp + fn || 1);
     const f1 = (2 * precision * recall) / (precision + recall || 1);
-    // biome-ignore lint/suspicious/noConsole: validation harness reports its score.
+    // The validation harness reports its score (noConsole is not enforced here).
     console.log(
       `adbar eval: pages=${pages} precision=${precision.toFixed(3)} recall=${recall.toFixed(3)} f1=${f1.toFixed(3)}`,
     );

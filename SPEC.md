@@ -44,9 +44,9 @@ Data flow of `wash(html, options)`:
 ```
 wash()  (TypeScript, packages/htmlwasher/src/pipeline.ts)
   ├─ validate options + maxInputBytes (BEFORE the FFI call)
-  ├─ metadata sidecar        (TS, src/metadata/*, linkedom)
-  ├─ runBoilerplate(mode)
-  │     mode='none' → skip (wash the whole document)
+  ├─ metadata sidecar        (TS, src/metadata/*, linkedom — overlaps the native extraction)
+  ├─ runBoilerplate(mode)    (started before the metadata parse; awaited after)
+  │     mode='none' → skip (wash the whole document; the native binding is never loaded)
   │     else → @htmlwasher/native.extract(html, { focus, url })   ← napi boundary (async AsyncTask)
   │              Rust: parse → classify (3-stage cascade) → select profile → extract main content
   │                    → preserve-markup serialize (UNSANITIZED) + baseline rescue on under-extraction
@@ -76,7 +76,9 @@ extractSync(html, options?) → the same object synchronously
 ```
 
 `pageType`/`focus` are typed as string-literal UNIONS (not const enums — bundlers erase those); the Rust
-crate converts to/from its enums.
+crate converts to/from its enums. `pipeline.ts` lazy-loads the binding on the first non-`'none'` wash;
+native `warnings` surface in `wash().messages` (prefixed `boilerplate:`), and a native failure — including
+a missing platform prebuild — degrades to washing the whole document with a warning instead of rejecting.
 
 ### The Rust extraction crate (`packages/htmlwasher/native/`)
 

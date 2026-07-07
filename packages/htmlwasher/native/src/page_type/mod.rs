@@ -35,8 +35,12 @@ pub type Classification = (PageType, Option<f64>);
 /// Returns [`Error::ModelLoad`] when the baked classifier artifacts fail to load.
 pub fn classify(doc: &Document, url: &str) -> Result<Classification, Error> {
     let url_type = url::classify_url(url);
-    let signals = signals::extract_html_signals(doc);
-    let refined = signals::refine_with_signals(url_type, &signals);
+    // Stage-2 signals only ever refine `Article`, so the DOM walk is skipped otherwise.
+    let refined = if url_type == PageType::Article {
+        signals::refine_with_signals(url_type, &signals::extract_html_signals(doc))
+    } else {
+        url_type
+    };
 
     let (ml_type, ml_conf) = model::model()?.classify_ml(doc, url);
 
@@ -491,6 +495,11 @@ mod tests {
         assert_eq!(
             PageType::from_str("docs").ok(),
             Some(PageType::Documentation)
+        );
+        // ASCII-case-insensitive — the napi binding delegates its wire parsing here.
+        assert_eq!(
+            PageType::from_str("Category").ok(),
+            Some(PageType::Category)
         );
         assert!(PageType::from_str("nonsense").is_err());
     }

@@ -3,7 +3,7 @@
 // line_processing, remove_control_characters) and trafilatura/json_metadata.py
 // (normalize_json) — Apache-2.0.
 
-import { type HElement, type HNode, TEXT_NODE } from './dom.js';
+import { type HElement, type HNode, TEXT_NODE, trim } from './dom.js';
 
 /** Strip HTML comments and tags from a raw string. Mirrors `utils.HTML_STRIP_TAGS`. */
 const HTML_STRIP_TAGS = /<!--[\s\S]*?-->|<[^>]*>/g;
@@ -19,11 +19,6 @@ const UNICODE_ESCAPE = /\\u([0-9a-fA-F]{4})/g;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: faithful port of utils.remove_control_characters.
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 
-/** Collapse internal whitespace and trim, matching trafilatura's `utils.trim`. */
-export function trim(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
 /** Remove HTML comments and tags from a string (mirrors `HTML_STRIP_TAGS.sub`). */
 export function stripHtmlTags(text: string): string {
   return text.replace(HTML_STRIP_TAGS, '');
@@ -36,23 +31,36 @@ function safeCodePoint(code: number): string {
   return String.fromCodePoint(code);
 }
 
+/** The named entities `unescapeHtml` decodes (faithful subset of Python `unescape`). */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+// Numeric (hex, then decimal) + named forms in ONE alternation, so decoding is a
+// single scan like Python's `html.unescape` — never a chain of replaces.
+const HTML_ENTITY = /&(?:#x([0-9a-fA-F]+)|#(\d+)|(amp|lt|gt|quot|apos|nbsp));/g;
+
 /**
  * Decode the small set of named/numeric HTML entities trafilatura's `unescape`
  * touches in metadata. linkedom already decodes entities in element text, but
  * attribute values and JSON-LD payloads can still carry them, so we decode the
  * common ones here. Not a full entity table (faithful subset of Python `unescape`).
+ * Single-pass, matching `html.unescape` semantics: a double-escaped entity
+ * decodes exactly once (`&amp;lt;` → `&lt;`, never `<`).
  */
 export function unescapeHtml(text: string): string {
   if (!text.includes('&')) return text;
-  return text
-    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex: string) => safeCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_m, dec: string) => safeCodePoint(Number.parseInt(dec, 10)))
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+  return text.replace(HTML_ENTITY, (match, hex?: string, dec?: string, name?: string) => {
+    if (hex !== undefined) return safeCodePoint(Number.parseInt(hex, 16));
+    if (dec !== undefined) return safeCodePoint(Number.parseInt(dec, 10));
+    if (name !== undefined) return NAMED_ENTITIES[name] ?? match;
+    return match;
+  });
 }
 
 /**

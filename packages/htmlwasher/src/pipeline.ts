@@ -7,10 +7,12 @@
 // matching per-type profile internally, returning the preserve-markup content
 // HTML (UNSANITIZED — the washing stage owns sanitization) plus the page type +
 // confidence. `none` bypasses the FFI call entirely (no extraction, no
-// classification) and washes the whole document. wash() is async: the Rust
-// extraction runs on the libuv threadpool and the washing formatter loads lazily.
+// classification) and washes the whole document. wash() is async: the native
+// module loads lazily (first non-`none` call), the Rust extraction runs on the
+// libuv threadpool, and the washing formatter loads lazily. A native failure
+// (extract() rejection or an unloadable binding) degrades to whole-document
+// washing with a warning rather than rejecting wash().
 
-import { extract } from '@htmlwasher/native';
 import { extractMetadata } from './metadata/index.js';
 import {
   type BoilerplateMode,
@@ -28,18 +30,24 @@ import {
 } from './types.js';
 import { washHtml } from './washing/wash.js';
 
-/**
- * Map a boilerplate-removal `mode` (never `none`) to the Rust core's extraction
- * focus. `none` is handled before this table (it skips extraction entirely).
- */
-const MODE_TO_FOCUS: Record<
-  Exclude<BoilerplateMode, 'none'>,
-  'precision' | 'balanced' | 'recall'
-> = {
-  precision: 'precision',
-  balanced: 'balanced',
-  recall: 'recall',
-};
+/** The `@htmlwasher/native` module surface (type-only — the module loads lazily). */
+type NativeModule = typeof import('@htmlwasher/native');
+
+// Lazy-loaded native binding: `boilerplate: 'none'`, metadata-only use, and any
+// platform without a loadable prebuilt .node must never require the FFI module
+// at package load. The resolved module is ALSO cached synchronously so warmed
+// calls dispatch extract() to the threadpool before wash()'s synchronous
+// metadata parse runs (see the overlap note in wash()).
+let native: NativeModule | undefined;
+let nativeLoad: Promise<NativeModule> | undefined;
+
+function loadNative(): Promise<NativeModule> {
+  nativeLoad ??= import('@htmlwasher/native').then((mod) => {
+    native = mod;
+    return mod;
+  });
+  return nativeLoad;
+}
 
 interface BoilerplateOutcome {
   html: string;
@@ -54,7 +62,9 @@ interface BoilerplateOutcome {
  * detected page type + confidence. The public `wash()` never passes a `pageType`
  * override (the classifier always auto-runs). The returned `contentHtml` is
  * UNSANITIZED — the caller MUST flow it through `washHtml`. When extraction
- * yields no content, keep the whole document and warn.
+ * yields no content, keep the whole document and warn. When the native call
+ * fails (extract() rejection or an unloadable binding), degrade the same way:
+ * warn and wash the whole document (pageType/confidence omitted).
  */
 async function runBoilerplate(
   html: string,
@@ -62,21 +72,38 @@ async function runBoilerplate(
   url: string | undefined,
   messages: Message[],
 ): Promise<BoilerplateOutcome> {
-  if (mode === 'none') return { html }; // wash the whole document (no extraction)
+  if (mode === 'none') return { html }; // wash the whole document (no extraction, no FFI)
 
-  const r = await extract(html, { focus: MODE_TO_FOCUS[mode], url });
-  if (r.contentHtml === '') {
+  try {
+    // Once `none` is handled, `mode` IS the Rust core's focus union.
+    const mod = native ?? (await loadNative());
+    const r = await mod.extract(html, { focus: mode, url });
+    // Surface the core's non-fatal diagnostics. `fallbackUsed` gets no message of
+    // its own: every fallback/rescue result already carries one of the warnings
+    // ('body-fallback-used', 'json-ld-rescue', or 'baseline-rescue').
+    for (const warning of r.warnings) {
+      messages.push({ type: 'warning', text: `boilerplate: ${warning}` });
+    }
+    if (r.contentHtml === '') {
+      messages.push({
+        type: 'warning',
+        text: 'boilerplate removal produced no content; washing the whole document',
+      });
+      return { html, pageType: r.pageType, confidence: r.confidence };
+    }
+    return { html: r.contentHtml, pageType: r.pageType, confidence: r.confidence };
+  } catch (error) {
     messages.push({
       type: 'warning',
-      text: 'boilerplate removal produced no content; washing the whole document',
+      text: `boilerplate removal failed: ${error instanceof Error ? error.message : String(error)}; washing the whole document`,
     });
-    return { html, pageType: r.pageType, confidence: r.confidence };
+    return { html };
   }
-  return { html: r.contentHtml, pageType: r.pageType, confidence: r.confidence };
 }
 
+/** `extractMetadata` returns a pruneEmpty()-ed sidecar, so any key means real data. */
 function hasMetadata(meta: Metadata): boolean {
-  return Object.values(meta).some((v) => v !== undefined && (!Array.isArray(v) || v.length > 0));
+  return Object.keys(meta).length > 0;
 }
 
 /**
@@ -128,6 +155,12 @@ export async function wash(html: string, options: WashOptions = {}): Promise<Was
   const minify = options.minify ?? false;
   const messages: Message[] = [];
 
+  // Start the boilerplate stage FIRST so the Rust threadpool work overlaps the
+  // synchronous linkedom metadata parse below (both consume the raw html).
+  // Message order is preserved: the metadata warning is pushed synchronously,
+  // while runBoilerplate's warnings land only once its promise is awaited.
+  const boilerplatePromise = runBoilerplate(html, mode, options.url, messages);
+
   let metadata: Metadata | undefined;
   try {
     const meta = extractMetadata(html, options.url);
@@ -139,7 +172,7 @@ export async function wash(html: string, options: WashOptions = {}): Promise<Was
     });
   }
 
-  const boilerplate = await runBoilerplate(html, mode, options.url, messages);
+  const boilerplate = await boilerplatePromise;
   const washed = await washHtml(boilerplate.html, level, { minify, config: options.config });
   messages.push(...washed.messages);
 

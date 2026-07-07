@@ -73,12 +73,6 @@ fn collect_ld_types(value: &Value, out: &mut Vec<String>) {
     }
 }
 
-fn has_aggregate_offer(value: &Value) -> bool {
-    let mut types = Vec::new();
-    collect_ld_types(value, &mut types);
-    types.iter().any(|t| t == "AggregateOffer")
-}
-
 fn class_or_id(doc: &Document, patterns: &[&str]) -> bool {
     patterns
         .iter()
@@ -91,7 +85,6 @@ pub fn extract_html_signals(doc: &Document) -> HtmlSignals {
     let og = og_type(doc);
 
     let mut ld_types = Vec::new();
-    let mut aggregate_offer = false;
     for script in select_doc(doc, "script[type=\"application/ld+json\"]") {
         let raw = script.text();
         let trimmed = raw.trim();
@@ -100,11 +93,10 @@ pub fn extract_html_signals(doc: &Document) -> HtmlSignals {
         }
         if let Ok(parsed) = serde_json::from_str::<Value>(trimmed) {
             collect_ld_types(&parsed, &mut ld_types);
-            if has_aggregate_offer(&parsed) {
-                aggregate_offer = true;
-            }
         }
     }
+    // One walk: `AggregateOffer` is just another collected `@type`.
+    let aggregate_offer = ld_types.iter().any(|t| t == "AggregateOffer");
 
     let has_product_grid = class_or_id(doc, PRODUCT_GRID_PATTERNS);
 
