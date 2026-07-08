@@ -54,14 +54,14 @@ describe('trafilaturacore corpus (offline E2E)', () => {
   });
 
   it('exercises every boilerplate mode plus the styled custom config', () => {
-    // The matrix must cover all four modes (incl. the renamed clean-only) and
-    // the one custom-config combo where a CSS-URL-allow-list regression would
+    // The matrix must cover all four modes (incl. the renamed clean-keep-boilerplate)
+    // and the one custom-config combo where a CSS-URL-allow-list regression would
     // surface across real fixtures.
     const labels = COMBOS.map((c) => c.label);
     expect(labels).toContain('balanced');
     expect(labels).toContain('precision');
     expect(labels).toContain('recall');
-    expect(labels).toContain('clean-only');
+    expect(labels).toContain('clean-keep-boilerplate');
     expect(labels).toContain('balanced+styled-config');
   });
 

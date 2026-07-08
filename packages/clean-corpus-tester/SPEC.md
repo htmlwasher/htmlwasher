@@ -43,7 +43,7 @@ default Trafilatura-aligned config, plus one custom-config combo:
 - `balanced` — default path; the page-type **reference** combo
 - `precision` — exercises the `precision` boilerplate mode end-to-end
 - `recall` — exercises the `recall` boilerplate mode end-to-end
-- `clean-only` — no extraction, no classification, no FFI; whole-document cleaning
+- `clean-keep-boilerplate` — no extraction, no classification, no FFI; whole-document cleaning
 - `balanced+styled-config` — `balanced` boilerplate with a custom `CleanConfig` that adds the
   `<style>` tag and `class`/`style` attributes to the default config, so the CSS-URL allow-list
   stays exercised end-to-end (where a CSS-URL regression would surface)
@@ -88,7 +88,7 @@ report rows stay deterministic. Fixtures themselves run sequentially (bounded me
 - `runCorpus(): Promise<CorpusReport>` — load `corpus.json` (resolved relative to the package dir),
   read every fixture, run the combo matrix, and produce the report. Fully offline + deterministic.
 - `COMBOS` — the label-keyed `{ label, boilerplate, config? }` combos (`balanced`, `precision`,
-  `recall`, `clean-only`, `balanced+styled-config`).
+  `recall`, `clean-keep-boilerplate`, `balanced+styled-config`).
 - `PAGE_TYPE_ACCURACY_FLOOR` (`0.4`) and `SUBSTANTIAL_BODY_TEXT` (`200`) — the run thresholds.
 - Types: `CorpusReport`, `FixtureResult`, `ComboResult`
   (`{ combo, boilerplate, pageType?, confidence?, htmlLength, title?, pass }`), `AssertionFailure`.

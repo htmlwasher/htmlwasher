@@ -40,20 +40,20 @@ clean(html: string, options?: CleanOptions): Promise<CleanResult>
 ```
 
 Stages: metadata sidecar (from the original document) → boilerplate(mode) →
-clean(config). For any mode other than `clean-only`, `pipeline.ts` calls the
+clean(config). For any mode other than `clean-keep-boilerplate`, `pipeline.ts` calls the
 `@trafilaturacore/native` Rust core's async `extract(html, { focus, url })`, which
 classifies the page and routes extraction through the matching per-type profile
 **internally** and returns the preserve-markup content HTML plus the detected
 `pageType` + `confidence` (both surfaced on the result). The public `clean()` never
 passes a `pageType` override — the classifier always auto-runs. When extraction
 yields empty content, `clean()` keeps the whole document and warns.
-`mode: 'clean-only'` bypasses the FFI call entirely (no extraction, no
+`mode: 'clean-keep-boilerplate'` bypasses the FFI call entirely (no extraction, no
 classification) and cleans the whole document.
 
 #### Native diagnostics and degradation
 
 The native module is loaded **lazily** (a cached dynamic import) on the first
-non-`clean-only` clean — `boilerplate: 'clean-only'`, metadata-only use, and any platform
+non-`clean-keep-boilerplate` clean — `boilerplate: 'clean-keep-boilerplate'`, metadata-only use, and any platform
 without a loadable prebuilt `.node` never touch the FFI module (package import
 and the CLI keep working). The core's non-fatal `warnings` (`body-fallback-used`,
 `content-very-short`, `json-ld-rescue`, `baseline-rescue`) surface in
@@ -76,14 +76,14 @@ wins, the crate synthesizes markup (e.g. bare `<p>`), so markup preservation is
 best-effort by construction — "original markup" always means "modulo
 doc-cleaning".
 
-The two knobs are orthogonal — any boilerplate mode combines with the default or
-a custom cleaning config. The sanitize stage ALWAYS runs, driven by
+The two core knobs are orthogonal — any boilerplate mode combines with the default
+or a custom cleaning config. The sanitize stage ALWAYS runs, driven by
 `DEFAULT_CLEAN_CONFIG`; callers may pass a fully-custom `config` (a
 `CleanConfig` — pure JSON data) that **replaces** the default Trafilatura-aligned
-config. These options (plus the optional `url` context) are the entire
-user-facing surface; there are deliberately no
-`includeComments`/`includeTables`/`includeImages`/`includeLinks` toggles. The
-security floor is **unconditional**: `enforceSecurityFloor` + the CSS-URL
+config. On top of the config, the four tri-state `include*` toggles
+(`includeComments`/`includeTables`/`includeImages`/`includeLinks`) subtract a
+content family on an explicit `false` (see `deriveContentConfig` under Types).
+The security floor is **unconditional**: `enforceSecurityFloor` + the CSS-URL
 cleaner (`cleanStyledHtml`) run as the final cleaning pass on **every** path —
 the default config and every custom `config`. `<script>` (tag + text), every
 `on*` handler, `javascript:`/`vbscript:`/untrusted `data:`
@@ -119,15 +119,19 @@ trafilaturacore [input] [options]
   from **stdin**. A bare invocation with an interactive TTY and no piped input
   fails with exit code 1 rather than hanging.
 
-| Option                     | Maps to `clean()` | Notes                                                                          |
-| -------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| `-b, --boilerplate <mode>` | `boilerplate`     | `precision\|balanced\|recall\|clean-only`; default `balanced`. Validated.      |
-| `-c, --config <file.json>` | `config`          | custom `CleanConfig` JSON file; read + validated; replaces the default config. |
-| `-m, --minify`             | `minify`          | minify the output instead of pretty-formatting.                                |
-| `-u, --url <url>`          | `url`             | context only — **never fetched**.                                              |
-| `-o, --output <file>`      | —                 | write the result to a file instead of stdout.                                  |
-| `--json`                   | —                 | emit `{ html, metadata, pageType, confidence, messages }` as pretty JSON.      |
-| `-q, --quiet`              | —                 | suppress the stderr diagnostics + `[pageType conf]` line.                      |
+| Option                     | Maps to `clean()` | Notes                                                                                 |
+| -------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `-b, --boilerplate <mode>` | `boilerplate`     | `precision\|balanced\|recall\|clean-keep-boilerplate`; default `balanced`. Validated. |
+| `-c, --config <file.json>` | `config`          | custom `CleanConfig` JSON file; read + validated; replaces the default config.        |
+| `--no-comments`            | `includeComments` | soft no-op (comment retention follows the page-type profile).                         |
+| `--no-tables`              | `includeTables`   | drop table subtrees (`table`/`caption`/`tr`/`td`/`th`/`colgroup`/`col`).              |
+| `--no-images`              | `includeImages`   | drop image subtrees (`img`/`figure`/`figcaption`/`picture`/`source`).                 |
+| `--no-links`               | `includeLinks`    | unwrap `<a>` (keep the anchor text, drop `href`).                                     |
+| `-m, --minify`             | `minify`          | minify the output instead of pretty-formatting.                                       |
+| `-u, --url <url>`          | `url`             | context only — **never fetched**.                                                     |
+| `-o, --output <file>`      | —                 | write the result to a file instead of stdout.                                         |
+| `--json`                   | —                 | emit `{ html, metadata, pageType, confidence, messages }` as pretty JSON.             |
+| `-q, --quiet`              | —                 | suppress the stderr diagnostics + `[pageType conf]` line.                             |
 
 I/O semantics: stdout carries the cleaned HTML (or JSON); stderr carries the
 `messages` diagnostics and a `[pageType confidence]` line (suppressed by `--quiet`,
@@ -146,8 +150,8 @@ as the program entry point.
 ### Types — _implemented in `src/types.ts`_
 
 - `BOILERPLATE_MODES` (`as const`) + `BoilerplateMode` =
-  `'precision' | 'balanced' | 'recall' | 'clean-only'`. Default `'balanced'`. Maps
-  to Trafilatura's `favor_precision`/`favor_recall`; `clean-only` skips
+  `'precision' | 'balanced' | 'recall' | 'clean-keep-boilerplate'`. Default `'balanced'`. Maps
+  to Trafilatura's `favor_precision`/`favor_recall`; `clean-keep-boilerplate` skips
   boilerplate removal + classification entirely (cleans the whole document,
   never loads the FFI binding — trafilaturacore's addition).
 - `DEFAULT_CLEAN_CONFIG` (a `CleanConfig`, defined in `src/cleaning/config.ts`,
@@ -181,21 +185,39 @@ as the program entry point.
 - `PAGE_TYPES` (`as const`) + `PageType` = the 7 types
   (`article, forum, product, collection, listing, documentation, service` — note
   `collection`, not `category`).
-- `CleanOptions` = `{ boilerplate?, config?, minify?, maxInputBytes?, url? }`.
+- `CleanOptions` = `{ boilerplate?, includeComments?, includeTables?,
+includeImages?, includeLinks?, config?, minify?, maxInputBytes?, url? }`.
   `minify` defaults to `false` (prettier-format); `url` is context-only and never
   fetched. `config?: CleanConfig` is a fully-custom cleaning config that replaces
-  the default Trafilatura-aligned config. `maxInputBytes?` (default
+  the default Trafilatura-aligned config. The four `include*` toggles are tri-state
+  (default keep; only an explicit `false` subtracts) and mirror Trafilatura's
+  `include_*` flags for the Contextractor consumer: `includeTables`/`includeImages`/
+  `includeLinks: false` subtract their content family via `deriveContentConfig`
+  (below), while `includeComments` is a soft no-op (comment retention follows the
+  classified page-type profile). `maxInputBytes?` (default
   `DEFAULT_MAX_INPUT_BYTES` = 10 MB UTF-8) caps the input size. `clean()` throws
-  a `TypeError` when `html` is not a string or when `boilerplate`/`config` is
-  provided-but-invalid, and a `RangeError` when the input exceeds `maxInputBytes`.
+  a `TypeError` when `html` is not a string, when `boilerplate`/`config` is
+  provided-but-invalid, or when any `include*` toggle is provided but not a boolean,
+  and a `RangeError` when the input exceeds `maxInputBytes`.
 - `CleanConfig` = `{ allowedTags?, allowedAttributes?, allowedClasses?,
 selfClosing?, nonTextTags?, transformTags? }` — all JSON-serializable (plain data,
   no functions). `isCleanConfig(value)` / `cleanConfigError(value)` are the
   boundary guards (reject unknown/wrong-typed fields with a clear message); both
   the library and the CLI validate with them.
+- `deriveContentConfig(base: CleanConfig, toggles): CleanConfig` (exported from
+  `src/cleaning/config.ts`) — derives an effective config from `base` per the
+  `include*` toggles: `includeImages: false` drops `img`/`figure`/`figcaption`/
+  `picture`/`source` from `allowedTags` (adding `figure`/`picture`/`img`/`source`
+  to `nonTextTags` and dropping their `allowedAttributes`/`selfClosing` entries);
+  `includeTables: false` drops `table`/`caption`/`tr`/`td`/`th`/`colgroup`/`col`
+  (adding `table` to `nonTextTags`); `includeLinks: false` removes `a` from
+  `allowedTags` (unwrapped, not discarded — anchor text kept). Returns the `base`
+  reference unchanged when nothing subtracts (so the default cleaning path is
+  byte-identical) and never mutates `base`. `pipeline.ts` calls it and forwards
+  `options.config` verbatim when nothing subtracts.
 - `CleanResult` = `{ html: string; messages: Message[]; metadata?: Metadata;
 pageType?: PageType; confidence?: number }` (`pageType`/`confidence` set when
-  extraction runs, omitted for `boilerplate: 'clean-only'`).
+  extraction runs, omitted for `boilerplate: 'clean-keep-boilerplate'`).
 - `Message` = `{ type: 'info' | 'warning' | 'error'; text: string }`.
 - `Metadata` (optional sidecar) = `{ title?, author?, url?, hostname?,
 description?, sitename?, date?, categories?, tags?, image?, pageType?, license? }`.
@@ -264,7 +286,7 @@ present when extraction runs.
   DOMPurify/jsdom hardened backend behind the `Cleaner` seam. _implemented (Phase 6)_
 - `src/pipeline.ts` — orchestrates metadata + boilerplate(mode) → clean(config),
   exposing the public `clean()`. Loads `@trafilaturacore/native` lazily (never for
-  `mode: 'clean-only'`), starts the Rust extraction before the synchronous metadata
+  `mode: 'clean-keep-boilerplate'`), starts the Rust extraction before the synchronous metadata
   parse so the threadpool work overlaps it, surfaces native `warnings` as
   `boilerplate: <warning>` messages, and degrades a native failure to
   whole-document cleaning with a warning. _implemented_

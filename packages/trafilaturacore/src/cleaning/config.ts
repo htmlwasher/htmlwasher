@@ -90,7 +90,7 @@ export const DEFAULT_CLEAN_CONFIG: CleanConfig = deepFreeze({
   allowedTags: [
     // Document scaffolding (Trafilatura's build_html_output emits html/body,
     // plus head/meta when metadata is on; title kept because trafilaturacore
-    // also cleans whole documents in `boilerplate: 'clean-only'` mode)
+    // also cleans whole documents in `boilerplate: 'clean-keep-boilerplate'` mode)
     'html',
     'head',
     'meta',
@@ -233,3 +233,94 @@ export const DEFAULT_CLEAN_CONFIG: CleanConfig = deepFreeze({
     plaintext: 'pre',
   },
 });
+
+/**
+ * The content-inclusion toggles {@link deriveContentConfig} subtracts from a base
+ * {@link CleanConfig}. These mirror Trafilatura's `include_*` flags for the
+ * downstream Contextractor consumer. Tri-state: `undefined` or `true` keeps the
+ * family untouched; only an explicit `false` subtracts. `includeComments` is
+ * intentionally absent — comment retention is decided by the page-type profile in
+ * the Rust core, not by a tag-level subtraction (see `CleanOptions.includeComments`).
+ */
+export interface ContentToggles {
+  /** Keep tables. `false` discards table subtrees. */
+  includeTables?: boolean;
+  /** Keep images. `false` discards image subtrees. */
+  includeImages?: boolean;
+  /** Keep links. `false` unwraps `<a>` (anchor text kept, `href` dropped). */
+  includeLinks?: boolean;
+}
+
+// Tag families each toggle subtracts (see deriveContentConfig). IMAGE_NON_TEXT is
+// the image subset that becomes a discarded subtree — `figcaption` is only removed
+// from allowedTags (unwrapped when standalone; discarded with its `figure` parent).
+const IMAGE_TAGS = ['img', 'figure', 'figcaption', 'picture', 'source'] as const;
+const IMAGE_NON_TEXT = ['figure', 'picture', 'img', 'source'] as const;
+const TABLE_TAGS = ['table', 'caption', 'tr', 'td', 'th', 'colgroup', 'col'] as const;
+
+/**
+ * Derive an effective {@link CleanConfig} from `base` by subtracting the content
+ * families the `toggles` switch OFF. Tri-state: only an explicit `false`
+ * subtracts; `undefined`/`true` keeps the family. When nothing subtracts, returns
+ * the **`base` reference unchanged** (so the default cleaning path stays
+ * byte-identical). Never mutates `base` — a fresh config with fresh arrays/objects
+ * is built only for the fields that change.
+ *
+ * - `includeImages: false` → discard image subtrees: `img`/`figure`/`figcaption`/
+ *   `picture`/`source` removed from `allowedTags`; `figure`/`picture`/`img`/
+ *   `source` added to `nonTextTags`; their `allowedAttributes` + `selfClosing`
+ *   entries dropped.
+ * - `includeTables: false` → discard table subtrees: `table`/`caption`/`tr`/`td`/
+ *   `th`/`colgroup`/`col` removed from `allowedTags`; `table` added to `nonTextTags`.
+ * - `includeLinks: false` → unwrap `<a>`: `a` removed from `allowedTags` (anchor
+ *   text kept, `href` dropped); NOT added to `nonTextTags`.
+ */
+export function deriveContentConfig(base: CleanConfig, toggles: ContentToggles): CleanConfig {
+  const dropImages = toggles.includeImages === false;
+  const dropTables = toggles.includeTables === false;
+  const dropLinks = toggles.includeLinks === false;
+  if (!dropImages && !dropTables && !dropLinks) return base;
+
+  const removeTags = new Set<string>();
+  const addNonText: string[] = [];
+  const removeAttrsAndSelfClosing = new Set<string>();
+
+  if (dropImages) {
+    for (const tag of IMAGE_TAGS) {
+      removeTags.add(tag);
+      removeAttrsAndSelfClosing.add(tag);
+    }
+    addNonText.push(...IMAGE_NON_TEXT);
+  }
+  if (dropTables) {
+    for (const tag of TABLE_TAGS) removeTags.add(tag);
+    addNonText.push('table');
+  }
+  if (dropLinks) {
+    removeTags.add('a');
+  }
+
+  const result: CleanConfig = { ...base };
+
+  if (base.allowedTags !== undefined) {
+    result.allowedTags = base.allowedTags.filter((tag) => !removeTags.has(tag));
+  }
+  if (addNonText.length > 0) {
+    const existing = base.nonTextTags ?? [];
+    result.nonTextTags = [...existing, ...addNonText.filter((tag) => !existing.includes(tag))];
+  }
+  if (removeAttrsAndSelfClosing.size > 0) {
+    if (base.allowedAttributes !== undefined) {
+      result.allowedAttributes = Object.fromEntries(
+        Object.entries(base.allowedAttributes).filter(
+          ([tag]) => !removeAttrsAndSelfClosing.has(tag),
+        ),
+      );
+    }
+    if (base.selfClosing !== undefined) {
+      result.selfClosing = base.selfClosing.filter((tag) => !removeAttrsAndSelfClosing.has(tag));
+    }
+  }
+
+  return result;
+}

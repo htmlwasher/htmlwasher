@@ -96,9 +96,12 @@ describe('runClean', () => {
 
   it('--minify output is shorter and has no double spaces vs non-minified', async () => {
     const plain = makeIo(PAGE);
-    await runClean(opts({ input: '-', boilerplate: 'clean-only' }), plain);
+    await runClean(opts({ input: '-', boilerplate: 'clean-keep-boilerplate' }), plain);
     const minified = makeIo(PAGE);
-    await runClean(opts({ input: '-', boilerplate: 'clean-only', minify: true }), minified);
+    await runClean(
+      opts({ input: '-', boilerplate: 'clean-keep-boilerplate', minify: true }),
+      minified,
+    );
     expect(minified.stdout.text.length).toBeLessThanOrEqual(plain.stdout.text.length);
     expect(minified.stdout.text).not.toMatch(/ {2}/);
   });
@@ -115,14 +118,36 @@ describe('runClean', () => {
     expect(io.stderr.text).toBe('');
   });
 
-  it('--boilerplate clean-only cleans the whole document (no extraction)', async () => {
+  it('--boilerplate clean-keep-boilerplate cleans the whole document (no extraction)', async () => {
     const io = makeIo('<div><p>hi there words</p><custom-x>and more text</custom-x></div>');
-    const code = await runClean(opts({ input: '-', boilerplate: 'clean-only' }), io);
+    const code = await runClean(opts({ input: '-', boilerplate: 'clean-keep-boilerplate' }), io);
     expect(code).toBe(0);
     // The default config keeps <p>, unwraps <div>/<custom-x> keeping their text.
     expect(io.stdout.text).toContain('<p>hi there words</p>');
     expect(io.stdout.text).toContain('and more text');
     expect(io.stdout.text).not.toContain('<custom-x');
+  });
+
+  it('--no-images (includeImages: false) drops <img> from the cleaned output', async () => {
+    const io = makeIo('<p>text here for sure words</p><img src="x.png" alt="pic">');
+    const code = await runClean(
+      opts({ input: '-', boilerplate: 'clean-keep-boilerplate', includeImages: false }),
+      io,
+    );
+    expect(code).toBe(0);
+    expect(io.stdout.text).not.toMatch(/<img/i);
+    expect(io.stdout.text).toContain('text here');
+  });
+
+  it('--no-links (includeLinks: false) unwraps <a>, keeping the anchor text', async () => {
+    const io = makeIo('<p>See <a href="/x">link words here</a> now.</p>');
+    const code = await runClean(
+      opts({ input: '-', boilerplate: 'clean-keep-boilerplate', includeLinks: false }),
+      io,
+    );
+    expect(code).toBe(0);
+    expect(io.stdout.text).not.toMatch(/<a[\s>]/i);
+    expect(io.stdout.text).toContain('link words here');
   });
 
   it('-o <file> writes the file and stdout stays empty', async () => {
@@ -140,7 +165,10 @@ describe('runClean', () => {
     const cfg = tmpPath('config.json');
     await writeFile(cfg, JSON.stringify({ allowedTags: ['p'] }));
     const io = makeIo('<ul><li>x</li></ul><p>Hi there words</p>');
-    const code = await runClean(opts({ input: '-', boilerplate: 'clean-only', config: cfg }), io);
+    const code = await runClean(
+      opts({ input: '-', boilerplate: 'clean-keep-boilerplate', config: cfg }),
+      io,
+    );
     expect(code).toBe(0);
     expect(io.stdout.text).toContain('<p>Hi there words</p>');
     // The default config would keep <ul>/<li>; the custom config keeps only <p>.
@@ -238,7 +266,7 @@ describe('option validation (parser layer)', () => {
     expect(message).toMatch(/xyz/);
   });
 
-  it("accepts --boilerplate clean-only (the renamed 'none' mode)", () => {
+  it('accepts --boilerplate clean-keep-boilerplate (the whole-document mode)', () => {
     // Exercise parseBoilerplate's accept path through commander. Re-registering
     // .action() replaces the real handler, so runClean never touches real streams.
     const program = buildProgram().exitOverride();
@@ -246,12 +274,54 @@ describe('option validation (parser layer)', () => {
     program.action((_input: string | undefined, o: { boilerplate: string }) => {
       parsedMode = o.boilerplate;
     });
-    program.parse(['node', 'trafilaturacore', 'x.html', '--boilerplate', 'clean-only']);
-    expect(parsedMode).toBe('clean-only');
+    program.parse(['node', 'trafilaturacore', 'x.html', '--boilerplate', 'clean-keep-boilerplate']);
+    expect(parsedMode).toBe('clean-keep-boilerplate');
     // Help text documents the renamed mode and no longer mentions --level.
     const helpText = buildProgram().helpInformation();
-    expect(helpText).toContain('clean-only');
+    expect(helpText).toContain('clean-keep-boilerplate');
     expect(helpText).not.toContain('--level');
+  });
+
+  it('the --no-* content flags parse to false; defaults keep everything', () => {
+    // Commander's `--no-x` (with no positive `--x`) defaults `o.x` to `true` and
+    // sets it `false` when the flag is present. The action maps these to the
+    // include* clean() options.
+    const build = () => {
+      const program = buildProgram().exitOverride();
+      let captured: Record<string, unknown> = {};
+      program.action((_input: string | undefined, o: Record<string, unknown>) => {
+        captured = o;
+      });
+      return { program, get: () => captured };
+    };
+
+    const off = build();
+    off.program.parse([
+      'node',
+      'trafilaturacore',
+      'x.html',
+      '--no-comments',
+      '--no-tables',
+      '--no-images',
+      '--no-links',
+    ]);
+    expect(off.get()).toMatchObject({
+      comments: false,
+      tables: false,
+      images: false,
+      links: false,
+    });
+
+    const on = build();
+    on.program.parse(['node', 'trafilaturacore', 'x.html']);
+    expect(on.get()).toMatchObject({ comments: true, tables: true, images: true, links: true });
+
+    // The help text advertises the content toggles.
+    const helpText = buildProgram().helpInformation();
+    expect(helpText).toContain('--no-tables');
+    expect(helpText).toContain('--no-images');
+    expect(helpText).toContain('--no-links');
+    expect(helpText).toContain('--no-comments');
   });
 });
 

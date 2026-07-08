@@ -11,7 +11,7 @@ describe('trafilaturacore scaffold', () => {
 
   it('exports the public surface (clean, modes, DEFAULT_CLEAN_CONFIG) without level artifacts', () => {
     expect(typeof api.clean).toBe('function');
-    expect(api.BOILERPLATE_MODES).toContain('clean-only');
+    expect(api.BOILERPLATE_MODES).toContain('clean-keep-boilerplate');
     expect(api.DEFAULT_CLEAN_CONFIG.allowedTags).toContain('p');
     // The five-level preset system is gone from the public surface.
     expect('CLEANING_LEVELS' in api).toBe(false);

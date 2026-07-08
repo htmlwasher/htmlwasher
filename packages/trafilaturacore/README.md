@@ -35,7 +35,7 @@ may still change before a stable release.
 import { clean } from 'trafilaturacore';
 
 const { html, metadata, pageType, confidence, messages } = await clean(pageHtml, {
-  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'clean-only'
+  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'clean-keep-boilerplate'
   minify: false,
   url: 'https://example.com/article', // optional context; never fetched
 });
@@ -46,18 +46,44 @@ author, date, sitename, tags, …), the detected `pageType` + `confidence` (when
 extraction runs), and diagnostic `messages`. It is `async` (the formatter loads
 lazily).
 
-The two knobs are orthogonal — any boilerplate mode combines with the default or
-a custom cleaning config. They (plus `minify`) are the entire surface: there are
-deliberately no `includeComments`/`includeTables`/`includeImages`/`includeLinks`
-toggles. The sanitize stage always runs, driven by the exported
-`DEFAULT_CLEAN_CONFIG` — a single Trafilatura-aligned config derived from
+The two core knobs are orthogonal — any boilerplate mode combines with the default
+or a custom cleaning config. On top of them, four `include*` content toggles (see
+below) let a caller subtract a content family. The sanitize stage always runs,
+driven by the exported `DEFAULT_CLEAN_CONFIG` — a single Trafilatura-aligned config
+derived from
 Trafilatura 2.1.0: its tag allow-list is Trafilatura's HTML output vocabulary
 union rs-trafilatura's serializer whitelist; Trafilatura's `MANUALLY_CLEANED`
 list maps to `nonTextTags` (subtree discarded with content: `nav`, `aside`,
 `form`, `iframe`, `script`, …); its `MANUALLY_STRIPPED` list is simply not
 allowed, so those tags are unwrapped with content kept (`div`, `span`,
-`section`, …). `boilerplate: 'clean-only'` skips extraction and classification
+`section`, …). `boilerplate: 'clean-keep-boilerplate'` skips extraction and classification
 entirely and cleans the whole document.
+
+### Content-inclusion toggles
+
+Four optional tri-state toggles mirror Trafilatura's `include_*` flags (for the
+downstream Contextractor consumer). They default to **keep** — `undefined` or
+`true` changes nothing; only an explicit `false` subtracts a content family on top
+of the active cleaning config:
+
+- `includeImages: false` — discard image subtrees (`img`/`figure`/`figcaption`/`picture`/`source`).
+- `includeTables: false` — discard table subtrees (`table`/`caption`/`tr`/`td`/`th`/`colgroup`/`col`).
+- `includeLinks: false` — unwrap `<a>`, keeping the anchor text but dropping `href`.
+- `includeComments` — a soft no-op: comment retention is decided by the classified
+  page-type profile in the Rust core, not a tag toggle. Accepted and validated at
+  the boundary for consumer-contract parity.
+
+```ts
+const { html } = await clean(pageHtml, {
+  includeImages: false, // drop <img>/<figure>/<picture> subtrees
+  includeLinks: false, //  flatten <a> to its anchor text
+});
+```
+
+Defaults keep everything, so toggles are a non-breaking, opt-in subtraction.
+Internally the derivation is `deriveContentConfig(base, toggles)`
+(`src/cleaning/config.ts`); when nothing subtracts it returns the base config
+unchanged, so the default cleaning path stays byte-identical.
 
 ### Custom cleaning config
 
@@ -135,11 +161,13 @@ trafilaturacore page.html -c my-cleaning-config.json
 It reads a single file argument, or stdin when the argument is omitted or `-`.
 Cleaned HTML (or `--json`) goes to **stdout**; diagnostics and a
 `[pageType confidence]` line go to **stderr** (silence them with `-q, --quiet`).
-Options: `-b, --boilerplate <precision|balanced|recall|clean-only>`,
+Options: `-b, --boilerplate <precision|balanced|recall|clean-keep-boilerplate>`,
 `-c, --config <file.json>` (a custom `CleanConfig`; replaces the default config),
-`-m, --minify`, `-u, --url <url>` (never fetched), `-o, --output <file>`,
-`--json`, `-q, --quiet`. Invalid option values, an invalid/malformed config file,
-and a missing input file exit non-zero with a clear stderr message.
+`--no-comments`/`--no-tables`/`--no-images`/`--no-links` (content-inclusion
+toggles, matching the library `include*` options), `-m, --minify`,
+`-u, --url <url>` (never fetched), `-o, --output <file>`, `--json`, `-q, --quiet`.
+Invalid option values, an invalid/malformed config file, and a missing input file
+exit non-zero with a clear stderr message.
 
 ## Attribution
 

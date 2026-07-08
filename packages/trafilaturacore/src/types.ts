@@ -14,15 +14,23 @@ export { DEFAULT_CLEAN_CONFIG } from './cleaning/config.js';
 /**
  * Boilerplate-removal mode — gates the Trafilatura-derived main-content extraction.
  *
- * - `precision`  → sets `favor_precision` (less noise, may miss content)
- * - `balanced`   → neither flag (neutral default)
- * - `recall`     → sets `favor_recall` (more content, may include noise)
- * - `clean-only` → skip boilerplate removal entirely (clean the whole document)
+ * - `precision`              → sets `favor_precision` (less noise, may miss content)
+ * - `balanced`               → neither flag (neutral default)
+ * - `recall`                 → sets `favor_recall` (more content, may include noise)
+ * - `clean-keep-boilerplate` → skip boilerplate removal entirely: HTML cleanup only,
+ *   keeping the whole document (no page-type, no confidence, never loads the Rust FFI)
  *
- * `precision`/`balanced`/`recall` mirror Trafilatura's internal focus;
- * `clean-only` is trafilaturacore's addition (upstream has no such mode).
+ * All four modes clean; `precision`/`balanced`/`recall` mirror Trafilatura's
+ * internal focus. `clean-keep-boilerplate` is trafilaturacore's addition (upstream
+ * has no such mode) — it does the cleanup without boilerplate removal / main-content
+ * extraction, so boilerplate is kept.
  */
-export const BOILERPLATE_MODES = ['precision', 'balanced', 'recall', 'clean-only'] as const;
+export const BOILERPLATE_MODES = [
+  'precision',
+  'balanced',
+  'recall',
+  'clean-keep-boilerplate',
+] as const;
 export type BoilerplateMode = (typeof BOILERPLATE_MODES)[number];
 export const DEFAULT_BOILERPLATE_MODE = 'balanced' satisfies BoilerplateMode;
 
@@ -81,16 +89,40 @@ export interface Metadata {
 }
 
 /**
- * Options for {@link clean}. These knobs (plus the optional source-URL context)
- * are the entire user-facing surface — there are deliberately no
- * `includeComments` / `includeTables` / `includeImages` / `includeLinks`
- * toggles. The Trafilatura-aligned `DEFAULT_CLEAN_CONFIG` (or a fully-custom
- * `config`) is the single tag-inclusion control; comments are decided by the
- * classified page type.
+ * Options for {@link clean}. The `boilerplate` mode + the cleaning `config` are the
+ * core knobs; the four `include*` tri-state toggles below mirror Trafilatura's
+ * `include_*` flags for the downstream Contextractor consumer. The
+ * Trafilatura-aligned `DEFAULT_CLEAN_CONFIG` (or a fully-custom `config`) is the
+ * baseline tag-inclusion control; each `include*: false` subtracts a content family
+ * on top of it (see {@link deriveContentConfig}).
  */
 export interface CleanOptions {
   /** Boilerplate-removal mode. Default `'balanced'`. */
   boilerplate?: BoilerplateMode;
+  /**
+   * Keep comments. Tri-state; default keep. **Soft no-op**: comment retention is
+   * decided by the page-type profile in the Rust core, not by a tag-level toggle,
+   * so this does not feed {@link deriveContentConfig}. Accepted and validated at the
+   * boundary for Contextractor consumer-contract parity.
+   */
+  includeComments?: boolean;
+  /**
+   * Keep tables. Tri-state; default keep. An explicit `false` discards table
+   * subtrees (`table`/`caption`/`tr`/`td`/`th`/`colgroup`/`col`).
+   */
+  includeTables?: boolean;
+  /**
+   * Keep images. Tri-state; default keep. An explicit `false` discards image
+   * subtrees (`img`/`figure`/`figcaption`/`picture`/`source`). Note: Contextractor
+   * defaults images off, but trafilaturacore keeps them and subtracts only on an
+   * explicit `false`.
+   */
+  includeImages?: boolean;
+  /**
+   * Keep links. Tri-state; default keep. An explicit `false` unwraps `<a>` (anchor
+   * text kept, `href` dropped).
+   */
+  includeLinks?: boolean;
   /**
    * Fully-custom cleaning config — a {@link CleanConfig} (pure JSON data). When
    * set it drives the sanitize stage directly, replacing the default
@@ -123,9 +155,9 @@ export interface CleanResult {
   html: string;
   messages: Message[];
   metadata?: Metadata;
-  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'clean-only'`). */
+  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'clean-keep-boilerplate'`). */
   pageType?: PageType;
-  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'clean-only'`). */
+  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'clean-keep-boilerplate'`). */
   confidence?: number;
 }
 

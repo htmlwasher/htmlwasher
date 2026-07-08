@@ -2,18 +2,23 @@
 // Orchestrates the two pillars into the public clean() API:
 //   metadata (sidecar) + boilerplate(mode) → clean(config).
 //
-// For any boilerplate mode other than `clean-only`, the @trafilaturacore/native
+// For any boilerplate mode other than `clean-keep-boilerplate`, the @trafilaturacore/native
 // Rust core classifies the page (3-stage cascade) and routes extraction through
 // the matching per-type profile internally, returning the preserve-markup content
 // HTML (UNSANITIZED — the cleaning stage owns sanitization) plus the page type +
-// confidence. `clean-only` bypasses the FFI call entirely (no extraction, no
+// confidence. `clean-keep-boilerplate` bypasses the FFI call entirely (no extraction, no
 // classification) and cleans the whole document. clean() is async: the native
-// module loads lazily (first non-`clean-only` call), the Rust extraction runs on
+// module loads lazily (first non-`clean-keep-boilerplate` call), the Rust extraction runs on
 // the libuv threadpool, and the cleaning formatter loads lazily. A native failure
 // (extract() rejection or an unloadable binding) degrades to whole-document
 // cleaning with a warning rather than rejecting clean().
 
 import { cleanHtml } from './cleaning/clean.js';
+import {
+  type ContentToggles,
+  DEFAULT_CLEAN_CONFIG,
+  deriveContentConfig,
+} from './cleaning/config.js';
 import { extractMetadata } from './metadata/index.js';
 import {
   type BoilerplateMode,
@@ -31,7 +36,7 @@ import {
 /** The `@trafilaturacore/native` module surface (type-only — the module loads lazily). */
 type NativeModule = typeof import('@trafilaturacore/native');
 
-// Lazy-loaded native binding: `boilerplate: 'clean-only'`, metadata-only use, and
+// Lazy-loaded native binding: `boilerplate: 'clean-keep-boilerplate'`, metadata-only use, and
 // any platform without a loadable prebuilt .node must never require the FFI module
 // at package load. The resolved module is ALSO cached synchronously so warmed
 // calls dispatch extract() to the threadpool before clean()'s synchronous
@@ -70,10 +75,10 @@ async function runBoilerplate(
   url: string | undefined,
   messages: Message[],
 ): Promise<BoilerplateOutcome> {
-  if (mode === 'clean-only') return { html }; // clean the whole document (no extraction, no FFI)
+  if (mode === 'clean-keep-boilerplate') return { html }; // clean the whole document (no extraction, no FFI)
 
   try {
-    // Once `clean-only` is handled, `mode` IS the Rust core's focus union.
+    // Once `clean-keep-boilerplate` is handled, `mode` IS the Rust core's focus union.
     const mod = native ?? (await loadNative());
     const r = await mod.extract(html, { focus: mode, url });
     // Surface the core's non-fatal diagnostics. `fallbackUsed` gets no message of
@@ -108,15 +113,19 @@ function hasMetadata(meta: Metadata): boolean {
  * Clean a page: HTML in → cleaned HTML out (+ an optional metadata sidecar and,
  * when extraction runs, the detected page type and confidence).
  *
- * Knobs: the boilerplate-removal `mode` (default `'balanced'`; `'clean-only'`
- * cleans the whole document) and an optional fully-custom `config` (a
- * {@link import('./types.js').CleanConfig}), which replaces the default
- * Trafilatura-aligned cleaning config. `minify` (default `false`) emits minified
- * rather than prettier-formatted HTML. `url` is optional context (never fetched).
+ * Knobs: the boilerplate-removal `mode` (default `'balanced'`;
+ * `'clean-keep-boilerplate'` cleans the whole document) and an optional
+ * fully-custom `config` (a {@link import('./types.js').CleanConfig}), which
+ * replaces the default Trafilatura-aligned cleaning config. The `include*`
+ * tri-state toggles (`includeTables`/`includeImages`/`includeLinks`) subtract a
+ * content family from the effective config on an explicit `false`;
+ * `includeComments` is accepted but a soft no-op. `minify` (default `false`) emits
+ * minified rather than prettier-formatted HTML. `url` is optional context (never
+ * fetched).
  *
  * @throws {TypeError} if `html` is not a string, if `options.boilerplate` is
- *   provided but invalid, or if `options.config` is provided but is not a valid
- *   CleanConfig.
+ *   provided but invalid, if any `include*` toggle is provided but not a boolean,
+ *   or if `options.config` is provided but is not a valid CleanConfig.
  * @throws {RangeError} if the input HTML exceeds `options.maxInputBytes`
  *   (default {@link DEFAULT_MAX_INPUT_BYTES}, 10 MB) UTF-8 bytes.
  */
@@ -134,6 +143,20 @@ export async function clean(html: string, options: CleanOptions = {}): Promise<C
   }
   if (options.boilerplate !== undefined && !isBoilerplateMode(options.boilerplate)) {
     throw new TypeError(`Invalid boilerplate mode: ${String(options.boilerplate)}`);
+  }
+
+  // Validate each content-inclusion toggle is a boolean at the boundary (tri-state:
+  // `undefined` keeps the default). Mirrors the boundary guards above.
+  for (const key of [
+    'includeComments',
+    'includeTables',
+    'includeImages',
+    'includeLinks',
+  ] as const) {
+    const value = options[key];
+    if (value !== undefined && typeof value !== 'boolean') {
+      throw new TypeError(`Invalid ${key}: expected a boolean, received ${typeof value}`);
+    }
   }
 
   // Bound resource use: reject oversized input at the boundary.
@@ -167,7 +190,20 @@ export async function clean(html: string, options: CleanOptions = {}): Promise<C
   }
 
   const boilerplate = await boilerplatePromise;
-  const cleaned = await cleanHtml(boilerplate.html, { minify, config: options.config });
+  // Derive the effective cleaning config from the content toggles. When nothing
+  // subtracts, `deriveContentConfig` returns the base reference unchanged, so we
+  // forward `options.config` verbatim (`undefined` → the default path stays
+  // byte-identical to before the toggles existed). `includeComments` is a soft
+  // no-op and deliberately does not participate in the derivation.
+  const baseConfig = options.config ?? DEFAULT_CLEAN_CONFIG;
+  const toggles: ContentToggles = {
+    includeTables: options.includeTables,
+    includeImages: options.includeImages,
+    includeLinks: options.includeLinks,
+  };
+  const effectiveConfig = deriveContentConfig(baseConfig, toggles);
+  const configForClean = effectiveConfig === baseConfig ? options.config : effectiveConfig;
+  const cleaned = await cleanHtml(boilerplate.html, { minify, config: configForClean });
   messages.push(...cleaned.messages);
 
   const result: CleanResult = { html: cleaned.html, messages };

@@ -14,7 +14,12 @@ import {
 
 describe('option unions', () => {
   it('exposes exactly the four boilerplate modes', () => {
-    expect([...BOILERPLATE_MODES]).toEqual(['precision', 'balanced', 'recall', 'clean-only']);
+    expect([...BOILERPLATE_MODES]).toEqual([
+      'precision',
+      'balanced',
+      'recall',
+      'clean-keep-boilerplate',
+    ]);
   });
 
   it('exposes the seven page types with collection (not category)', () => {
@@ -42,8 +47,9 @@ describe('option unions', () => {
 describe('runtime guards', () => {
   it('isBoilerplateMode accepts valid, rejects invalid', () => {
     expect(isBoilerplateMode('precision')).toBe(true);
-    expect(isBoilerplateMode('clean-only')).toBe(true);
-    expect(isBoilerplateMode('none')).toBe(false); // renamed to 'clean-only'
+    expect(isBoilerplateMode('clean-keep-boilerplate')).toBe(true);
+    expect(isBoilerplateMode('clean-only')).toBe(false); // renamed to 'clean-keep-boilerplate'
+    expect(isBoilerplateMode('none')).toBe(false); // the original name, renamed twice
     expect(isBoilerplateMode('aggressive')).toBe(false);
     expect(isBoilerplateMode(42)).toBe(false);
     expect(isBoilerplateMode(undefined)).toBe(false);

@@ -35,22 +35,22 @@ describe('clean() orchestration', () => {
     expect(metadata?.sitename).toBe('Site');
   });
 
-  it("boilerplate 'clean-only' cleans the whole document", async () => {
-    const { html } = await clean(PAGE, { boilerplate: 'clean-only' });
+  it("boilerplate 'clean-keep-boilerplate' cleans the whole document", async () => {
+    const { html } = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate' });
     // whole-document clean keeps more than the article (but still strips scripts)
     expect(html).not.toMatch(/<script/i);
     expect(html).toContain('Real Title');
   });
 
   it('minify produces collapsed output', async () => {
-    const pretty = await clean(PAGE, { boilerplate: 'clean-only', minify: false });
-    const min = await clean(PAGE, { boilerplate: 'clean-only', minify: true });
+    const pretty = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate', minify: false });
+    const min = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate', minify: true });
     expect(min.html.length).toBeLessThanOrEqual(pretty.html.length);
   });
 
   it('a custom config drives the sanitize stage, replacing the default config', async () => {
     const { html } = await clean('<ul><li>x</li></ul><p>Hi</p>', {
-      boilerplate: 'clean-only',
+      boilerplate: 'clean-keep-boilerplate',
       config: { allowedTags: ['p'] }, // the default would keep <ul>/<li> too
     });
     expect(html).toContain('<p>Hi</p>');
@@ -60,7 +60,10 @@ describe('clean() orchestration', () => {
 
   it('throws a clear TypeError on an invalid custom config', async () => {
     await expect(
-      clean('<p>Hi</p>', { boilerplate: 'clean-only', config: { bogus: true } as never }),
+      clean('<p>Hi</p>', {
+        boilerplate: 'clean-keep-boilerplate',
+        config: { bogus: true } as never,
+      }),
     ).rejects.toThrow(/Invalid cleaning config: unknown field 'bogus'/);
   });
 
@@ -77,25 +80,28 @@ describe('clean() orchestration', () => {
 
   it('rejects input just over maxInputBytes with a RangeError', async () => {
     const html = 'a'.repeat(11);
-    await expect(clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 })).rejects.toThrow(
-      RangeError,
-    );
-    await expect(clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 })).rejects.toThrow(
-      /exceeding the limit of 10 bytes/,
-    );
+    await expect(
+      clean(html, { boilerplate: 'clean-keep-boilerplate', maxInputBytes: 10 }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      clean(html, { boilerplate: 'clean-keep-boilerplate', maxInputBytes: 10 }),
+    ).rejects.toThrow(/exceeding the limit of 10 bytes/);
   });
 
   it('accepts input exactly at maxInputBytes (just under the cap passes)', async () => {
     const html = 'a'.repeat(10);
-    const { html: out } = await clean(html, { boilerplate: 'clean-only', maxInputBytes: 10 });
+    const { html: out } = await clean(html, {
+      boilerplate: 'clean-keep-boilerplate',
+      maxInputBytes: 10,
+    });
     expect(typeof out).toBe('string');
   });
 
   it('measures the cap in UTF-8 bytes, not characters', async () => {
     // '€' is 3 UTF-8 bytes; two of them = 6 bytes > a 5-byte cap.
-    await expect(clean('€€', { boilerplate: 'clean-only', maxInputBytes: 5 })).rejects.toThrow(
-      RangeError,
-    );
+    await expect(
+      clean('€€', { boilerplate: 'clean-keep-boilerplate', maxInputBytes: 5 }),
+    ).rejects.toThrow(RangeError);
   });
 
   it('default cap is DEFAULT_MAX_INPUT_BYTES: 10 MB + 1 byte is rejected at the boundary', async () => {
@@ -103,16 +109,18 @@ describe('clean() orchestration', () => {
     // count alone — no need to push a real 10 MB document through prettier (the
     // under-cap path is covered by every other small-doc test in this suite).
     const overLimit = `${'a'.repeat(DEFAULT_MAX_INPUT_BYTES)}a`;
-    await expect(clean(overLimit, { boilerplate: 'clean-only' })).rejects.toThrow(RangeError);
-    await expect(clean(overLimit, { boilerplate: 'clean-only' })).rejects.toThrow(
+    await expect(clean(overLimit, { boilerplate: 'clean-keep-boilerplate' })).rejects.toThrow(
+      RangeError,
+    );
+    await expect(clean(overLimit, { boilerplate: 'clean-keep-boilerplate' })).rejects.toThrow(
       /exceeding the limit of/,
     );
   });
 
-  it('security floor holds through the public API on the clean-only path', async () => {
+  it('security floor holds through the public API on the clean-keep-boilerplate path', async () => {
     const { html } = await clean(
       '<p onclick="x()">hi</p><script>alert(1)</script><a href="javascript:alert(2)">l</a>',
-      { boilerplate: 'clean-only' },
+      { boilerplate: 'clean-keep-boilerplate' },
     );
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/onclick/i);
@@ -211,10 +219,95 @@ describe('clean() orchestration', () => {
     expect(confidence).toBeLessThanOrEqual(1);
   });
 
-  it("omits pageType for boilerplate 'clean-only' (no extraction, no classification)", async () => {
-    const { pageType, confidence } = await clean(PAGE, { boilerplate: 'clean-only' });
+  it("omits pageType for boilerplate 'clean-keep-boilerplate' (no extraction, no classification)", async () => {
+    const { pageType, confidence } = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate' });
     expect(pageType).toBeUndefined();
     expect(confidence).toBeUndefined();
+  });
+});
+
+describe('clean() content-inclusion toggles', () => {
+  // clean-keep-boilerplate → deterministic whole-document cleaning, so a toggle's
+  // effect is isolated from extraction. The tri-state contract: only an explicit
+  // `false` subtracts; `undefined`/`true` keeps.
+  it('includeImages: false discards image subtrees (img/figure/figcaption)', async () => {
+    const input =
+      '<p>Body text with plenty of words here for sure.</p><figure><img src="x.png" alt="pic"><figcaption>the caption</figcaption></figure>';
+    const { html } = await clean(input, {
+      boilerplate: 'clean-keep-boilerplate',
+      includeImages: false,
+    });
+    expect(html).not.toMatch(/<img/i);
+    expect(html).not.toMatch(/<figure/i);
+    expect(html).not.toContain('the caption'); // figcaption discarded with its figure parent
+    expect(html).toContain('Body text');
+  });
+
+  it('keeps images by default (no toggle)', async () => {
+    const input = '<p>Body text with plenty of words here.</p><img src="x.png" alt="pic">';
+    const { html } = await clean(input, { boilerplate: 'clean-keep-boilerplate' });
+    expect(html).toMatch(/<img/i);
+  });
+
+  it('includeTables: false discards the table subtree', async () => {
+    const input = '<p>Paragraph text here.</p><table><tr><td>cell content text</td></tr></table>';
+    const { html } = await clean(input, {
+      boilerplate: 'clean-keep-boilerplate',
+      includeTables: false,
+    });
+    expect(html).not.toMatch(/<table/i);
+    expect(html).not.toContain('cell content text');
+    expect(html).toContain('Paragraph text');
+  });
+
+  it('includeLinks: false unwraps <a> but keeps the anchor text (href dropped)', async () => {
+    const input = '<p>See <a href="/x" title="t">the link text</a> now.</p>';
+    const { html } = await clean(input, {
+      boilerplate: 'clean-keep-boilerplate',
+      includeLinks: false,
+    });
+    expect(html).not.toMatch(/<a[\s>]/i);
+    expect(html).not.toContain('href');
+    expect(html).toContain('the link text');
+  });
+
+  it('includeComments: false is a soft no-op (identical output to no toggle)', async () => {
+    const withToggle = await clean(PAGE, {
+      boilerplate: 'clean-keep-boilerplate',
+      includeComments: false,
+    });
+    const without = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate' });
+    expect(withToggle.html).toBe(without.html);
+  });
+
+  it('all toggles true leaves the default path byte-identical (whole-document)', async () => {
+    const withTrue = await clean(PAGE, {
+      boilerplate: 'clean-keep-boilerplate',
+      includeComments: true,
+      includeTables: true,
+      includeImages: true,
+      includeLinks: true,
+    });
+    const without = await clean(PAGE, { boilerplate: 'clean-keep-boilerplate' });
+    expect(withTrue.html).toBe(without.html);
+  });
+
+  it('no-toggle default extraction path stays byte-identical (balanced)', async () => {
+    const withTrue = await clean(PAGE, {
+      boilerplate: 'balanced',
+      includeTables: true,
+      includeImages: true,
+      includeLinks: true,
+    });
+    const without = await clean(PAGE, { boilerplate: 'balanced' });
+    expect(withTrue.html).toBe(without.html);
+  });
+
+  it('throws a TypeError on a non-boolean toggle', async () => {
+    await expect(clean('<p>Hi</p>', { includeImages: 'yes' as never })).rejects.toThrow(TypeError);
+    await expect(clean('<p>Hi</p>', { includeTables: 1 as never })).rejects.toThrow(
+      /Invalid includeTables/,
+    );
   });
 });
 
@@ -282,7 +375,7 @@ describe('clean() native-core diagnostics and degradation', () => {
     expect(result.pageType).toBeUndefined();
   });
 
-  it("boilerplate 'clean-only' never loads the native binding (lazy FFI)", async () => {
+  it("boilerplate 'clean-keep-boilerplate' never loads the native binding (lazy FFI)", async () => {
     vi.resetModules();
     const factory = vi.fn(() => {
       throw new Error('should never load');
@@ -290,8 +383,8 @@ describe('clean() native-core diagnostics and degradation', () => {
     vi.doMock('@trafilaturacore/native', factory);
     // The package (pipeline module) itself must load without the binding…
     const { clean: cleanMocked } = await import('./pipeline.js');
-    // …and a 'clean-only'-mode clean must never trigger the import.
-    const { html, messages } = await cleanMocked(PAGE, { boilerplate: 'clean-only' });
+    // …and a 'clean-keep-boilerplate'-mode clean must never trigger the import.
+    const { html, messages } = await cleanMocked(PAGE, { boilerplate: 'clean-keep-boilerplate' });
     expect(html).toContain('Real Title');
     expect(factory).not.toHaveBeenCalled();
     expect(messages.some((m) => m.text.startsWith('boilerplate removal failed'))).toBe(false);
@@ -340,7 +433,7 @@ describe('clean() warning builders narrow non-Error throws', () => {
       },
     }));
     const { clean: cleanMocked } = await import('./pipeline.js');
-    const { messages } = await cleanMocked(PAGE, { boilerplate: 'clean-only' });
+    const { messages } = await cleanMocked(PAGE, { boilerplate: 'clean-keep-boilerplate' });
     const warning = messages.find((m) => m.text.startsWith('metadata extraction failed'));
     expect(warning?.text).toContain('boom-not-an-error');
     expect(warning?.text).not.toContain('undefined');

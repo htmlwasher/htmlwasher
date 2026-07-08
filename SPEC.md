@@ -28,7 +28,7 @@ across languages:
 documentation, service`), per-type extraction profiles, confidence scoring, and a **preserve-markup**
   serializer that emits the kept content with its original tags + attributes (script-free via extraction
   hygiene, but otherwise **UNSANITIZED**). Gated by the boilerplate mode `precision | balanced | recall |
-clean-only` (`clean-only` bypasses the Rust core).
+clean-keep-boilerplate` (`clean-keep-boilerplate` bypasses the Rust core).
 - **HTML cleaning (TypeScript).** The `sanitize-html`-based sanitize + normalize + format pipeline — the
   single Trafilatura-aligned default config (`DEFAULT_CLEAN_CONFIG`) plus a fully-custom JSON
   `CleanConfig` — and the **unconditional security floor**. In v2 the cleaning stage is the **sole
@@ -46,7 +46,7 @@ clean()  (TypeScript, packages/trafilaturacore/src/pipeline.ts)
   ├─ validate options + maxInputBytes (BEFORE the FFI call)
   ├─ metadata sidecar        (TS, src/metadata/*, linkedom — overlaps the native extraction)
   ├─ runBoilerplate(mode)    (started before the metadata parse; awaited after)
-  │     mode='clean-only' → skip (clean the whole document; the native binding is never loaded)
+  │     mode='clean-keep-boilerplate' → skip (clean the whole document; the native binding is never loaded)
   │     else → @trafilaturacore/native.extract(html, { focus, url })   ← napi boundary (async AsyncTask)
   │              Rust: parse → classify (3-stage cascade) → select profile → extract main content
   │                    → preserve-markup serialize (UNSANITIZED) + baseline rescue on under-extraction
@@ -76,7 +76,7 @@ extractSync(html, options?) → the same object synchronously
 ```
 
 `pageType`/`focus` are typed as string-literal UNIONS (not const enums — bundlers erase those); the Rust
-crate converts to/from its enums. `pipeline.ts` lazy-loads the binding on the first non-`'clean-only'` clean;
+crate converts to/from its enums. `pipeline.ts` lazy-loads the binding on the first non-`'clean-keep-boilerplate'` clean;
 native `warnings` surface in `clean().messages` (prefixed `boilerplate:`), and a native failure — including
 a missing platform prebuild — degrades to cleaning the whole document with a warning instead of rejecting.
 
@@ -107,11 +107,20 @@ validated by `native/tests/classifier_parity.rs` against fixtures `training/` re
 
 `pipeline.ts` (the public `clean()`), `cleaning/` (the Trafilatura-aligned default config + custom `CleanConfig` + the
 unconditional floor + the optional DOMPurify/jsdom hardened backend), `metadata/` (the sidecar + its own
-`dom.ts` linkedom helper), `cli*.ts` (offline `-b/-c/-m/-u/--json/-o/-q`), `types.ts` (the FROZEN public
-surface — plain string unions, no enums; `native-types.test.ts` asserts the public `PageType` union equals
-the napi one). Public API: `clean(html, options?) → Promise<{ html, messages, metadata?, pageType?, confidence? }>`
-with `boilerplate` (default `balanced`), `config?` (a custom `CleanConfig` that replaces the default), `minify?`,
+`dom.ts` linkedom helper), `cli*.ts` (offline `-b/-c/--no-{comments,tables,images,links}/-m/-u/--json/-o/-q`),
+`types.ts` (the FROZEN public surface — plain string unions, no enums; `native-types.test.ts` asserts the
+public `PageType` union equals the napi one). Public API:
+`clean(html, options?) → Promise<{ html, messages, metadata?, pageType?, confidence? }>` with `boilerplate`
+(default `balanced`), the tri-state `include*` content toggles (`includeComments`/`includeTables`/`includeImages`/
+`includeLinks` — default keep; an explicit `false` subtracts a content family via `deriveContentConfig`, while
+`includeComments` is a soft no-op), `config?` (a custom `CleanConfig` that replaces the default), `minify?`,
 `maxInputBytes?` (default 10 MB, enforced before the FFI), `url?` (context only, never fetched).
+
+```ts
+// Library: drop images + flatten links (defaults keep everything — opt-in subtraction)
+await clean(html, { boilerplate: 'balanced', includeImages: false, includeLinks: false });
+// CLI, offline, same effect:  trafilaturacore page.html --no-images --no-links
+```
 
 ### Training (offline Python, `training/`)
 

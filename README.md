@@ -76,7 +76,8 @@ Use it as a **library**:
 ```ts
 import { clean } from 'trafilaturacore';
 const { html, metadata, pageType } = await clean(pageHtml, {
-  boilerplate: 'balanced', // precision | balanced | recall | clean-only
+  boilerplate: 'balanced', // precision | balanced | recall | clean-keep-boilerplate
+  includeImages: false, //   tri-state include* toggles; default keeps everything
   minify: false, //          set true to minify instead of pretty-print
 });
 ```
@@ -86,6 +87,7 @@ const { html, metadata, pageType } = await clean(pageHtml, {
 ```bash
 trafilaturacore article.html -b balanced                  # file in → stdout
 cat page.html | trafilaturacore --minify                  # stdin → minified stdout
+trafilaturacore page.html --no-images --no-links          # drop images, flatten links
 trafilaturacore page.html --json > out.json               # full result (html + metadata + pageType)
 ```
 

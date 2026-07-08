@@ -5,7 +5,7 @@
 // backs nonTextTags, and MANUALLY_STRIPPED tags are simply absent (unwrapped).
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CLEAN_CONFIG } from './config.js';
+import { type CleanConfig, DEFAULT_CLEAN_CONFIG, deriveContentConfig } from './config.js';
 
 const allowed = new Set(DEFAULT_CLEAN_CONFIG.allowedTags);
 const nonText = new Set(DEFAULT_CLEAN_CONFIG.nonTextTags);
@@ -181,5 +181,89 @@ describe('DEFAULT_CLEAN_CONFIG — immutability', () => {
     expect(Object.isFrozen(DEFAULT_CLEAN_CONFIG.allowedAttributes?.a)).toBe(true);
     expect(Object.isFrozen(DEFAULT_CLEAN_CONFIG.transformTags)).toBe(true);
     expect(() => DEFAULT_CLEAN_CONFIG.allowedTags?.push('script')).toThrow(TypeError);
+  });
+});
+
+describe('deriveContentConfig', () => {
+  it('returns the base reference unchanged when nothing subtracts', () => {
+    // Tri-state: undefined or true keeps the family, so the default path is
+    // byte-identical (same reference — the pipeline forwards options.config verbatim).
+    expect(deriveContentConfig(DEFAULT_CLEAN_CONFIG, {})).toBe(DEFAULT_CLEAN_CONFIG);
+    expect(
+      deriveContentConfig(DEFAULT_CLEAN_CONFIG, {
+        includeTables: true,
+        includeImages: true,
+        includeLinks: true,
+      }),
+    ).toBe(DEFAULT_CLEAN_CONFIG);
+  });
+
+  it('includeImages: false removes image tags, adds them to nonTextTags, drops their attrs', () => {
+    const cfg = deriveContentConfig(DEFAULT_CLEAN_CONFIG, { includeImages: false });
+    const allowed = new Set(cfg.allowedTags);
+    for (const tag of ['img', 'figure', 'figcaption', 'picture', 'source']) {
+      expect(allowed.has(tag), `allowedTags should drop <${tag}>`).toBe(false);
+    }
+    const nonText = new Set(cfg.nonTextTags);
+    for (const tag of ['figure', 'picture', 'img', 'source']) {
+      expect(nonText.has(tag), `nonTextTags should gain <${tag}>`).toBe(true);
+    }
+    // figcaption is NOT a discarded subtree on its own (only removed from allowedTags).
+    expect(nonText.has('figcaption')).toBe(false);
+    // allowedAttributes + selfClosing entries for the image tags are dropped.
+    expect(cfg.allowedAttributes?.img).toBeUndefined();
+    expect(cfg.allowedAttributes?.source).toBeUndefined();
+    expect(cfg.selfClosing).not.toContain('img');
+    expect(cfg.selfClosing).not.toContain('source');
+    // Non-image entries survive untouched.
+    expect(cfg.allowedAttributes?.a).toEqual(['href', 'title']);
+  });
+
+  it('includeTables: false removes table tags and adds table to nonTextTags', () => {
+    const cfg = deriveContentConfig(DEFAULT_CLEAN_CONFIG, { includeTables: false });
+    const allowed = new Set(cfg.allowedTags);
+    for (const tag of ['table', 'caption', 'tr', 'td', 'th', 'colgroup', 'col']) {
+      expect(allowed.has(tag), `allowedTags should drop <${tag}>`).toBe(false);
+    }
+    expect(new Set(cfg.nonTextTags).has('table')).toBe(true);
+  });
+
+  it('includeLinks: false removes <a> from allowedTags but NOT into nonTextTags', () => {
+    const cfg = deriveContentConfig(DEFAULT_CLEAN_CONFIG, { includeLinks: false });
+    expect(cfg.allowedTags).not.toContain('a');
+    expect(cfg.nonTextTags).not.toContain('a'); // unwrapped, not discarded — anchor text kept
+  });
+
+  it('combines multiple subtractions', () => {
+    const cfg = deriveContentConfig(DEFAULT_CLEAN_CONFIG, {
+      includeImages: false,
+      includeTables: false,
+      includeLinks: false,
+    });
+    const allowed = new Set(cfg.allowedTags);
+    for (const tag of ['img', 'figure', 'table', 'td', 'a']) {
+      expect(allowed.has(tag)).toBe(false);
+    }
+    const nonText = new Set(cfg.nonTextTags);
+    expect(nonText.has('img')).toBe(true);
+    expect(nonText.has('table')).toBe(true);
+  });
+
+  it('derives from a custom base config without mutating it', () => {
+    const base: CleanConfig = {
+      allowedTags: ['p', 'a', 'img', 'table', 'tr', 'td'],
+      allowedAttributes: { a: ['href'], img: ['src'] },
+      selfClosing: ['img'],
+      nonTextTags: ['script'],
+    };
+    const snapshot = structuredClone(base);
+    const cfg = deriveContentConfig(base, { includeImages: false, includeLinks: false });
+    expect(cfg).not.toBe(base);
+    expect(cfg.allowedTags).toEqual(['p', 'table', 'tr', 'td']); // a + img removed
+    expect(cfg.nonTextTags).toEqual(['script', 'figure', 'picture', 'img', 'source']);
+    expect(cfg.allowedAttributes).toEqual({ a: ['href'] }); // img dropped, a kept (links unwrap)
+    expect(cfg.selfClosing).toEqual([]); // img dropped
+    // The base config is left exactly as it was.
+    expect(base).toEqual(snapshot);
   });
 });

@@ -37,7 +37,7 @@ const { version: packageVersion } = createRequire(import.meta.url)('../package.j
 function parseBoilerplate(value: string): BoilerplateMode {
   if (!isBoilerplateMode(value)) {
     throw new Error(
-      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or clean-only.`,
+      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or clean-keep-boilerplate.`,
     );
   }
   return value;
@@ -54,6 +54,11 @@ export interface ResolvedCliOptions {
   boilerplate: BoilerplateMode;
   /** Path to a custom cleaning-config `.json` file. Replaces the default config. */
   config?: string;
+  /** Content-inclusion toggles (from `--no-comments`/`--no-tables`/`--no-images`/`--no-links`). Default keep. */
+  includeComments?: boolean;
+  includeTables?: boolean;
+  includeImages?: boolean;
+  includeLinks?: boolean;
   minify: boolean;
   /** Context only — never fetched. */
   url?: string;
@@ -158,6 +163,10 @@ export async function runClean(opts: ResolvedCliOptions, io: CliIo): Promise<num
   const result = await clean(html, {
     boilerplate: opts.boilerplate,
     config,
+    includeComments: opts.includeComments,
+    includeTables: opts.includeTables,
+    includeImages: opts.includeImages,
+    includeLinks: opts.includeLinks,
     minify: opts.minify,
     url: opts.url,
   });
@@ -224,7 +233,7 @@ export function buildProgram(): Command {
     .argument('[input]', 'path to an HTML file; omit or use "-" to read HTML from stdin')
     .option(
       '-b, --boilerplate <mode>',
-      'boilerplate-removal mode: precision | balanced | recall | clean-only',
+      'boilerplate-removal mode: precision | balanced | recall | clean-keep-boilerplate',
       parseBoilerplate,
       DEFAULT_BOILERPLATE_MODE,
     )
@@ -232,6 +241,10 @@ export function buildProgram(): Command {
       '-c, --config <file.json>',
       'custom cleaning config (JSON CleanConfig); replaces the default config',
     )
+    .option('--no-comments', 'drop comments (soft no-op: comment retention follows the page type)')
+    .option('--no-tables', 'drop table subtrees (table/caption/tr/td/th/colgroup/col)')
+    .option('--no-images', 'drop image subtrees (img/figure/figcaption/picture/source)')
+    .option('--no-links', 'unwrap <a> links: keep the anchor text, drop the href')
     .option('-m, --minify', 'minify the output HTML instead of pretty-formatting it', false)
     .option('-u, --url <url>', 'source URL for classifier/metadata context only — NEVER fetched')
     .option('-o, --output <file>', 'write the result to a file instead of stdout')
@@ -242,6 +255,10 @@ export function buildProgram(): Command {
         input,
         boilerplate: opts.boilerplate,
         config: opts.config,
+        includeComments: opts.comments,
+        includeTables: opts.tables,
+        includeImages: opts.images,
+        includeLinks: opts.links,
         minify: opts.minify,
         url: opts.url,
         output: opts.output,
@@ -267,6 +284,11 @@ export function buildProgram(): Command {
 interface CommanderOptions {
   boilerplate: BoilerplateMode;
   config?: string;
+  /** `--no-*` negations: commander defaults each to `true`, `--no-x` sets it `false`. */
+  comments: boolean;
+  tables: boolean;
+  images: boolean;
+  links: boolean;
   minify: boolean;
   url?: string;
   output?: string;

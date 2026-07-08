@@ -22,7 +22,7 @@ Trafilatura-aligned config, plus one custom-config combo:
 - `balanced` (the default path; also the page-type reference)
 - `precision`
 - `recall`
-- `clean-only` (no extraction, no classification; whole-document cleaning)
+- `clean-keep-boilerplate` (no extraction, no classification; whole-document cleaning)
 - `balanced+styled-config` (`balanced` with a custom config that adds the `<style>` tag and
   `class`/`style` attributes, keeping the CSS-URL allow-list exercised)
 

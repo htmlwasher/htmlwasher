@@ -73,7 +73,7 @@ export const COMBOS: readonly {
   { label: 'precision', boilerplate: 'precision' },
   { label: 'recall', boilerplate: 'recall' },
   // Whole-document cleaning: no extraction, no classification, no FFI.
-  { label: 'clean-only', boilerplate: 'clean-only' },
+  { label: 'clean-keep-boilerplate', boilerplate: 'clean-keep-boilerplate' },
   { label: 'balanced+styled-config', boilerplate: 'balanced', config: STYLED_CONFIG },
 ];
 
