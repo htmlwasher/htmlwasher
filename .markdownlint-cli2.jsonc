@@ -29,7 +29,6 @@
     ".claude/**",
     "prompts/**",
     "sources/**",
-    "training/**",
     "temp/**",
     "**/fixtures/**"
   ]

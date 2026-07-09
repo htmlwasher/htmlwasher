@@ -7,10 +7,9 @@ core is a Rust crate (`packages/trafilaturacore/native/`) reached from Node via 
 `clean()` API, the Trafilatura-aligned HTML cleaning stage, the metadata sidecar, and the CLI stay TypeScript. The
 classifier is a pure-Rust GBDT evaluator over the XGBoost native JSON dump (`model.xgb.json`) —
 **no ONNX/onnxruntime at runtime**. Shipped artifacts (`packages/trafilaturacore/native/artifacts/{model.xgb.json,tfidf-vocab.json}`)
-are trained offline in `training/` and baked into the crate via `include_str!`. Alpha — APIs may
-still change. See [`@/PORTING-NOTES.md`](PORTING-NOTES.md) for the per-phase migration map, gotchas,
-and scores, and [`@/.claude/rules/spec-maintenance.md`](.claude/rules/spec-maintenance.md) for the
-ongoing spec-maintenance rule.
+are trained offline (in the development repo) and baked into the crate via `include_str!`. Alpha — APIs
+may still change. See [`@/docs/PORTING-NOTES.md`](docs/PORTING-NOTES.md) for the per-phase migration
+map, gotchas, and scores.
 
 Key numbers: Rust↔Python feature parity exact (numeric ≤ 3.4e-13, TF-IDF ≤ 2.2e-16, argmax 100%);
 adbar eval P 0.831 / R 0.840 / F1 0.835 (a lift over v1's ≈0.80); classifier ≈ 0.777 held-out WCXB
@@ -99,9 +98,9 @@ over **189 features (89 numeric + 100 TF-IDF)**. Confidence: URL/signal type agr
 else the softmax argmax probability (compared by **argmax class**, not float). The evaluator is a pure-Rust
 walk over the XGBoost native JSON dump (`multi:softprob`, 7 classes, 1400 trees, round-robin
 `tree_info[i]%7`, strict `<` splits in **float32**, softmax→argmax). Feature parity with
-`training/extract_features.py` is byte-level (sklearn `smooth_idf` L2 TF-IDF, baked StandardScaler, UTF-8
+the offline trainer’s `extract_features.py` is byte-level (sklearn `smooth_idf` L2 TF-IDF, baked StandardScaler, UTF-8
 byte lengths, CPython whitespace class, selectolax comma-union non-dedup, the 500k enhanced-feature gate),
-validated by `native/tests/classifier_parity.rs` against fixtures `training/` regenerates.
+validated by `native/tests/classifier_parity.rs` against fixtures the offline trainer regenerates.
 
 ### The TypeScript shell (`packages/trafilaturacore/src/`)
 
@@ -122,11 +121,13 @@ await clean(html, { boilerplate: 'balanced', includeImages: false, includeLinks:
 // CLI, offline, same effect:  trafilaturacore page.html --no-images --no-links
 ```
 
-### Training (offline Python, `training/`)
+### Training (offline Python, development repo only)
 
-Trains XGBoost from WCXB (200 rounds, depth 8, `multi:softprob`, SMOTE), exports `model.xgb.json` (via
-`Booster.save_model`) + `tfidf-vocab.json` (vocab + IDF + StandardScaler stats) + the Rust↔Python parity
-fixtures into `packages/trafilaturacore/native/`. Not a pnpm workspace member; not shipped at runtime.
+XGBoost is trained from WCXB (200 rounds, depth 8, `multi:softprob`, SMOTE) and exports `model.xgb.json`
+(via `Booster.save_model`) + `tfidf-vocab.json` (vocab + IDF + StandardScaler stats) + the Rust↔Python
+parity fixtures into `packages/trafilaturacore/native/artifacts/`. The trainer is dev tooling: it is not a
+pnpm workspace member, is not shipped at runtime, and lives only in the development repo. The trained
+artifacts are committed here and baked into the crate.
 
 ## Monorepo layout
 
@@ -136,10 +137,14 @@ packages/
   trafilaturacore/                  # npm `trafilaturacore` (published): src/{cleaning,metadata}, pipeline.ts, cli*, types.ts
     native/                    # crate `trafilaturacore-native` = npm `@trafilaturacore/native` (private): the Rust core +
                                #   #[napi] surface + artifacts/ + npm/<target>/ committed prebuilds
-  clean-corpus-tester/          # @trafilaturacore/clean-corpus-tester — offline E2E corpus tester (in `pnpm test`)
-  live-crawl-tester/           # @trafilaturacore/live-crawl-tester — out-of-brief unimplemented stub
-training/                      # offline Python (uv): XGBoost → model.xgb.json + tfidf-vocab.json + fixtures
+  standalone-python/           # PyPI `trafilaturacore` (published): thin subprocess wrapper over the bundled CLI
+docs/                          # licence notes + PORTING-NOTES.md (per-phase port map)
+examples/                      # runnable npm-cli / npm-library / pypi-library examples + sample.html
+media/                         # brand assets used by the registry READMEs
 ```
+
+Dev tooling (the offline corpus tester, the live-crawl stub, the Python trainer, and the benchmark
+harness) lives only in the development repo and is never published here.
 
 `pnpm-workspace.yaml` globs (contextractor): `packages/*`, `packages/*/native`, `packages/*/native/npm/*`.
 The native package `build`/`test` scripts self-skip when no Rust toolchain is configured (committed prebuilds
@@ -158,11 +163,9 @@ cover `pnpm build`/`test`); CI rebuilds + refreshes the prebuilds for the 5 nati
 ## Build and test
 
 `pnpm build` (turbo `tsc`; native self-skips to prebuilds), `pnpm lint` (Biome + markdownlint + Prettier),
-`pnpm test` (turbo vitest incl. the offline clean-corpus-tester); `cargo test --workspace` + `cargo clippy
---all-targets -- -D warnings` + `cargo fmt --check` for the crate; `uv run pytest` + `uvx ruff` for training.
-The adbar eval harness (`packages/trafilaturacore/test/validation/`) and the clean-corpus-tester are the offline
-integration oracles; the external `~/r/trafilatura-external-tester/` runs the four-engine live token/visual
-benchmark (network, out-of-repo). Lockfiles: `pnpm-lock.yaml` gitignored (plain `pnpm install`); `Cargo.lock`
+`pnpm test` (turbo vitest); `cargo test --workspace` + `cargo clippy
+--all-targets -- -D warnings` + `cargo fmt --check` for the crate; `uv run pytest` for the Python wrapper.
+Unit tests live in the development repo and are stripped from this mirror. Lockfiles: `pnpm-lock.yaml` gitignored (plain `pnpm install`); `Cargo.lock`
 committed.
 
 ## Operating modes
@@ -189,6 +192,4 @@ through the port lineage; the WCXB dataset is CC-BY-4.0 (attribution required). 
 
 - [`@/packages/trafilaturacore/SPEC.md`](packages/trafilaturacore/SPEC.md) — the library's public API + cleaning behavior.
 - [`@/packages/trafilaturacore/native/SPEC.md`](packages/trafilaturacore/native/SPEC.md) — the Rust crate + napi boundary.
-- [`@/packages/live-crawl-tester/SPEC.md`](packages/live-crawl-tester/SPEC.md) — the out-of-brief stub.
-- [`@/packages/clean-corpus-tester/SPEC.md`](packages/clean-corpus-tester/SPEC.md) — the offline corpus E2E tester.
-- [`@/training/SPEC.md`](training/SPEC.md) — the offline XGBoost → JSON training pipeline.
+- [`@/packages/standalone-python/SPEC.md`](packages/standalone-python/SPEC.md) — the PyPI wrapper's API + vendoring.

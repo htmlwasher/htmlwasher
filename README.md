@@ -20,8 +20,7 @@ scraper or browser-automation framework.
 
 ## Status
 
-Alpha — implemented (built in phases per `@/prompts/2026-6-24-init/prompt.md`).
-The extraction core, metadata extractor, trained pure-Rust GBDT classifier,
+Alpha — implemented. The extraction core, metadata extractor, trained pure-Rust GBDT classifier,
 per-type profiles, and the Trafilatura-aligned cleaning stage are all in place
 and exercised by the test suite (260+ tests). The classifier scores ~0.78 on the
 held-out WCXB test split; extraction scores F1 0.835 on the adbar evaluation corpus.
@@ -39,30 +38,25 @@ This is a pnpm + turbo monorepo.
   (`@/packages/trafilaturacore/native/`, reached via napi-rs). Exposed both as the
   `clean()` library API and as an offline `trafilaturacore` CLI (reads a file or
   stdin, writes cleaned HTML to stdout; never fetches).
-- `@/training/` — an offline Python project (Python 3.12+, uv-managed) that
-  trains the page-type classifier from the public WCXB dataset and exports
-  `model.xgb.json` (the XGBoost native JSON dump) + `tfidf-vocab.json`. It is
-  run offline, is not a pnpm workspace package, and is not shipped at runtime.
-- `@/packages/clean-corpus-tester/` — a separate **offline** TypeScript workspace
-  package: runs trafilaturacore end-to-end over saved WCXB HTML fixtures (≥3 per page
-  type × 7 types) across boilerplate-mode combos, asserting the
-  security invariants + page-type plausibility and emitting a report. No network
-  (part of root `pnpm test`; standalone: `pnpm -C packages/clean-corpus-tester run test:corpus`).
-- `@/packages/live-crawl-tester/` — a separate scaffold stub for a future live-site
-  fetcher; not part of the trafilaturacore pipeline (trafilaturacore itself never fetches).
-- `~/r/trafilatura-sources/` — six read-only reference repositories (rs-trafilatura,
-  web-page-classifier, go-trafilatura, adbar/trafilatura, trafilatura-rs,
-  readability), cloned by `@/clone-other-repos.sh`. These are gitignored inputs
-  only; never edit them.
-- `@/prompts/2026-6-24-init/` — the build brief (`prompt.md`) and research
-  context docs that drive the phased implementation.
+- `@/packages/standalone-python/` — the PyPI package `trafilaturacore`: a thin
+  Python wrapper that drives the bundled Node CLI via subprocess. Alpha and
+  experimental — maintained, but not fully tested or officially supported.
+- `@/examples/` — runnable examples for each surface: the npm CLI
+  (`examples/npm-cli/`), the npm library (`examples/npm-library/`), and the PyPI
+  library (`examples/pypi-library/`), all cleaning the shared
+  `examples/sample.html`.
+- `@/docs/` — third-party licence notes and the per-phase port map
+  (`docs/PORTING-NOTES.md`).
+- `@/media/` — the brand assets used by the registry READMEs.
+
+The page-type classifier is trained offline from the public WCXB dataset; the
+trained artifacts (`model.xgb.json`, `tfidf-vocab.json`) are committed into the
+Rust crate and baked in via `include_str!`, so no training step is needed to
+build or use the library.
 
 ## Quick start
 
 ```bash
-# Fetch the six read-only reference repositories into ~/r/trafilatura-sources/ (outside this repo)
-bash clone-other-repos.sh
-
 # Install workspace dependencies
 pnpm install
 
@@ -91,12 +85,10 @@ trafilaturacore page.html --no-images --no-links          # drop images, flatten
 trafilaturacore page.html --json > out.json               # full result (html + metadata + pageType)
 ```
 
-The classifier is trained offline in `@/training/` (Python, uv-managed) and is
-**not** part of the Node.js install at build time — the npm package ships the
-`@trafilaturacore/native` crate (a prebuilt `.node` binary) with `model.xgb.json` +
-`tfidf-vocab.json` baked in via Rust `include_str!`; there is no `onnxruntime`
-at runtime. The `clean-corpus-tester` runs entirely offline; the
-`live-crawl-tester` is an unimplemented stub (trafilaturacore itself never fetches).
+The classifier is trained offline and is **not** part of the Node.js install at
+build time — the npm package ships the `@trafilaturacore/native` crate (a
+prebuilt `.node` binary) with `model.xgb.json` + `tfidf-vocab.json` baked in via
+Rust `include_str!`; there is no `onnxruntime` at runtime.
 
 ## Classifier inference
 

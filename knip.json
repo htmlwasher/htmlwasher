@@ -1,9 +1,9 @@
 {
   "ignore": [
+    "examples/**",
     ".claude/hooks/**",
     "prompts/**",
     "sources/**",
-    "training/**",
     "**/fixtures/**",
     "packages/trafilaturacore/native/index.js"
   ],
@@ -23,10 +23,6 @@
     "packages/trafilaturacore/native": {
       "entry": "test/**/*.test.ts",
       "project": "test/**"
-    },
-    "packages/live-crawl-tester": {
-      "entry": "src/index.ts",
-      "project": "src/**"
     }
   }
 }

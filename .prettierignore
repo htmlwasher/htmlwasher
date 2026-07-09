@@ -4,7 +4,6 @@
 .claude
 prompts
 sources
-training
 temp
 **/fixtures
 **/dist

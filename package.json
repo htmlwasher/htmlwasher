@@ -15,8 +15,7 @@
     "format": "biome format --write . && pnpm fix:md",
     "check": "biome check . && pnpm lint:md",
     "lint:md": "markdownlint-cli2 \"**/*.md\" && prettier --check \"**/*.md\"",
-    "fix:md": "markdownlint-cli2 --fix \"**/*.md\" && prettier --write \"**/*.md\"",
-    "clone-sources": "bash clone-other-repos.sh"
+    "fix:md": "markdownlint-cli2 --fix \"**/*.md\" && prettier --write \"**/*.md\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

@@ -1,0 +1,14 @@
+<svg width="276" height="30" viewBox="0 0 276 30" xmlns="http://www.w3.org/2000/svg">
+  <title>Trafilatura Core</title>
+  <!-- Icon mark (icon.svg artwork), scaled from its 200x200 viewBox into a 30x30 square on the left -->
+  <g transform="scale(0.15)">
+    <!-- Light blue workpiece bands -->
+    <path d="M0,50 H80 L116,84 H200 V116 H116 L80,150 H0 Z" fill="#1e81b9"/>
+    <!-- Dark blue die: top shoulder -->
+    <path d="M0,0 H200 V84 H116 L80,50 H0 Z" fill="#2f3ea3"/>
+    <!-- Dark blue die: bottom shoulder -->
+    <path d="M0,200 H200 V116 H116 L80,150 H0 Z" fill="#2f3ea3"/>
+  </g>
+  <!-- Wordmark: Courier New Bold, gray — matches the HtmlWasher logo style -->
+  <text x="39" y="22" font-family="Courier New" font-weight="bold" font-size="24" fill="#525252">Trafilatura Core</text>
+</svg>

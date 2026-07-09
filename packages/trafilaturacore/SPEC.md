@@ -315,6 +315,6 @@ present when extraction runs.
   buffers); optional `dompurify`/`jsdom` hardened backend. _added in Phase 6._
 
 The classifier model + `tfidf-vocab.json` are trained offline in the separate
-`@/training/` Python project (see [`@/training/SPEC.md`](../../training/SPEC.md))
+`@/tools/training/` Python project (see [`@/tools/training/SPEC.md`](../../training/SPEC.md))
 and baked into the `@trafilaturacore/native` crate as `include_str!`-ed artifacts. No
 Python or ONNX loads at runtime.

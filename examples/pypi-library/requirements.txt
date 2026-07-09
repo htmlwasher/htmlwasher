@@ -1,0 +1,4 @@
+# pip install trafilaturacore
+# Or, to test unreleased changes, ./run.sh builds the wrapper from source and
+# installs the local platform wheel.
+trafilaturacore
