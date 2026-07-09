@@ -10,11 +10,6 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "trafilaturacore": "workspace:*",
-    "undici": "^7.0.0",
-    "robots-parser": "^3.0.1"
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
     "@types/node": "^26.0.0",

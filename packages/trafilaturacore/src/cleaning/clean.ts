@@ -32,7 +32,7 @@ import { decodeBuffer } from './decode.js';
 import { isHtmlDocument, normalizeHtml } from './normalize.js';
 
 /** Options for {@link cleanHtml} / {@link cleanBuffer}. */
-export interface CleanOptions {
+interface CleanOptions {
   /** Minify the output (html-minifier-terser) instead of prettier-formatting it. Default `false`. */
   minify?: boolean;
   /**
@@ -49,7 +49,7 @@ export interface CleanOptions {
 }
 
 /** The output of a cleaning run: cleaned HTML plus accumulated diagnostics. */
-export interface CleanOutput {
+interface CleanOutput {
   html: string;
   messages: Message[];
 }

@@ -1,0 +1,188 @@
+name: release-pypi
+
+# Builds platform wheels for the `trafilaturacore` PyPI library and publishes via
+# Trusted Publishing (OIDC). Each wheel vendors the built tsup Node CLI (dist/) plus
+# a hoisted, real-file node_modules tree and the build platform's napi `.node`
+# prebuild. MUST run only AFTER the native-prebuild refresh (build-native.yml) is
+# merged, so each wheel bundles current `.node` files — hence workflow_dispatch
+# (not a `v*` tag trigger). The /projects:trafilatura:publish:pypi command encodes
+# this gate.
+#
+# NOTE: authored-untested — this workflow has not had a CI run yet.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build from (e.g. v0.1.0, or the merged prebuild-refresh commit)"
+        required: true
+        type: string
+
+jobs:
+  build-wheels:
+    name: wheel ${{ matrix.plat_tag }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            plat_tag: macosx_13_0_arm64
+            napi_platform: darwin-arm64
+            cibw_archs: arm64
+          # macos-13 (Intel) runners are deprecated/scarce and stall in the queue,
+          # so cross-build the x86_64 wheel on the arm64 runner. The wheel is
+          # py3-none (no compiled extension; the .node is a prebuilt asset), so the
+          # "cross-build" is pure packaging; cibuildwheel auto-skips its test.
+          - os: macos-14
+            plat_tag: macosx_13_0_x86_64
+            napi_platform: darwin-x64
+            cibw_archs: x86_64
+          - os: ubuntu-latest
+            plat_tag: manylinux_2_28_x86_64
+            napi_platform: linux-x64-gnu
+            cibw_archs: native
+          - os: ubuntu-24.04-arm
+            plat_tag: manylinux_2_28_aarch64
+            napi_platform: linux-arm64-gnu
+            cibw_archs: native
+          - os: windows-latest
+            plat_tag: win_amd64
+            napi_platform: win32-x64-msvc
+            cibw_archs: native
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          # pnpm-lock.yaml is gitignored (repo convention); setup-node@v6 auto-enables
+          # package-manager caching when a `packageManager` field is present, which then
+          # hard-errors "lock file not found". Disable it. See github-workflows.md.
+          package-manager-cache: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Build the tsup bundle (dist/ + dist/native/*.node from the committed
+      # prebuilds) and flatten the workspace into a real-file tree (no symlinks —
+      # wheels cannot carry them). The napi crate build self-skips without cargo
+      # (committed prebuilds are used), so no Rust toolchain is needed here.
+      - name: Build and flatten the CLI
+        shell: bash
+        run: |
+          # pnpm-lock.yaml is not committed in this repo, so resolve fresh (no
+          # --frozen-lockfile, matching build-native.yml's install strategy).
+          pnpm install
+          # Build trafilaturacore + its workspace dep (@trafilaturacore/native, a
+          # no-op self-skip without cargo) in dependency order via turbo. The
+          # clean-corpus-tester / live-crawl-tester packages are not in the CLI's
+          # dependency closure and are excluded by the filter.
+          pnpm exec turbo run build --filter=trafilaturacore
+          # Hoisted node-linker → a real-file, npm-style node_modules (no symlinks)
+          # that still resolves the CLI's external runtime deps (commander,
+          # sanitize-html, linkedom, parse5, prettier, chardet, …).
+          pnpm --filter trafilaturacore deploy --prod --config.node-linker=hoisted _cli_deploy
+
+      - name: Build wheel
+        uses: pypa/cibuildwheel@v2.21
+        with:
+          package-dir: packages/standalone-python
+          output-dir: wheelhouse
+        env:
+          # Use latest build-backend deps instead of cibuildwheel's pinned
+          # constraints. The pinned set ships an old hatchling (<1.27) that stamps
+          # PEP 639 metadata under Metadata-Version 2.3, which twine rejects on
+          # upload. hatchling >=1.27 stamps 2.4 correctly. The wheel is
+          # pure-Python (py3-none), so unpinning build deps is low risk.
+          CIBW_DEPENDENCY_VERSIONS: latest
+          # One wheel per platform (the backend emits py3-none-<plat>); cp312 just
+          # drives the single build.
+          CIBW_BUILD: "cp312-*"
+          # Per-job arch: "native" elsewhere, "x86_64" for the cross-built Intel-mac
+          # wheel. "native" keeps 64-bit Linux from also building i686, which the
+          # forced single-platform tag would mislabel.
+          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+          # Skip musllinux — the forced manylinux_2_28 tag would mislabel a musl
+          # wheel, and the napi loader ships no musl `.node`. We ship manylinux only.
+          CIBW_SKIP: "*musllinux*"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          # Stage the host-built deploy tree into _vendor (pure-Python; runs in the
+          # manylinux container without needing Node there).
+          CIBW_BEFORE_ALL: >
+            python {project}/packages/standalone-python/scripts/stage_vendor.py
+            --deploy-dir {project}/_cli_deploy
+            --keep-platform ${{ matrix.napi_platform }}
+          CIBW_ENVIRONMENT: TRAFILATURACORE_WHEEL_PLATFORM=${{ matrix.plat_tag }}
+          # No ELF Python extension to patch — skip auditwheel/delocate entirely.
+          CIBW_REPAIR_WHEEL_COMMAND: ""
+          CIBW_TEST_COMMAND: 'python -c "import trafilaturacore; print(trafilaturacore.__version__)"'
+
+      # Safety gate: stage_vendor prunes non-target .node and never errors, so a
+      # deploy tree missing this platform's prebuild would silently ship an empty
+      # wheel. Fail the job (blocking publish) unless the wheel bundles the matching
+      # native module. Critical for the cross-built Intel-mac wheel.
+      - name: Verify the wheel bundles its native module
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel=$(ls wheelhouse/*.whl)
+          echo "Inspecting $wheel"
+          # Bundled layout: dist/native/trafilaturacore-native.<platform>.node
+          # (see packages/standalone-python/scripts/stage_vendor.py NATIVE_DIST_GLOB).
+          python -c "import zipfile,sys; z=zipfile.ZipFile('$wheel'); nodes=[n for n in z.namelist() if n.endswith('.node')]; print('bundled .node:', nodes); sys.exit(0 if any(n.endswith('trafilaturacore-native.${{ matrix.napi_platform }}.node') for n in nodes) else 1)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.plat_tag }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  build-sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build sdist
+        run: |
+          python -m pip install --upgrade build
+          python -m build --sdist --outdir dist packages/standalone-python
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC — no API token
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: "{wheels-*,sdist}"
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Generate and upload PEP 740 provenance attestations. Default for
+          # Trusted Publishing (OIDC) is already true; pin it explicitly so the
+          # attestation guarantee survives action default changes.
+          attestations: true

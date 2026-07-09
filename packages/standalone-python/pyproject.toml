@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trafilaturacore"
+version = "0.0.0a0"
+description = "Clean a page's main content from HTML in Python — a thin, typed wrapper over the bundled trafilaturacore Node CLI (alpha)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [{ name = "glueo", email = "company@glueo.com" }]
+keywords = [
+  "trafilatura",
+  "content-extraction",
+  "boilerplate-removal",
+  "readability",
+  "html",
+  "web-scraping",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Text Processing :: Markup :: HTML",
+  "Typing :: Typed",
+]
+dependencies = ["nodejs-wheel-binaries>=24.16,<25"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.3", "pytest-asyncio>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/trafilatura/trafilatura"
+Repository = "https://github.com/trafilatura/trafilatura"
+Issues = "https://github.com/trafilatura/trafilatura/issues"
+"npm package" = "https://www.npmjs.com/package/trafilaturacore"
+
+# Platform wheel: the custom hook forces a py3-none-{platform} tag so each wheel
+# carries only the build platform's bundled native module + the flattened JS tree.
+[tool.hatch.build.targets.wheel]
+packages = ["src/trafilaturacore"]
+artifacts = ["src/trafilaturacore/_vendor/**"]
+
+# LICENSE (Apache-2.0) + the third-party attribution NOTICE live at the engine
+# workspace root (../../, symmetric across the engine workspace and the public
+# mirror). The custom hook force-includes both into the wheel — resolving them
+# location-independently across an in-tree build AND a build from the sdist (where
+# the sdist force-include below places them at the sdist root). A static
+# force-include path would only resolve in one of those layouts.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/trafilaturacore",
+  "/hatch_build.py",
+  "/scripts",
+  "/README.md",
+  "/SPEC.md",
+  "/pyproject.toml",
+]
+
+# Carry LICENSE + NOTICE at the sdist root so a wheel built FROM the sdist can
+# still find them (the hook checks the sdist root as a fallback candidate).
+[tool.hatch.build.targets.sdist.force-include]
+"../../LICENSE" = "LICENSE"
+"../../NOTICE" = "NOTICE"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
+# S101: assert in tests. S603/S607: we spawn via argv lists (never a shell) with a
+# resolved interpreter path — the subprocess warnings do not apply.
+ignore = ["S101", "S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "-q"
+markers = ["e2e: real Node subprocess end-to-end test against the built dev CLI"]

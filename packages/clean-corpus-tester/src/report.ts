@@ -21,7 +21,7 @@ function fmtConfidence(confidence: number | undefined): string {
 }
 
 /** Build the per-fixture table as an array of text lines (no trailing newline). */
-export function renderTable(report: CorpusReport): string[] {
+function renderTable(report: CorpusReport): string[] {
   const lines: string[] = [];
   const header = [
     pad('fixture', 28),
@@ -89,7 +89,7 @@ export function printReport(report: CorpusReport): void {
 }
 
 /** Render the Markdown report body. */
-export function renderMarkdown(report: CorpusReport): string {
+function renderMarkdown(report: CorpusReport): string {
   const accuracyPct = (report.pageTypeAccuracy * 100).toFixed(1);
   const floorPct = (report.pageTypeAccuracyFloor * 100).toFixed(1);
   const lines: string[] = [];

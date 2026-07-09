@@ -76,7 +76,7 @@ function pruneEmpty(metadata: Metadata): Metadata {
  * known/default URL (context only — never fetched). Faithful port of
  * `extract_metadata`'s field order and precedence.
  */
-export function extractMetadataFromDocument(
+function extractMetadataFromDocument(
   doc: HDocument,
   url?: string,
   authorBlacklist?: ReadonlySet<string>,

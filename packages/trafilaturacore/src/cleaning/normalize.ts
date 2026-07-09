@@ -6,7 +6,7 @@
 import { parse, parseFragment, serialize } from 'parse5';
 import type { Message } from '../types.js';
 
-export interface NormalizeHtmlResult {
+interface NormalizeHtmlResult {
   html: string | undefined;
   messages: Message[];
 }

@@ -33,15 +33,14 @@
     "NOTICE"
   ],
   "scripts": {
-    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
-    "prepublishOnly": "node -e \"console.error('trafilaturacore cannot be published yet: @trafilaturacore/native is a private workspace dep; implement the alpha tarball-bundling plan (see PORTING-NOTES.md) first.'); process.exit(1);\"",
+    "build": "tsup && tsc -p tsconfig.build.json --emitDeclarationOnly",
+    "prepublishOnly": "node -e \"console.error('trafilaturacore is not published locally: publishing goes through the mirror release-npm.yml OIDC Trusted-Publishing workflow only (never `npm publish`). This guard is an intentional backstop.'); process.exit(1);\"",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@trafilaturacore/native": "workspace:*",
     "chardet": "^2.1.0",
     "commander": "^14.0.0",
     "html-minifier-terser": "^7.2.0",
@@ -57,10 +56,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@trafilaturacore/native": "workspace:*",
     "@types/html-minifier-terser": "^7.0.2",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^26.0.0",
     "@types/sanitize-html": "^2.16.0",
+    "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^3.2.4"
   }

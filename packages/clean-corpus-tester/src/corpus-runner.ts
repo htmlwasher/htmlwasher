@@ -41,7 +41,7 @@ export const PAGE_TYPE_ACCURACY_FLOOR = 0.4;
  * / near-empty document (e.g. "You need to enable JavaScript to run this app"),
  * so empty extraction output is legitimate, not a failure.
  */
-export const SUBSTANTIAL_BODY_TEXT = 200;
+const SUBSTANTIAL_BODY_TEXT = 200;
 
 /**
  * A custom cleaning config that additionally keeps class / inline style / the
@@ -102,7 +102,7 @@ export interface AssertionFailure {
 }
 
 /** Per-(fixture, combo) result. */
-export interface ComboResult {
+interface ComboResult {
   /** The combo label (mode name, or `balanced+styled-config`). */
   combo: string;
   boilerplate: BoilerplateMode;

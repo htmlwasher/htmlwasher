@@ -7,7 +7,7 @@ import type { HDocument } from './dom.js';
 import { isValidUrl } from './url.js';
 
 /** Fields the OpenGraph pass can populate (mirrors the bootstrap dict). */
-export interface OpenGraphResult {
+interface OpenGraphResult {
   title?: string;
   author?: string;
   url?: string;

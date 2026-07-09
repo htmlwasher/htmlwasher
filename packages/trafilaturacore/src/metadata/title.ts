@@ -10,7 +10,7 @@ import { selectMetaInfo } from './xpath-css.js';
 const HTMLTITLE_REGEX = /^(.+)?\s+[–•·—|⁄*⋆~‹«<›»>:-]\s+(.+)$/;
 
 /** examine_title_element result: the full title and the two split parts. */
-export interface TitleParts {
+interface TitleParts {
   title: string;
   first?: string;
   second?: string;

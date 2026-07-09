@@ -66,6 +66,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          # pnpm-lock.yaml is gitignored (repo convention); setup-node@v6 auto-enables
+          # package-manager caching when a `packageManager` field is present, which then
+          # hard-errors "lock file not found". Disable it. See github-workflows.md.
+          package-manager-cache: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -114,6 +118,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          # pnpm-lock.yaml is gitignored (repo convention) — disable the auto lockfile
+          # cache or setup-node@v6 hard-errors "lock file not found". See github-workflows.md.
+          package-manager-cache: false
       - name: Install dependencies
         run: pnpm install
       - name: Download all artifacts

@@ -8,7 +8,7 @@ import chardet from 'chardet';
 import iconv from 'iconv-lite';
 import type { Message } from '../types.js';
 
-export interface DecodeBufferResult {
+interface DecodeBufferResult {
   html: string | undefined;
   messages: Message[];
 }

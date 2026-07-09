@@ -25,7 +25,7 @@
     "build:rebuild": "napi build --platform --release --features napi",
     "build:debug": "napi build --platform --features napi",
     "build:wasm": "napi build --platform --release --features napi --target wasm32-wasip1-threads",
-    "test": "node -e \"const cp = require('node:child_process'); if (cp.spawnSync('cargo', ['--version']).status === 0 || process.env.npm_config_rebuild_native) { cp.execSync('cargo test --workspace', { stdio: 'inherit' }); } else { console.log('@trafilaturacore/native: skipping cargo test (no cargo on PATH).'); } cp.execSync('vitest run', { stdio: 'inherit' });\"",
+    "test": "node -e \"const cp = require('node:child_process'); if (cp.spawnSync('cargo', ['--version']).status === 0 || process.env.npm_config_rebuild_native) { cp.execSync('cargo test --workspace', { stdio: 'inherit' }); } else { console.log('@trafilaturacore/native: skipping cargo test (no cargo on PATH).'); } cp.execSync('vitest run --passWithNoTests', { stdio: 'inherit' });\"",
     "lint": "vitest run --passWithNoTests"
   },
   "devDependencies": {
