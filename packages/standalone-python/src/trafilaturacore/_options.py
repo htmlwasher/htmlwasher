@@ -24,10 +24,10 @@ BOILERPLATE_MODES: tuple[str, ...] = (
     "precision",
     "balanced",
     "recall",
-    "clean-keep-boilerplate",
+    "keep",
 )
 DEFAULT_BOILERPLATE_MODE = "balanced"
-BoilerplateMode = Literal["precision", "balanced", "recall", "clean-keep-boilerplate"]
+BoilerplateMode = Literal["precision", "balanced", "recall", "keep"]
 
 # 10 MB, mirroring the JS ``DEFAULT_MAX_INPUT_BYTES``. Inputs larger than this
 # (or a caller-supplied override) are rejected before spawn — a resource bound.

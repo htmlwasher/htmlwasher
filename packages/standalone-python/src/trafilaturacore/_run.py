@@ -88,12 +88,12 @@ def clean(
     """Clean a page's main content from ``html`` and return a :class:`CleanResult`.
 
     Mirrors the npm library's ``clean()``: HTML in -> cleaned HTML out, plus a
-    metadata sidecar and (unless ``boilerplate='clean-keep-boilerplate'``) a page
+    metadata sidecar and (unless ``boilerplate='keep'``) a page
     type and confidence. It is **offline** — the ``url`` is context only for the
     classifier/metadata and is never fetched.
 
     - ``boilerplate`` — one of ``precision`` / ``balanced`` (default) / ``recall``
-      / ``clean-keep-boilerplate``.
+      / ``keep``.
     - ``include_comments`` / ``include_tables`` / ``include_images`` /
       ``include_links`` — tri-state, default keep; pass ``False`` to drop that
       content family. (``include_comments`` is a soft no-op — comment retention is

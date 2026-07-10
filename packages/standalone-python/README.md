@@ -51,7 +51,7 @@ glibc ≥ 2.28), and Windows (x64). Requires Python 3.9+.
 - `messages` — a list of `Message(type, text)` diagnostics.
 - `metadata` — a dict sidecar (title, author, date, sitename, …), or `None`.
 - `page_type` — one of `article`, `forum`, `product`, `collection`, `listing`,
-  `documentation`, `service`, or `None` under `clean-keep-boilerplate`.
+  `documentation`, `service`, or `None` under `keep`.
 - `confidence` — the classifier's confidence in `page_type` (0–1), or `None`.
 
 `aclean()` is the async variant with the same signature.
@@ -62,7 +62,7 @@ Every option is a typed keyword argument mapping one-to-one onto a
 [CLI flag](https://www.npmjs.com/package/trafilaturacore):
 
 - `boilerplate=` — `"precision"`, `"balanced"` (default), `"recall"`, or
-  `"clean-keep-boilerplate"` (HTML cleanup only; keeps the whole document, skips
+  `"keep"` (HTML cleanup only; keeps the whole document, skips
   classification).
 - `include_comments=` / `include_tables=` / `include_images=` / `include_links=` —
   tri-state, default keep; pass `False` to drop that content family.

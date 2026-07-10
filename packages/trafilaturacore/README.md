@@ -35,7 +35,7 @@ may still change before a stable release.
 import { clean } from 'trafilaturacore';
 
 const { html, metadata, pageType, confidence, messages } = await clean(pageHtml, {
-  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'clean-keep-boilerplate'
+  boilerplate: 'balanced', // 'precision' | 'balanced' | 'recall' | 'keep'
   minify: false,
   url: 'https://example.com/article', // optional context; never fetched
 });
@@ -56,7 +56,7 @@ union rs-trafilatura's serializer whitelist; Trafilatura's `MANUALLY_CLEANED`
 list maps to `nonTextTags` (subtree discarded with content: `nav`, `aside`,
 `form`, `iframe`, `script`, …); its `MANUALLY_STRIPPED` list is simply not
 allowed, so those tags are unwrapped with content kept (`div`, `span`,
-`section`, …). `boilerplate: 'clean-keep-boilerplate'` skips extraction and classification
+`section`, …). `boilerplate: 'keep'` skips extraction and classification
 entirely and cleans the whole document.
 
 ### Content-inclusion toggles
@@ -161,7 +161,7 @@ trafilaturacore page.html -c my-cleaning-config.json
 It reads a single file argument, or stdin when the argument is omitted or `-`.
 Cleaned HTML (or `--json`) goes to **stdout**; diagnostics and a
 `[pageType confidence]` line go to **stderr** (silence them with `-q, --quiet`).
-Options: `-b, --boilerplate <precision|balanced|recall|clean-keep-boilerplate>`,
+Options: `-b, --boilerplate <precision|balanced|recall|keep>`,
 `-c, --config <file.json>` (a custom `CleanConfig`; replaces the default config),
 `--no-comments`/`--no-tables`/`--no-images`/`--no-links` (content-inclusion
 toggles, matching the library `include*` options), `-m, --minify`,

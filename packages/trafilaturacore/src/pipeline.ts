@@ -2,13 +2,13 @@
 // Orchestrates the two pillars into the public clean() API:
 //   metadata (sidecar) + boilerplate(mode) → clean(config).
 //
-// For any boilerplate mode other than `clean-keep-boilerplate`, the @trafilaturacore/native
+// For any boilerplate mode other than `keep`, the @trafilaturacore/native
 // Rust core classifies the page (3-stage cascade) and routes extraction through
 // the matching per-type profile internally, returning the preserve-markup content
 // HTML (UNSANITIZED — the cleaning stage owns sanitization) plus the page type +
-// confidence. `clean-keep-boilerplate` bypasses the FFI call entirely (no extraction, no
+// confidence. `keep` bypasses the FFI call entirely (no extraction, no
 // classification) and cleans the whole document. clean() is async: the native
-// module loads lazily (first non-`clean-keep-boilerplate` call), the Rust extraction runs on
+// module loads lazily (first non-`keep` call), the Rust extraction runs on
 // the libuv threadpool, and the cleaning formatter loads lazily. A native failure
 // (extract() rejection or an unloadable binding) degrades to whole-document
 // cleaning with a warning rather than rejecting clean().
@@ -36,7 +36,7 @@ import {
 /** The `@trafilaturacore/native` module surface (type-only — the module loads lazily). */
 type NativeModule = typeof import('@trafilaturacore/native');
 
-// Lazy-loaded native binding: `boilerplate: 'clean-keep-boilerplate'`, metadata-only use, and
+// Lazy-loaded native binding: `boilerplate: 'keep'`, metadata-only use, and
 // any platform without a loadable prebuilt .node must never require the FFI module
 // at package load. The resolved module is ALSO cached synchronously so warmed
 // calls dispatch extract() to the threadpool before clean()'s synchronous
@@ -75,10 +75,10 @@ async function runBoilerplate(
   url: string | undefined,
   messages: Message[],
 ): Promise<BoilerplateOutcome> {
-  if (mode === 'clean-keep-boilerplate') return { html }; // clean the whole document (no extraction, no FFI)
+  if (mode === 'keep') return { html }; // clean the whole document (no extraction, no FFI)
 
   try {
-    // Once `clean-keep-boilerplate` is handled, `mode` IS the Rust core's focus union.
+    // Once `keep` is handled, `mode` IS the Rust core's focus union.
     const mod = native ?? (await loadNative());
     const r = await mod.extract(html, { focus: mode, url });
     // Surface the core's non-fatal diagnostics. `fallbackUsed` gets no message of
@@ -114,7 +114,7 @@ function hasMetadata(meta: Metadata): boolean {
  * when extraction runs, the detected page type and confidence).
  *
  * Knobs: the boilerplate-removal `mode` (default `'balanced'`;
- * `'clean-keep-boilerplate'` cleans the whole document) and an optional
+ * `'keep'` cleans the whole document) and an optional
  * fully-custom `config` (a {@link import('./types.js').CleanConfig}), which
  * replaces the default Trafilatura-aligned cleaning config. The `include*`
  * tri-state toggles (`includeTables`/`includeImages`/`includeLinks`) subtract a

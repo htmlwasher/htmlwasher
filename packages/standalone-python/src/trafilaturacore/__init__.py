@@ -3,7 +3,7 @@
 A thin, typed wrapper that drives the bundled trafilaturacore Node CLI:
 :func:`clean` (sync) and :func:`aclean` (async) take HTML and return a
 :class:`CleanResult` — cleaned HTML, a metadata sidecar, and (unless
-``boilerplate='clean-keep-boilerplate'``) a page type and confidence. It is
+``boilerplate='keep'``) a page type and confidence. It is
 **offline**: HTML in -> cleaned HTML out; it never fetches the network. Python
 loads no JavaScript and no native ``.node`` — Node does, when it runs ``cli.js``.
 A self-contained Node runtime ships as a dependency (``nodejs-wheel-binaries``),

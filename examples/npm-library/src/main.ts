@@ -25,10 +25,10 @@ for (const message of result.messages) {
   console.log(`[${message.type}] ${message.text}`);
 }
 
-// The four boilerplate modes. `clean-keep-boilerplate` skips main-content
+// The four boilerplate modes. `keep` skips main-content
 // extraction entirely (HTML cleanup only) — so it reports no page type and
 // never loads the native module.
-for (const boilerplate of ['precision', 'balanced', 'recall', 'clean-keep-boilerplate'] as const) {
+for (const boilerplate of ['precision', 'balanced', 'recall', 'keep'] as const) {
   const r = await clean(html, { boilerplate });
   console.log(`${boilerplate}: ${r.html.length} bytes, pageType=${r.pageType ?? '(none)'}`);
 }

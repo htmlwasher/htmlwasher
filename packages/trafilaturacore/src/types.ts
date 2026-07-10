@@ -14,23 +14,18 @@ export { DEFAULT_CLEAN_CONFIG } from './cleaning/config.js';
 /**
  * Boilerplate-removal mode — gates the Trafilatura-derived main-content extraction.
  *
- * - `precision`              → sets `favor_precision` (less noise, may miss content)
- * - `balanced`               → neither flag (neutral default)
- * - `recall`                 → sets `favor_recall` (more content, may include noise)
- * - `clean-keep-boilerplate` → skip boilerplate removal entirely: HTML cleanup only,
- *   keeping the whole document (no page-type, no confidence, never loads the Rust FFI)
+ * - `precision` → sets `favor_precision` (less noise, may miss content)
+ * - `balanced`  → neither flag (neutral default)
+ * - `recall`    → sets `favor_recall` (more content, may include noise)
+ * - `keep`      → skip boilerplate removal entirely: HTML cleanup only, keeping the
+ *   whole document (no page-type, no confidence, never loads the Rust FFI)
  *
  * All four modes clean; `precision`/`balanced`/`recall` mirror Trafilatura's
- * internal focus. `clean-keep-boilerplate` is trafilaturacore's addition (upstream
- * has no such mode) — it does the cleanup without boilerplate removal / main-content
- * extraction, so boilerplate is kept.
+ * internal focus. `keep` is trafilaturacore's addition (upstream has no such mode)
+ * — it does the cleanup without boilerplate removal / main-content extraction, so
+ * the boilerplate is kept.
  */
-export const BOILERPLATE_MODES = [
-  'precision',
-  'balanced',
-  'recall',
-  'clean-keep-boilerplate',
-] as const;
+export const BOILERPLATE_MODES = ['precision', 'balanced', 'recall', 'keep'] as const;
 export type BoilerplateMode = (typeof BOILERPLATE_MODES)[number];
 export const DEFAULT_BOILERPLATE_MODE = 'balanced' satisfies BoilerplateMode;
 
@@ -155,9 +150,9 @@ export interface CleanResult {
   html: string;
   messages: Message[];
   metadata?: Metadata;
-  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'clean-keep-boilerplate'`). */
+  /** The page type the classifier routed extraction through (omitted when `boilerplate: 'keep'`). */
   pageType?: PageType;
-  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'clean-keep-boilerplate'`). */
+  /** Classifier confidence in `pageType` (0–1; omitted when `boilerplate: 'keep'`). */
   confidence?: number;
 }
 

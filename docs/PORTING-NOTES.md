@@ -320,7 +320,7 @@ none` styles, `hide-`/`-hide-`/`hide-print`/`hidden`/`hide`/`noprint`/`notloaded
   - Other notable fixes: single-pass entity decoding (metadata `unescapeHtml` + cleaning
     `decodeAttrEntities` double-decoded `&amp;lt;`); native warnings/fallback diagnostics now surface in
     `clean().messages`; native failure degrades to whole-document cleaning; the native binding is
-    lazy-loaded (`boilerplate: 'clean-keep-boilerplate'` never touches the FFI); native build/test scripts probe
+    lazy-loaded (`boilerplate: 'keep'` never touches the FFI); native build/test scripts probe
     `cargo --version` instead of `CARGO_HOME` (the old gate silently skipped rebuilds + cargo tests on
     standard rustup installs); corpus-tester security detectors are tag-anchored (no prose false
     positives); `.github/workflows/build-native.yml` authored (untested) for the missing 5-target +
@@ -524,7 +524,7 @@ bracket is not panic-safe (early return/panic between `149` and `446` leaks the 
 - **Known limitation:** when a fallback wins (JSON-LD `articleBody`, baseline rescue) markup is synthesized
   (bare `<p>`) — preservation is best-effort by construction; "original markup" always means "modulo doc-cleaning".
 - Supersedes doc 08 §1's "two independent safety passes": script stripping stays two-layered (hygiene + floor);
-  the `on*`/scheme/attribute redundancy on `boilerplate ≠ 'clean-keep-boilerplate'` paths collapses to ONE hardened TS pass.
+  the `on*`/scheme/attribute redundancy on `boilerplate ≠ 'keep'` paths collapses to ONE hardened TS pass.
 
 ## Classifier ground truth (Rust cascade, Python model, no ONNX)
 
@@ -734,7 +734,7 @@ was not a Trafilatura behavior — so it was removed outright.
   `2026-07-06-2106` determination. Rust-core/classifier surgery was rejected as high-risk to
   the adbar oracle for negative expected value on ≤3-page, reference-noisy types.
 
-## 2026-07-08 — content-inclusion toggles added; 'clean-only' renamed 'clean-keep-boilerplate'
+## 2026-07-08 — content-inclusion toggles added; 'clean-only' renamed 'keep'
 
 TypeScript-only change per [`@/prompts/2026-7-8-contextractor-content-toggles/contextractor-content-toggles.md`](prompts/2026-7-8-contextractor-content-toggles/contextractor-content-toggles.md).
 The Rust core (`@trafilaturacore/native`) is UNTOUCHED — the napi `ExtractOptions`
@@ -763,17 +763,17 @@ authority (context doc 09), so all content subtraction happens there.
   The CLI adds `--no-comments`/`--no-tables`/`--no-images`/`--no-links` (commander
   `--no-*` → include\* `false`), threaded through `ResolvedCliOptions`.
 - **Renamed (second rename of this value):** the `boilerplate` VALUE `'clean-only'` →
-  `'clean-keep-boilerplate'` (`none` → `clean-only` on 2026-07-07, → this on 2026-07-08).
+  `'keep'` (`none` → `clean-only` on 2026-07-07, → this on 2026-07-08).
   The OPTION stays named `boilerplate`; `precision`/`balanced`/`recall` are unchanged
   (they still mirror the Rust core's focus). Identical semantics: skip boilerplate removal
   - classification, never load the FFI, clean the whole document (`pageType`/`confidence`
-    omitted). `BOILERPLATE_MODES` is now `['precision', 'balanced', 'recall', 'clean-keep-boilerplate']`.
+    omitted). `BOILERPLATE_MODES` is now `['precision', 'balanced', 'recall', 'keep']`.
     The internal boilerplate-removal terminology (`runBoilerplate`, the `boilerplate:`
     diagnostic prefix, the Rust `is_boilerplate_named`/`boilerplate_selectors`) is unchanged —
     only the public mode VALUE changed. Rationale: all four modes clean; the old `clean-only`
-    misled — `clean-keep-boilerplate` states both halves (it cleans, and boilerplate is kept).
+    misled — `keep` states both halves (it cleans, and boilerplate is kept).
     Rejected again: renaming the `boilerplate` OPTION to `extractionMode`.
-- **clean-corpus-tester:** the `clean-only` combo is relabeled `clean-keep-boilerplate`.
+- **clean-corpus-tester:** the `clean-only` combo is relabeled `keep`.
 
 ---
 

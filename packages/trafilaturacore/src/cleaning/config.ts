@@ -90,7 +90,7 @@ export const DEFAULT_CLEAN_CONFIG: CleanConfig = deepFreeze({
   allowedTags: [
     // Document scaffolding (Trafilatura's build_html_output emits html/body,
     // plus head/meta when metadata is on; title kept because trafilaturacore
-    // also cleans whole documents in `boilerplate: 'clean-keep-boilerplate'` mode)
+    // also cleans whole documents in `boilerplate: 'keep'` mode)
     'html',
     'head',
     'meta',

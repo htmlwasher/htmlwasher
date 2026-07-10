@@ -70,7 +70,7 @@ Use it as a **library**:
 ```ts
 import { clean } from 'trafilaturacore';
 const { html, metadata, pageType } = await clean(pageHtml, {
-  boilerplate: 'balanced', // precision | balanced | recall | clean-keep-boilerplate
+  boilerplate: 'balanced', // precision | balanced | recall | keep
   includeImages: false, //   tri-state include* toggles; default keeps everything
   minify: false, //          set true to minify instead of pretty-print
 });

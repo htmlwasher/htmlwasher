@@ -3,7 +3,7 @@
 The ``trafilaturacore --json`` output is a JSON object with ``html``,
 ``messages``, and (when boilerplate removal ran) ``metadata``, ``pageType`` and
 ``confidence``. ``JSON.stringify`` omits undefined-valued keys, so the last three
-may be absent (e.g. under ``boilerplate='clean-keep-boilerplate'``).
+may be absent (e.g. under ``boilerplate='keep'``).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class CleanResult:
     """The result of :func:`trafilaturacore.clean`.
 
     ``page_type`` and ``confidence`` are ``None`` when boilerplate removal did not
-    run (``boilerplate='clean-keep-boilerplate'``). ``metadata`` is ``None`` when
+    run (``boilerplate='keep'``). ``metadata`` is ``None`` when
     the engine resolved no metadata.
     """
 

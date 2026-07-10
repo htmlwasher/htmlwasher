@@ -34,7 +34,7 @@ def main() -> None:
     for message in result.messages:
         print(f"[{message.type}] {message.text}")
 
-    # The four boilerplate modes. `clean-keep-boilerplate` skips main-content
+    # The four boilerplate modes. `keep` skips main-content
     # extraction entirely (HTML cleanup only) and reports no page type.
     for mode in trafilaturacore.BOILERPLATE_MODES:
         r = trafilaturacore.clean(html, boilerplate=mode)

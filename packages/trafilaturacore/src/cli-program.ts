@@ -37,7 +37,7 @@ const { version: packageVersion } = createRequire(import.meta.url)('../package.j
 function parseBoilerplate(value: string): BoilerplateMode {
   if (!isBoilerplateMode(value)) {
     throw new Error(
-      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or clean-keep-boilerplate.`,
+      `Invalid --boilerplate value: '${value}'. Use precision, balanced, recall, or keep.`,
     );
   }
   return value;
@@ -233,7 +233,7 @@ export function buildProgram(): Command {
     .argument('[input]', 'path to an HTML file; omit or use "-" to read HTML from stdin')
     .option(
       '-b, --boilerplate <mode>',
-      'boilerplate-removal mode: precision | balanced | recall | clean-keep-boilerplate',
+      'boilerplate-removal mode: precision | balanced | recall | keep',
       parseBoilerplate,
       DEFAULT_BOILERPLATE_MODE,
     )
