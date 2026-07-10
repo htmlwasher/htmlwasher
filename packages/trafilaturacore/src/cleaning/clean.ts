@@ -145,7 +145,12 @@ export async function cleanHtml(html: string, options: CleanOptions = {}): Promi
         parser: 'html',
         printWidth: 120,
         tabWidth: 2,
-        htmlWhitespaceSensitivity: 'ignore',
+        // 'css' (prettier's default) respects each element's CSS `display`, so
+        // whitespace around inline elements is never added or removed. 'ignore'
+        // reflows freely and CHANGES THE RENDERED TEXT: it broke
+        // `<a>RFC 6761</a>,` onto separate lines, which renders — and extracts —
+        // as `RFC 6761 ,`. The cleaned HTML must never alter what the page says.
+        htmlWhitespaceSensitivity: 'css',
       });
     }
   } catch (error) {

@@ -1,6 +1,0 @@
-# Permit unwrap/expect inside #[cfg(test)] code only. Production code stays bound by
-# the workspace `unwrap_used`/`expect_used` denies (packages/trafilaturacore/native uses
-# Result + `?` everywhere). Test fixtures assert on known-good inputs, so unwrap/expect
-# there is a readability win, not a robustness risk.
-allow-unwrap-in-tests = true
-allow-expect-in-tests = true
